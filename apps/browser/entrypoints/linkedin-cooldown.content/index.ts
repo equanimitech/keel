@@ -150,20 +150,16 @@ function formatTime(seconds: number): string {
   if (seconds <= 0) {
     return "0s";
   }
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
 
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
   const m = Math.floor((seconds % 3600) / 60);
   const s = seconds % 60;
 
-  if (d > 0) {
-    return h > 0 ? `${d}d ${h}h` : `${d}d`;
-  }
-  if (h > 0) {
-    return m > 0 ? `${h}h ${m}m` : `${h}h`;
-  }
-  return `${m}:${s.toString().padStart(2, "0")}`;
+  const parts: string[] = [];
+  if (d > 0) { parts.push(`${d}d`); }
+  if (h > 0) { parts.push(`${h}h`); }
+  if (m > 0) { parts.push(`${m}m`); }
+  if (s > 0 || parts.length === 0) { parts.push(`${s}s`); }
+  return parts.join(" ");
 }
