@@ -111,9 +111,9 @@ async function updateBadgeForTab(
     if (hostname.includes(domain)) {
       const until = await store.getValue();
       if (until && until > Date.now()) {
-        const remainingMin = Math.max(1, Math.ceil((until - Date.now()) / 60_000));
+        const remainingSec = Math.ceil((until - Date.now()) / 1000);
         await browser.action.setBadgeText({
-          text: `${remainingMin}m`,
+          text: formatBadgeTime(remainingSec),
           tabId,
         });
         await browser.action.setBadgeBackgroundColor({
@@ -148,4 +148,20 @@ async function updateBadgeForTab(
     color: anyActive ? "#4ade80" : "#94a3b8",
     tabId,
   });
+}
+
+/**
+ * Compact time format for the extension badge (max ~4 chars).
+ */
+function formatBadgeTime(seconds: number): string {
+  const d = Math.floor(seconds / 86400);
+  if (d > 0) {
+    return `${d}d`;
+  }
+  const h = Math.floor(seconds / 3600);
+  if (h > 0) {
+    return `${h}h`;
+  }
+  const m = Math.max(1, Math.ceil(seconds / 60));
+  return `${m}m`;
 }
