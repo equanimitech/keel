@@ -7,20 +7,21 @@
 
 * `2026-06-01-keel-authoring-architecture.md` — the bounded-context boundary + how shields are authored
 
-* `2026-06-01-strategic-friction-design.md` — the friction model + the browser (shield) reference slice
+* `2026-06-01-strategic-friction-design.md` — the friction model + the browser (Drogue) reference slice
 
 * `2026-06-01-tides-wind-down-design.md` — the desktop (compass) wind-down driver + observer
 
 * `2026-06-01-keel-ai-gate-design.md` — the Claude Code focus gate (a compass renderer)
 
 * `2026-05-31-always-deployed-browser-design.md` — the always-on browser surface
+
 * `2026-06-01-keel-design-system-alignment.md` — the **presentation shared core** (`@keel/ui`: tokens + shadcn), how friction renderers look
 
 ***
 
 ## Part I — What keel is
 
-> keel is **one friction model** applied across **two bounded contexts** over **one observation substrate**: a scalar `Friction f ∈ [0,1]` per **target**, computed by **intention-first drivers**, painted by **renderer ports** onto the ladder `hide<dim<delay<blur<block`, softened by the attention-research design principles, overridable by **scarce skip credits**, mirrored by **scoreless reflection**.
+> keel is **one model** over **capabilities × surfaces**, fed by **one observation substrate**: a scalar `Friction f ∈ [0,1]` per **target**, computed by **intention-first drivers**, expressed two ways — **Drogue** (*resist*: friction renderers on the ladder `hide<dim<delay<blur<block`, with an **engagement policy** so escalations arm at breakpoints, not mid-task) and **Compass-orient** (*reveal*: meta-awareness cues + scoreless reflection — the research's strongest lever) — and overridable by **scarce skip credits**.
 
 **Research stance (non-negotiable).** Every mechanism traces to `attention-research-basis.md` and leans on its *strong* rows (interruption cost, meta-awareness, breakpoints, personalization) and avoids its *weak/debunked* ones (capacity-decline myth, binaural, NSDR, flow figures). keel reduces **fragmentation/drift**; it never claims to restore lost *capacity* or to *produce* equanimity (constructs: ES-16 Non-reactivity, EQUA-S Hedonic Independence — measured in people, not products).
 
@@ -30,18 +31,24 @@
 
 The top structure is **two orthogonal axes**, not one surface-bound split. **Capabilities** are concerns (what keel does); **surfaces** are deployment columns (where it runs). Binding a concern to a surface (the authoring spec's first cut — "Shield = browser, Compass = desktop") is a DDD smell and breaks the moment a third surface appears. So:
 
-- **Shared core (surface-agnostic):** the **friction model** (`Friction` · drivers→`f` · ladder · `FrictionRenderer` port · skip credits · scoreless reflection) + the **observation substrate** (event schema). Neither shield nor compass, neither browser nor desktop. TS canonical, mirrored to Rust at the seam.
-- **Capabilities (concerns / roles):**
-  - **Shield** — *intervene*: render friction onto whatever the surface controls.
-  - **Compass** — *observe + orient*: sense activity, feed the substrate, drive `f` from intention.
-  - **Authoring** — *generate* interventions (the `AuthoringProvider` port).
-- **Surfaces (deployment columns of adapters):** each surface supplies adapters for one or more capabilities.
+* **Shared core (surface-agnostic):** the **friction model** (`Friction` · drivers→`f` · ladder · `FrictionRenderer` port · skip credits · scoreless reflection) + the **observation substrate** (event schema). Neither drogue nor compass, neither browser nor desktop. TS canonical; Rust does sensing/execution only (no model duplication).
 
-| Capability ↓ / Surface → | **browser** | **desktop** | **app** *(future, not now)* |
-|---|---|---|---|
-| **Shield** (intervene) | DOM renderers | overlay (stain) + **AI-gate hook** | app-UI / notification renderers |
-| **Compass** (observe+orient) | tab-watcher | window-watcher + OS sensing | usage-watcher |
-| **Authoring** (generate) | BYOK-in-browser | desktop-connected · Claude-Code-MCP | — |
+* **Capabilities (concerns / roles):**
+
+  * **Drogue** — *intervene*: render friction onto whatever the surface controls. (A drogue is a sea-anchor that adds **graduated drag** to slow and steady a vessel in heavy weather — literally `f`. Renamed from "Shield" for nautical coherence with Compass; the browser's existing `ShieldDefinition`/shields *code symbols* are the Drogue renderer layer — a downstream code rename, not done yet.)
+
+  * **Compass** — *observe + orient*: **observe** (sense activity, feed the substrate, drive `f` from intention) **+ orient** (*reveal* the user's position back to them — the meta-awareness "bell" + scoreless reflection). Orient is a peer output to Drogue, not a friction rung — it's the research's strongest lever, so it's first-class, not a footnote.
+
+  * **Authoring** — *generate* interventions (the `AuthoringProvider` port).
+
+* **Surfaces (deployment columns of adapters):** each surface supplies adapters for one or more capabilities.
+
+| Capability ↓ / Surface →     | **browser**     | **desktop**                         | **app** *(future, not now)*     |
+| ---------------------------- | --------------- | ----------------------------------- | ------------------------------- |
+| **Drogue** (resist)          | DOM renderers   | overlay (stain) + **AI-gate hook**  | app-UI / notification renderers |
+| **Compass** — observe        | tab-watcher     | window-watcher + OS sensing         | usage-watcher                   |
+| **Compass** — orient (reveal)| in-page bell / reflection | the "bell" + daily reflection | app nudges                |
+| **Authoring** (generate)     | BYOK-in-browser | desktop-connected · Claude-Code-MCP | —                               |
 
 The only genuinely surface-bound bits are **physics** — DOM mutation (TS-in-browser), OS sensing (Rust-on-desktop). Everything above the adapter line is the shared core. "Align browser and desktop closely" = they're two columns over one core, not two contexts.
 
@@ -53,11 +60,17 @@ The only genuinely surface-bound bits are **physics** — DOM mutation (TS-in-br
 
 ## Part III — The friction model (shared kernel)
 
-* **`Friction`** — branded scalar `f ∈ [0,1]`, one per **`target`**. `0` = intentional path, unimpeded; `1` = max friction. *("target" replaces "arm" — the bandit metaphor misleads; a target is just the scope* *`f`* *is keyed by, instantiated per surface: a domain for a browser Shield target, an activity for a desktop Compass target.)*
+* **`Friction`** — branded scalar `f ∈ [0,1]`, one per **`target`**. `0` = intentional path, unimpeded; `1` = max friction. *("target" replaces "arm" — the bandit metaphor misleads; a target is just the scope* *`f`* *is keyed by, instantiated per surface: a domain for a browser Drogue target, an activity for a desktop target.)*
 
 * **Driver** — computes `f` for a target; multiple compose by **max** (Part IV).
 
-* **`FrictionRenderer`** (port) — given `f`, paints itself; declares a **`FrictionBand`** **`{rung, engagesAt}`** on the ladder `hide<dim<delay<blur<block`. Adapters live in the surface (DOM, overlay, **or the Claude Code hook**); the port + ladder live in the kernel. A binary shield is the degenerate band `engagesAt: 1`.
+* **`FrictionRenderer`** (port) — a **Drogue** output. Given `f`, paints friction; declares a **`FrictionBand`** **`{rung, engagesAt, arming}`** on the ladder `hide<dim<delay<blur<block`. Adapters live in the surface (DOM, overlay, **or the Claude Code hook**); port + ladder live in the kernel. A binary drogue is the degenerate band `engagesAt: 1`.
+  * **`engagesAt`** (a `Friction`) = *what rung at this `f`* — the threshold the renderer begins at.
+  * **`arming`** = *when a rung-change takes effect* — `immediate | breakpoint(maxGraceMs) | grace(ms)`. This decouples the `f`-curve from timing so escalations (esp. to `delay`/`block`) **fire at the next natural breakpoint, not mid-task** (research principle #1; avoids the ~23-min residue cost). Low rungs (`dim`) default `immediate`; high rungs default `breakpoint`.
+
+* **Two output families** (don't collapse them):
+  * **Drogue** — *resist*: the friction renderers above (subtractive cost, on the ladder, `f`-scaled, armed).
+  * **Compass-orient** — *reveal*: the meta-awareness **bell** + scoreless **reflection**. `f`-aware (may intensify) but **not friction** — it imposes no cost, it surfaces your position. The browser's existing "signals" (additive indicators) generalize to this. Putting meta-awareness on the friction ladder would be a category error; it is the research's *strongest* lever and gets its own axis.
 
 * **Skip credits** — the override: scarce, *granted not earned*, rendered as a depleting resource (never a score). Resolves Holistic Control via scarcity, not a locked door. Per-target tactic (count, lift duration, refill).
 
@@ -104,7 +117,7 @@ Every renderer on both surfaces inherits these (from `attention-research-basis.m
 1. **Breakpoint-arming** — higher rungs engage at the next natural breakpoint (switch/idle/commit), never mid-task (avoids the ~23-min interruption-residue cost). *Applies to the YouTube cooldown too, not just desktop.*
 2. **Periphery-first** — ambient (the stain) before focal.
 3. **Nudge > block** — no hard cutoff; coding-block (AI stops *producing*, still converses) + scarce credits; never traps the machine.
-4. **Meta-awareness is a primary mechanism, not a side feature** — the "digital bell" (notice duration/hour) + scoreless reflection. Strongest restoration evidence; also the Fade engine.
+4. **Meta-awareness is a primary mechanism, not a side feature** — the "digital bell" (notice duration/hour) + scoreless reflection. Strongest restoration evidence; also the Fade engine. **It is the Compass-orient output, a peer to Drogue-friction — not a rung on the ladder** (Part III). Modeling it as friction would be a category error.
 5. **Personalization** — user-set times, per-target tactics, credits. *The user is high-work-control → the research says blocking backfires for them → intention-alignment + meta-awareness fit better than quotas.*
 6. **Wider context = Zenborg** — the intention source (Part IV).
 
@@ -116,7 +129,7 @@ Every renderer on both surfaces inherits these (from `attention-research-basis.m
 
 Each surface is a column of adapters over the shared core. We build **browser** and **desktop** now; **app** is a future column.
 
-* **browser** — Shield adapters: DOM renderers (RuleSpec + 7 primitives + validator + interpreter, TS, standalone). Compass adapter: tab-watcher. Authoring: BYOK-in-browser. Always-deployed (slice A).
+* **browser** — Drogue adapters: DOM renderers (RuleSpec + 7 primitives + validator + interpreter, TS, standalone). Compass: tab-watcher (observe) + in-page bell/reflection (orient). Authoring: BYOK-in-browser. Always-deployed (slice A).
 
 * **desktop** — Compass adapters: hard-to-quit hidden daemon, window-watcher + OS sensing, the wind-down driver, the observation substrate writer. Shield adapters: the stain overlay + the **AI-gate hook** (a `FrictionRenderer` whose adapter denies Claude Code coding tools, breakpoint-armed). Plus a read-only **focus MCP** (distinct from the authoring MCP). Authoring: desktop-connected · Claude-Code-MCP.
 
