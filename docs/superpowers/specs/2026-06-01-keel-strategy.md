@@ -1,3 +1,13 @@
+---
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:fe1a69db45132d07aa4bad5b966c270fa334f01f6ec6f287c26704d83e37f3c2
+  docFilename: 2026-06-01-keel-strategy.md
+  stampedAt: 2026-06-01T16:02:39.497761Z
+  signature: ed25519:nwBUDIVAcaMzWTXyi1qe2JwH6MP2fMw6KO/LFijHl0xVmeNBvw+9vAkQD8D80qfJ7A/XDa/EUV1VP4IfYNc2AA==
+---
 # keel — Unified Strategy
 
 **Date:** 2026-06-01
@@ -43,12 +53,12 @@ The top structure is **two orthogonal axes**, not one surface-bound split. **Cap
 
 * **Surfaces (deployment columns of adapters):** each surface supplies adapters for one or more capabilities.
 
-| Capability ↓ / Surface →     | **browser**     | **desktop**                         | **app** *(future, not now)*     |
-| ---------------------------- | --------------- | ----------------------------------- | ------------------------------- |
-| **Drogue** (resist)          | DOM renderers   | overlay (stain) + **AI-gate hook**  | app-UI / notification renderers |
-| **Compass** — observe        | tab-watcher     | window-watcher + OS sensing         | usage-watcher                   |
-| **Compass** — orient (reveal)| in-page bell / reflection | the "bell" + daily reflection | app nudges                |
-| **Authoring** (generate)     | BYOK-in-browser | desktop-connected · Claude-Code-MCP | —                               |
+| Capability ↓ / Surface →      | **browser**               | **desktop**                         | **app** *(future, not now)*     |
+| ----------------------------- | ------------------------- | ----------------------------------- | ------------------------------- |
+| **Drogue** (resist)           | DOM renderers             | overlay (stain) + **AI-gate hook**  | app-UI / notification renderers |
+| **Compass** — observe         | tab-watcher               | window-watcher + OS sensing         | usage-watcher                   |
+| **Compass** — orient (reveal) | in-page bell / reflection | the "bell" + daily reflection       | app nudges                      |
+| **Authoring** (generate)      | BYOK-in-browser           | desktop-connected · Claude-Code-MCP | —                               |
 
 The only genuinely surface-bound bits are **physics** — DOM mutation (TS-in-browser), OS sensing (Rust-on-desktop). Everything above the adapter line is the shared core. "Align browser and desktop closely" = they're two columns over one core, not two contexts.
 
@@ -65,14 +75,19 @@ The only genuinely surface-bound bits are **physics** — DOM mutation (TS-in-br
 * **Driver** — computes `f` for a target; multiple compose by **max** (Part IV).
 
 * **`FrictionRenderer`** (port) — a **Drogue** output. Given `f`, paints friction. Each renderer declares three fields (no compound "band" noun):
+
   * **`notch`** — its level on the **drag scale** `hide < dim < delay < blur < block` (escalating drag — the deeper notch, the more the drogue bites).
+
   * **`engagesAt`** (a `Friction`) — the threshold `f` at which it begins. A binary drogue is the degenerate case: one notch, `engagesAt: 1`.
-  * **`arming`** — *when a notch-change takes effect* — `immediate | breakpoint(maxGraceMs) | grace(ms)`. Decouples the `f`-curve from timing so escalations (esp. to `delay`/`block`) **fire at the next natural breakpoint, not mid-task** (research #1; avoids the ~23-min residue cost). Low notches (`dim`) default `immediate`; high notches default `breakpoint`.
+
+  * **`arming`** — *when a notch-change takes effect* — `immediate | breakpoint(maxGraceMs) | grace(ms)`. Decouples the `f`-curve from timing so escalations (esp. to `delay`/`block`) **fire at the next natural breakpoint, not mid-task** (research #1; avoids the \~23-min residue cost). Low notches (`dim`) default `immediate`; high notches default `breakpoint`.
 
   Adapters live in the surface (DOM, overlay, **or the Claude Code hook**); the port + the drag scale live in the kernel.
 
 * **Two output families** (don't collapse them):
+
   * **Drogue** — *resist*: the friction renderers above (subtractive cost, on the drag scale, `f`-scaled, armed).
+
   * **Compass-orient** — *reveal*: the meta-awareness **bell** + scoreless **reflection**. `f`-aware (may intensify) but **not friction** — it imposes no cost, it surfaces your position. The browser's existing "signals" (additive indicators) generalize to this. Putting meta-awareness on the drag scale would be a category error; it is the research's *strongest* lever and gets its own axis.
 
 * **Skip credits** — the override: scarce, *granted not earned*, rendered as a depleting resource (never a score). Resolves Holistic Control via scarcity, not a locked door. Per-target tactic (count, lift duration, refill).
@@ -156,7 +171,7 @@ Concrete moves that pull the surfaces together:
 
 ## Part IX — Unified build sequence
 
-1. **Rename** equanimi → keel. *(plan written)*
+1. **~~Rename~~** ~~equanimi → keel.~~ *~~(plan written)~~* *done.*
 2. **`packages/domain/src/rules/`** — RuleSpec + 7 primitives + `frictionBand` (TS). Upstream of everything (authoring spec).
 3. **Friction core (shared kernel)** — `Friction`, `frictionCurve`, `FrictionRung`, `FrictionBand`, `FrictionRenderer` port. + the browser **reference slice** (renderer/credits/reflection plumbing; `usage-vs-budget` as the demoted proof-driver).
 4. **Observation substrate** — watcher/event model + JSONL/rollup (shared; desktop `window` watcher + browser `tab` watcher).
