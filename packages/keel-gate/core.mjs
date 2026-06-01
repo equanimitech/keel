@@ -16,7 +16,7 @@
 
 /** @type {Target} */
 export const DEFAULT_TARGET = {
-  driver: { kind: "wind-down", windDown: "23:30", hardStop: "01:00", reset: "05:00" },
+  driver: { kind: "wind-down", windDown: "22:30", hardStop: "00:00", reset: "05:00" },
   rules: [{ notch: "block", engagesAt: 1.0, arming: "breakpoint", maxGraceMin: 10,
             tools: ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"] }],
   orient: { bellAfterMin: 120, sessionGapMin: 30 },
