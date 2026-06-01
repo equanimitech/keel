@@ -1,5 +1,11 @@
 # keel Design System Alignment — Design
 
+> **⊛ Reconciled with the umbrella** (`2026-06-01-keel-strategy.md`, canonical). How this fits the capabilities × surfaces model:
+> - **`@keel/ui` is the presentation shared core** — surface-agnostic, consumed by the browser/desktop/(future app) columns. It sits beside the **logic shared core** (`@keel/domain`: friction model, drivers, observation substrate). Two faces of one core; both surface-agnostic, both inward of the surface columns.
+> - **The "tokens-only" content-overlay tier == the browser Shield-capability renderers** (cooldown, stain, feed-hide). So the friction ladder's rungs (`dim`/`delay`/`block`) render *through* `@keel/ui` tokens — this spec governs how the `FrictionRenderer` adapters *look*; the strategy governs what they *do*.
+> - **Coordinate the popup→React conversion here with the popup toggle-removal** in `strategic-friction` Part IV (same files — do them as one move, not twice).
+> - Naming is already `@keel/*` (post-rename) — consistent. Theme is per-surface (no sync), consistent with the umbrella's separate-storage reality.
+
 **Date:** 2026-06-01
 **Status:** Approved design, pre-plan
 **Surfaces:** `apps/desktop` (Tauri), `apps/browser` (WXT), new `packages/ui`

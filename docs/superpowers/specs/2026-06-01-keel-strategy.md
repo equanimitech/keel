@@ -14,6 +14,7 @@
 * `2026-06-01-keel-ai-gate-design.md` — the Claude Code focus gate (a compass renderer)
 
 * `2026-05-31-always-deployed-browser-design.md` — the always-on browser surface
+* `2026-06-01-keel-design-system-alignment.md` — the **presentation shared core** (`@keel/ui`: tokens + shadcn), how friction renderers look
 
 ***
 
@@ -147,6 +148,8 @@ Concrete moves that pull the surfaces together:
 6. **AI-gate** — hook renderer (breakpoint-armed) + meta-awareness bell + focus MCP.
 7. **Authoring pipeline** — `AuthoringProvider` port + BYOK-in-browser + validation gate (own track; the Authoring capability, browser column first).
 8. **Zenborg intention source** — replace clock-proxy with real declared intention. *(future)*
+
+**Parallel track (cross-cutting):** the **design-system alignment** (`@keel/ui` presentation core — tokens + shadcn, light/dark) runs alongside steps 3–6, since the friction renderers (stain, cooldown overlay, popup) render through it. Coordinate the popup→React conversion with the popup toggle-removal (step 3 / strategic-friction Part IV).
 
 ***
 
