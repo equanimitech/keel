@@ -141,10 +141,12 @@ keel cannot reach inside Cursor / Terminal, and on macOS without special entitle
 ### The ladder (`hide < dim < delay < blur < block`)
 
 - **`dim` → StainOverlay (reused).** The existing full-screen radial wash (`StainOverlay.tsx`, its own Tauri WebviewWindow, opacity driven by a 0–100 `progress`) is driven by `f`: `stain.progress = f × 100`. A warm wash that deepens as the night goes — gain-reduction *before* the wall. (Today it's wired to drift and disabled-by-default; this slice re-points it at `f`.)
-- **`block` → lockdown at `f = 1`**, three channels at once:
-  1. **AI-gate (the teeth).** keel exposes a **local MCP server** (and/or a Claude Code hook). While lockdown is active it returns a *decline* instruction to Claude sessions — your own coding assistant stands down. Because you code *with* Claude, this raises the cost of the compulsive act at its source, far more honestly than blacking out a screen. Local-only; no network. (Tool/schema design deferred to the plan — see `designing-mcp-tools`.)
-  2. **Cooldown overlay.** A full-screen overlay window ("land the plane — break until 05:00"), minted via `TauriOverlayManager` like the stain window. Attention barrier, not an OS lock.
-  3. **The daemon holds.** keel will not stand down on its own until **R** (or a credit is spent — below).
+- **`delay` → meta-awareness bell (evidence-led, before the wall).** From `W`, an occasional bounded "digital bell" notices your state ("3h unbroken, 01:02") — scaffolds the noticing skill (strongest restoration evidence) and is the Fade engine. A nudge, never a block.
+- **`block` → coding-block at lockdown** — the teeth, at the *tool*, **breakpoint-armed**:
+  1. **AI-gate via a Claude Code hook (the reliable teeth).** A `PreToolUse` hook **denies coding actions** (`Edit/Write/MultiEdit/NotebookEdit/Bash`) — your coding assistant stops *producing*, while conversation still works. (MCP can't gate; the hook is the enforcement. Full design: `docs/superpowers/specs/2026-06-01-keel-ai-gate-design.md`.) A read-only MCP surfaces tide state so Claude is focus-aware.
+  2. **Breakpoint-armed, not clock-slammed.** Crossing `H` enters `pending_lockdown`; the block asserts at the **next natural breakpoint** (app switch / idle / commit, from the observer) or a ~10-min max grace — never mid-keystroke (avoids the ~23-min interruption-residue cost).
+  3. **Cooldown overlay (peripheral).** The stain at max + a gentle overlay; an attention barrier, not an OS lock.
+  - **No full-turn block.** Dropped per the evidence (hard cutoffs get abandoned). keel withholds AI *code production* and raises friction; it never blocks conversation or traps the machine.
 
 ### The override: a finite, scarce **skip budget** (resolves Holistic Control)
 
@@ -152,7 +154,7 @@ Lockdown is escapable only by spending a **credit** — a scarce, granted (never
 
 - **Grant:** `N` per month with a small rollover cap (default **2/month, cap 3** — tactic, tune later). Granted flat, not earned by behavior (earning would gamify it → couples to hedonic reward → washing).
 - **Spend:** a deliberate, confirmed action; stands lockdown down for the rest of that night (until **R**); decrements the visible remaining count; **logged as a `skip` event** (it's data — clustered skips are a future compulsion signal).
-- **At 0 credits:** **no sanctioned exit until R.** keel grants nothing — AI-gate stays on, overlay holds, daemon won't stand down. This is the chosen purist Ulysses pact.
+- **At 0 credits:** **no sanctioned exit until R** — the coding-block holds (AI won't produce code, stain/overlay hold, daemon won't stand down). The purist Ulysses pact, but in its softened form: it withholds AI code production, never conversation and never the machine.
 
 ### Sovereignty & Safety (honest boundaries)
 
@@ -238,8 +240,8 @@ A `skip` is appended to the day's JSONL and surfaced in the rollup; `remaining` 
 
 - With a coding app frontmost after **W**, the stain wash appears and deepens as the clock approaches **H** (visible, escalating, *before* the wall).
 - Below **W**, or with a non-coding app frontmost, `f = 0` and keel is invisible (near-enemy guard).
-- At **H**, lockdown engages: the AI-gate makes Claude sessions decline, the cooldown overlay shows, and keel grants no sanctioned exit until **R** — **except** by spending a skip credit, which stands lockdown down for the night, decrements `remaining`, and logs a `skip` event.
-- At **0 remaining credits**, lockdown holds until **R** with no sanctioned exit; the daemon resists quitting but the OS-level exit remains (honest enforcement ceiling / safety floor).
+- From **W**, an escalating meta-awareness bell notices state (no block); crossing **H** enters `pending_lockdown` (coding still works) until the next breakpoint or a ~10-min grace, then the AI-gate hook **denies coding actions** (conversation still works) until **R** — **except** by spending a skip credit, which stands the block down for the night, decrements `remaining`, and logs a `skip` event. **No full-turn block.**
+- At **0 remaining credits**, the coding-block holds until **R**; the daemon resists quitting but conversation, and the OS-level exit, always remain (honest enforcement ceiling / safety floor).
 - Config (coding apps, W/H/R, budget) is editable when not in lockdown, and **refused** during lockdown.
 - Every app switch is a coalesced, durationful event in `~/.keel/observations/YYYY/MM/DD.jsonl` with `watcher` + `host` provenance; the day's `…/DD.md` rollup reports coding minutes, switches/hr, median dwell, longest stretch, friction peak, lockdowns, skips, and the "wound-down-on-own" reflection (no streak/score).
 - `windDownDriver`, `CadenceRollup`, and `SkipBudget` are pure and unit-tested without the GUI.
