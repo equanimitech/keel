@@ -6,7 +6,8 @@
 > - **`usage-vs-budget` is demoted** to a weak/optional signal — kept as this slice's *plumbing-prover*, not the flagship. Primary drivers are intention-first (`wind-down` → Zenborg → `detected-compulsion`); see umbrella Part IV. ("give it another try" — kept, not dropped.)
 > - The research-led renderer principles apply to *every* renderer here, including the YouTube cooldown: **breakpoint-arming, periphery-first, nudge>block, meta-awareness, personalization** (umbrella Part VI; `docs/references/attention-research-basis.md`).
 > - **Capability "Shield" → "Drogue"** (the friction-render/intervene role; nautical, pairs with Compass). The browser `ShieldDefinition`/shields *code symbols* are the Drogue renderer layer — code rename is a downstream task.
-> - **`FrictionBand` gains `arming`** (`immediate | breakpoint | grace`) so escalations fire at breakpoints, not mid-task (research #1). And **meta-awareness (bell/reflection) is the Compass-orient output, a peer to Drogue — *not* a rung on the friction ladder** (umbrella Part III). The browser "signals" generalize to Compass-orient.
+> - **Vocabulary renamed** (umbrella Part III): the **friction ladder → drag scale**; **rung → notch** (`hide<dim<delay<blur<block`); **`FrictionBand` is dropped** — a renderer just declares `notch` + `engagesAt` + **`arming`** (`immediate | breakpoint | grace`, so escalations fire at breakpoints, not mid-task — research #1).
+> - **Meta-awareness (bell/reflection) is the Compass-orient output, a peer to Drogue — *not* a notch on the drag scale.** The browser "signals" generalize to Compass-orient.
 
 **Date:** 2026-06-01
 **Surface:** keel (browser extension first; model is platform-wide)

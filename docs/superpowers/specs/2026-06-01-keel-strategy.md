@@ -21,7 +21,7 @@
 
 ## Part I — What keel is
 
-> keel is **one model** over **capabilities × surfaces**, fed by **one observation substrate**: a scalar `Friction f ∈ [0,1]` per **target**, computed by **intention-first drivers**, expressed two ways — **Drogue** (*resist*: friction renderers on the ladder `hide<dim<delay<blur<block`, with an **engagement policy** so escalations arm at breakpoints, not mid-task) and **Compass-orient** (*reveal*: meta-awareness cues + scoreless reflection — the research's strongest lever) — and overridable by **scarce skip credits**.
+> keel is **one model** over **capabilities × surfaces**, fed by **one observation substrate**: a scalar `Friction f ∈ [0,1]` per **target**, computed by **intention-first drivers**, expressed two ways — **Drogue** (*resist*: friction renderers on the **drag scale** `hide<dim<delay<blur<block`, each at a **notch**, armed so escalations engage at breakpoints, not mid-task) and **Compass-orient** (*reveal*: meta-awareness cues + scoreless reflection — the research's strongest lever) — and overridable by **scarce skip credits**.
 
 **Research stance (non-negotiable).** Every mechanism traces to `attention-research-basis.md` and leans on its *strong* rows (interruption cost, meta-awareness, breakpoints, personalization) and avoids its *weak/debunked* ones (capacity-decline myth, binaural, NSDR, flow figures). keel reduces **fragmentation/drift**; it never claims to restore lost *capacity* or to *produce* equanimity (constructs: ES-16 Non-reactivity, EQUA-S Hedonic Independence — measured in people, not products).
 
@@ -64,19 +64,22 @@ The only genuinely surface-bound bits are **physics** — DOM mutation (TS-in-br
 
 * **Driver** — computes `f` for a target; multiple compose by **max** (Part IV).
 
-* **`FrictionRenderer`** (port) — a **Drogue** output. Given `f`, paints friction; declares a **`FrictionBand`** **`{rung, engagesAt, arming}`** on the ladder `hide<dim<delay<blur<block`. Adapters live in the surface (DOM, overlay, **or the Claude Code hook**); port + ladder live in the kernel. A binary drogue is the degenerate band `engagesAt: 1`.
-  * **`engagesAt`** (a `Friction`) = *what rung at this `f`* — the threshold the renderer begins at.
-  * **`arming`** = *when a rung-change takes effect* — `immediate | breakpoint(maxGraceMs) | grace(ms)`. This decouples the `f`-curve from timing so escalations (esp. to `delay`/`block`) **fire at the next natural breakpoint, not mid-task** (research principle #1; avoids the ~23-min residue cost). Low rungs (`dim`) default `immediate`; high rungs default `breakpoint`.
+* **`FrictionRenderer`** (port) — a **Drogue** output. Given `f`, paints friction. Each renderer declares three fields (no compound "band" noun):
+  * **`notch`** — its level on the **drag scale** `hide < dim < delay < blur < block` (escalating drag — the deeper notch, the more the drogue bites).
+  * **`engagesAt`** (a `Friction`) — the threshold `f` at which it begins. A binary drogue is the degenerate case: one notch, `engagesAt: 1`.
+  * **`arming`** — *when a notch-change takes effect* — `immediate | breakpoint(maxGraceMs) | grace(ms)`. Decouples the `f`-curve from timing so escalations (esp. to `delay`/`block`) **fire at the next natural breakpoint, not mid-task** (research #1; avoids the ~23-min residue cost). Low notches (`dim`) default `immediate`; high notches default `breakpoint`.
+
+  Adapters live in the surface (DOM, overlay, **or the Claude Code hook**); the port + the drag scale live in the kernel.
 
 * **Two output families** (don't collapse them):
-  * **Drogue** — *resist*: the friction renderers above (subtractive cost, on the ladder, `f`-scaled, armed).
-  * **Compass-orient** — *reveal*: the meta-awareness **bell** + scoreless **reflection**. `f`-aware (may intensify) but **not friction** — it imposes no cost, it surfaces your position. The browser's existing "signals" (additive indicators) generalize to this. Putting meta-awareness on the friction ladder would be a category error; it is the research's *strongest* lever and gets its own axis.
+  * **Drogue** — *resist*: the friction renderers above (subtractive cost, on the drag scale, `f`-scaled, armed).
+  * **Compass-orient** — *reveal*: the meta-awareness **bell** + scoreless **reflection**. `f`-aware (may intensify) but **not friction** — it imposes no cost, it surfaces your position. The browser's existing "signals" (additive indicators) generalize to this. Putting meta-awareness on the drag scale would be a category error; it is the research's *strongest* lever and gets its own axis.
 
 * **Skip credits** — the override: scarce, *granted not earned*, rendered as a depleting resource (never a score). Resolves Holistic Control via scarcity, not a locked door. Per-target tactic (count, lift duration, refill).
 
 * **Scoreless reflection** — "limit reached / wound-down on own N of 7." A mirror that builds judgment → Fade. No streak/badge.
 
-* **Cooldown =** **`f`** **pinned to 1** = every renderer on the target at its rung at once. One word for the f=1 state across both surfaces (supersedes desktop "lockdown").
+* **Cooldown =** **`f`** **pinned to 1** = every renderer on the target at its deepest notch at once. One word for the f=1 state across both surfaces (supersedes desktop "lockdown").
 
 ***
 
@@ -114,7 +117,7 @@ Both surfaces already observe; today they diverge. Align them onto **one event m
 
 Every renderer on both surfaces inherits these (from `attention-research-basis.md`):
 
-1. **Breakpoint-arming** — higher rungs engage at the next natural breakpoint (switch/idle/commit), never mid-task (avoids the ~23-min interruption-residue cost). *Applies to the YouTube cooldown too, not just desktop.*
+1. **Breakpoint-arming** — deeper notches engage at the next natural breakpoint (switch/idle/commit), never mid-task (avoids the ~23-min interruption-residue cost). *Applies to the YouTube cooldown too, not just desktop.*
 2. **Periphery-first** — ambient (the stain) before focal.
 3. **Nudge > block** — no hard cutoff; coding-block (AI stops *producing*, still converses) + scarce credits; never traps the machine.
 4. **Meta-awareness is a primary mechanism, not a side feature** — the "digital bell" (notice duration/hour) + scoreless reflection. Strongest restoration evidence; also the Fade engine. **It is the Compass-orient output, a peer to Drogue-friction — not a rung on the ladder** (Part III). Modeling it as friction would be a category error.
