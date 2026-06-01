@@ -53,7 +53,7 @@ export function useTrayIcon(): void {
           menu,
           icon: idleIcon,
           iconAsTemplate: true,
-          tooltip: "Monotask",
+          tooltip: "Keel",
         });
 
         console.log("✅ Tray icon created successfully!");
@@ -179,7 +179,7 @@ async function createMenu(): Promise<Menu> {
         },
       }),
       await MenuItem.new({
-        text: "Quit monotask",
+        text: "Quit Keel",
         action: async () => {
           await exit(0);
         },

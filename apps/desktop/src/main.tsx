@@ -30,7 +30,7 @@ bootstrap()
     // Show error to user
     document.getElementById("root")!.innerHTML = `
       <div style="padding: 24px; max-width: 600px; margin: 50px auto; text-align: center;">
-        <h1 style="color: #C00;">Failed to start Monotask</h1>
+        <h1 style="color: #C00;">Failed to start Keel</h1>
         <p style="color: #666; margin: 16px 0;">An error occurred during initialization:</p>
         <pre style="background: #F5F5F4; padding: 16px; border-radius: 8px; text-align: left; overflow-x: auto;">${error}</pre>
         <p style="color: #666; margin-top: 16px;">Please restart the application.</p>
