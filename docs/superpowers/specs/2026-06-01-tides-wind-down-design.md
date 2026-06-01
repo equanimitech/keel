@@ -4,6 +4,7 @@
 **Surface:** keel desktop (Tauri/macOS); consumes shared `@keel/domain` primitives
 **Status:** design, approved in brainstorming — ready for implementation plan
 **Lineage:** EquanimiTech *Strategic Friction* (`docs/superpowers/specs/2026-06-01-strategic-friction-design.md`); observer model adapted from **ActivityWatch** (buckets/events, heartbeat+pulsetime, watcher separation); persistence pattern from **Secretariat / Pensieve** (markdown-king for human-facing artifacts)
+**Equanimitech diagnostic:** passed. Sovereignty held via a finite **skip budget** (scarcity-as-friction) rather than a locked door; "lockdown" is honestly an attention + AI-tool barrier, not an OS cage — the residual OS-level exit is the safety floor (graceful-failure). The interventionist teeth are an **AI-gate** (local MCP/hook that makes Claude sessions decline at lockdown), not screen-blanking. Strategic Friction → ES-16 Non-reactivity; Fade applies to the *intervention*, not the daemon. No claim keel produces equanimity.
 **Depends on:** the rename to `keel` (`docs/superpowers/plans/2026-06-01-rename-equanimi-to-keel.md`) and the shared `Friction` value object + `frictionCurve()` introduced by the Strategic Friction browser slice (Part IV). Both are shared primitives; whichever slice lands first creates them.
 
 ---
@@ -133,18 +134,37 @@ While a coding app is frontmost:
 
 ---
 
-## Part IV — The renderer (ladder on desktop)
+## Part IV — The interventionist (renderer + the teeth)
 
-keel cannot reach inside Cursor / Terminal; it renders its own overlays on top (it already runs as a macOS **Accessory**, above fullscreen). Two rungs of the Strategic Friction ladder (`hide < dim < delay < blur < block`) apply:
+keel cannot reach inside Cursor / Terminal, and on macOS without special entitlements it **cannot physically lock the machine**. So intervention is **multi-channel**, escalating with `f`, and at lockdown the real teeth are at the *tool*, not the OS.
+
+### The ladder (`hide < dim < delay < blur < block`)
 
 - **`dim` → StainOverlay (reused).** The existing full-screen radial wash (`StainOverlay.tsx`, its own Tauri WebviewWindow, opacity driven by a 0–100 `progress`) is driven by `f`: `stain.progress = f × 100`. A warm wash that deepens as the night goes — gain-reduction *before* the wall. (Today it's wired to drift and disabled-by-default; this slice re-points it at `f`.)
-- **`block` → hard-lock cooldown window.** At `f = 1`, a cooldown overlay window ("land the plane — break until 05:00"), minted via `TauriOverlayManager` the same way the stain window is. It re-asserts on any attempt to bring a coding app frontmost, until **R**.
+- **`block` → lockdown at `f = 1`**, three channels at once:
+  1. **AI-gate (the teeth).** keel exposes a **local MCP server** (and/or a Claude Code hook). While lockdown is active it returns a *decline* instruction to Claude sessions — your own coding assistant stands down. Because you code *with* Claude, this raises the cost of the compulsive act at its source, far more honestly than blacking out a screen. Local-only; no network. (Tool/schema design deferred to the plan — see `designing-mcp-tools`.)
+  2. **Cooldown overlay.** A full-screen overlay window ("land the plane — break until 05:00"), minted via `TauriOverlayManager` like the stain window. Attention barrier, not an OS lock.
+  3. **The daemon holds.** keel will not stand down on its own until **R** (or a credit is spent — below).
 
-### Decision recorded: hard lock overrides compass-not-cage for this arm
+### The override: a finite, scarce **skip budget** (resolves Holistic Control)
 
-The parent doc is emphatic — *"Not a cage. It never hard-blocks in the name of control."* This slice **deliberately departs** from that for the deep-night coding arm: between **H** and **R** the lock has **no escape hatch**.
+Lockdown is escapable only by spending a **credit** — a scarce, granted (never *earned*) skip. This is a `budget` in the domain sense (a *skip budget*) and the costly signal that lets *you* classify a night as worth-it without keel having to detect crafting-vs-compulsion (which it can't do honestly).
 
-**Reasoning (and the risk):** the mission is literally *"stop me from coding until 3AM."* Sleep is a special case where the user's considered, declared intention ("do not let me code through the night") should beat the in-the-moment urge — the lock *is* the intention, asserted in advance against a predictably-compromised later self (Ulysses-pact framing). The accepted risk: resentment, or the user killing keel / switching machines. If that materialises, the fallback is the parent doc's escapable-with-friction model (hold-to-continue / type-why), or a ratchet (escapable early, hard-lock only 02:00–05:00). Those are *not* built now; this records why and the off-ramp.
+- **Grant:** `N` per month with a small rollover cap (default **2/month, cap 3** — tactic, tune later). Granted flat, not earned by behavior (earning would gamify it → couples to hedonic reward → washing).
+- **Spend:** a deliberate, confirmed action; stands lockdown down for the rest of that night (until **R**); decrements the visible remaining count; **logged as a `skip` event** (it's data — clustered skips are a future compulsion signal).
+- **At 0 credits:** **no sanctioned exit until R.** keel grants nothing — AI-gate stays on, overlay holds, daemon won't stand down. This is the chosen purist Ulysses pact.
+
+### Sovereignty & Safety (honest boundaries)
+
+- **"Locked" is not an OS cage.** keel offers no *sanctioned* exit at 0 credits, but cannot and must not physically trap the machine. A determined user can quit the process or use another device. The **hard-to-quit daemon raises the cost** of that unsanctioned exit; it never makes it impossible.
+- **That residual exit is the safety floor.** A genuine emergency is never blocked by keel — satisfying Calm Interface's graceful-failure. We get the purist pact *and* safety precisely by being honest about the enforcement ceiling. No separate "break-glass" is built; the OS-level exit is it.
+- **Holistic Control:** the *considered self* sets W/H/R, the coding-app list, and the skip budget in advance, and can edit them — but **not during an active lockdown** (editing config mid-lockdown is itself gated, else the override is trivial). Daytime, fully editable.
+- **Modification Rights:** open Tauri repo, forkable, config in editable markdown. The user's ultimate exit.
+- **Construct:** Strategic Friction here maps to **ES-16 Non-reactivity**. No claim that lockdown *produces* equanimity — only that it raises the cost of the compulsive path.
+
+### Fade-by-Design (the intervention fades, not the daemon)
+
+A tool you can't quit is in tension with Fade. Resolution: the **intervention** lessens as you stop drifting — fewer nights reach lockdown, and the daily rollup reflects *"you wound down on your own 5 of 7 nights"* (a teaching reflection, **not** a streak/score — scoring would gamify). A healthy 6-month outcome is you widening W or retiring the arm because you no longer drift. *Construct: EQUA-S Hedonic Independence.* The observer may persist; the friction should fade.
 
 ---
 
@@ -159,28 +179,47 @@ Rust window tracker ──window_changed──▶ Observer (TS)
         │                                   ├─ classify frontmost vs coding-app set
         │                                   └─ update in-memory dwell/cadence ─▶ daily rollup .md
         ▼
-   (now, config) ──▶ windDownDriver: f = (frontmostApp, now, config)
+   (now, config, creditsSpentTonight) ──▶ windDownDriver: f = pure(...)
         │
         ├─ f → stain.progress (StainOverlay)
-        └─ f == 1 → show/refresh hard-lock cooldown window;  f < 1 → hide it
+        └─ f == 1 (lockdown) ──┬─ AI-gate: MCP/hook returns "decline" to Claude sessions
+                               ├─ cooldown overlay window (TauriOverlayManager)
+                               └─ daemon holds until R or a credit is spent
 ```
 
-A periodic tick (existing 1s cadence is fine) re-evaluates `f` even when the frontmost app doesn't change, because **the clock moves** — the lock must arm at H without an app switch.
+A periodic tick (existing 1s cadence is fine) re-evaluates `f` even when the frontmost app doesn't change, because **the clock moves** — lockdown must arm at H without an app switch. Lockdown is a derived predicate (`f == 1 && !skippedTonight`), so spending a credit flips it off for the night purely through state.
 
 ### Components / units (each one purpose, clear interface)
 
-- **`windDownDriver`** (pure) — `(frontmostApp: string, now: Date, config: TideConfig) → Friction`. No I/O. Owns the curve + arm logic.
+- **`windDownDriver`** (pure) — `(frontmostApp, now, config, skippedTonight) → Friction`. No I/O. Owns curve + arm + skip logic.
+- **`SkipBudget`** (domain) — a `budget` value object: grant/spend/remaining with the N-per-month + rollover-cap policy. Pure; spending is a transition, persistence is elsewhere.
 - **`Observer`** — consumes `window_changed`, coalesces into events, appends JSONL, maintains the running rollup. Knows nothing about friction.
-- **`CadenceRollup`** (pure) — `events[] → DailyRollup`. Derives switches/hr, median dwell, longest stretch.
-- **`MarkdownStore` / `JsonlStore`** — thin persistence adapters over `~/.keel/observations/…` and `~/.keel/config.md`. The only units that touch the filesystem.
+- **`CadenceRollup`** (pure) — `events[] → DailyRollup`. Derives switches/hr, median dwell, longest stretch, lockdowns, skips, "wound-down-on-own" reflection.
+- **`AiGate`** — the lockdown→Claude bridge. A **local MCP server** and/or Claude Code hook exposing keel's lockdown state as a *decline* directive. Reads lockdown state; no business logic.
+- **`Daemon`** — LaunchAgent + Accessory app: hidden (no dock / app-switcher), relaunches if killed, runs the tick. Raises the cost of the unsanctioned exit; never blocks it.
+- **`ObservationRepository` / `ConfigRepository`** (ports) — `JsonlStore` + `MarkdownStore` implementations behind fp-ts `TaskEither` interfaces (matching the existing `FileSystemConfigRepository` pattern). The only units that touch the filesystem. Config edits are **refused while lockdown is active**.
 - **Renderer wiring** — maps `f` onto `StainOverlay` progress and the cooldown window via `TauriOverlayManager`.
+
+> **Ports (DIP/OCP).** `Watcher` (emits events), `FrictionDriver` (`→ Friction`), `ObservationRepository`, `ConfigRepository`, and `AiGate` are interfaces. The reserved `afk`/`editor` watchers and the future `detected-compulsion` driver slot in against these contracts without touching existing units.
 
 ### Files (indicative; finalized in the plan)
 
-- Shared `@keel/domain`: `Friction` + `createFriction` + `frictionCurve` (shared with browser slice — create if absent).
-- Desktop new: `windDownDriver`, `Observer`, `CadenceRollup`, `JsonlStore`, `MarkdownStore`, `TideConfig` type.
-- Desktop touched: `TauriOverlayManager` (add cooldown window), `StainOverlay` re-point to `f`, `appState` (friction + cooldown state), Preferences pane (coding-app list + W/H/R), Tauri capability scope (`$HOME/.keel/**` — already set by the rename plan).
-- Rust: upgrade the tracker to durationful/heartbeat emission (or keep change-emit and coalesce in TS — chosen in the plan).
+- Shared `@keel/domain`: `Friction` + `createFriction` + `frictionCurve` (shared with browser slice — create if absent); `SkipBudget` value object.
+- Desktop new: `windDownDriver`, `Observer`, `CadenceRollup`, `AiGate` (MCP server / hook), `JsonlStore`, `MarkdownStore`, `TideConfig` type, repository ports.
+- Desktop touched: `TauriOverlayManager` (add cooldown window), `StainOverlay` re-point to `f`, `appState` (friction + lockdown + credits state), Preferences pane (coding-app list + W/H/R + skip budget; locked during lockdown), Tauri capability scope (`$HOME/.keel/**` — already set by the rename plan).
+- Rust / daemon: upgrade the tracker to durationful/heartbeat emission (or keep change-emit and coalesce in TS — chosen in the plan); LaunchAgent for hard-to-quit relaunch.
+
+### Config (`~/.keel/config.md` frontmatter)
+
+```yaml
+coding_apps: ["Cursor", "Terminal", "iTerm2", "Claude"]
+wind_down: "23:30"   # W
+hard_stop: "01:00"   # H
+reset: "05:00"       # R
+skip_budget: { per_month: 2, rollover_cap: 3, remaining: 2 }
+```
+
+A `skip` is appended to the day's JSONL and surfaced in the rollup; `remaining` decrements on spend, replenishes monthly to the cap.
 
 ---
 
@@ -189,9 +228,9 @@ A periodic tick (existing 1s cadence is fine) re-evaluates `f` even when the fro
 - **`afk` watcher** — idle/presence sensing. Reserved slot; "different sensor source, not needed now."
 - **`editor` watcher** — file/project/language texture. Reserved slot (needs editor plugins).
 - **`detected-compulsion` driver** — acting on switch cadence / texture. We *collect* its data; we do not drive `f` from it.
-- **Escapable / ratcheting lock** — the off-ramp if the hard lock proves wrong. Recorded in Part IV, not built.
 - **store.bin → markdown migration** for existing sessions / captures / drift.
 - **Non-coding arms** (general "you should be winding down") and **multi-device** sync.
+- **A separate emergency break-glass** — unnecessary; the OS-level unsanctioned exit *is* the safety floor (Part IV).
 
 ---
 
@@ -199,8 +238,10 @@ A periodic tick (existing 1s cadence is fine) re-evaluates `f` even when the fro
 
 - With a coding app frontmost after **W**, the stain wash appears and deepens as the clock approaches **H** (visible, escalating, *before* the wall).
 - Below **W**, or with a non-coding app frontmost, `f = 0` and keel is invisible (near-enemy guard).
-- At **H** a hard-lock cooldown window appears and **cannot be escaped** until **R**; bringing a coding app frontmost re-asserts it. At **R** it clears and a new observation day begins.
-- Every app switch is recorded as a coalesced, durationful event in `~/.keel/observations/YYYY/MM/DD.jsonl` with `watcher` + `host` provenance; the day's `…/DD.md` rollup reports coding minutes, switches/hr, median dwell, longest stretch, friction peak, and lockouts.
-- `windDownDriver` and `CadenceRollup` are pure and unit-tested without the GUI.
-- No copy or comment claims keel *detects compulsion* or *produces equanimity*.
+- At **H**, lockdown engages: the AI-gate makes Claude sessions decline, the cooldown overlay shows, and keel grants no sanctioned exit until **R** — **except** by spending a skip credit, which stands lockdown down for the night, decrements `remaining`, and logs a `skip` event.
+- At **0 remaining credits**, lockdown holds until **R** with no sanctioned exit; the daemon resists quitting but the OS-level exit remains (honest enforcement ceiling / safety floor).
+- Config (coding apps, W/H/R, budget) is editable when not in lockdown, and **refused** during lockdown.
+- Every app switch is a coalesced, durationful event in `~/.keel/observations/YYYY/MM/DD.jsonl` with `watcher` + `host` provenance; the day's `…/DD.md` rollup reports coding minutes, switches/hr, median dwell, longest stretch, friction peak, lockdowns, skips, and the "wound-down-on-own" reflection (no streak/score).
+- `windDownDriver`, `CadenceRollup`, and `SkipBudget` are pure and unit-tested without the GUI.
+- No copy or comment claims keel *detects compulsion* or *produces equanimity*; the AI-gate and daemon are local-only.
 - Adding the `afk` watcher later requires no change to the event model, persistence, or the wind-down driver.
