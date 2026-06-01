@@ -1,10 +1,14 @@
 # keel Design System Alignment — Design
 
 > **⊛ Reconciled with the umbrella** (`2026-06-01-keel-strategy.md`, canonical). How this fits the capabilities × surfaces model:
-> - **`@keel/ui` is the presentation shared core** — surface-agnostic, consumed by the browser/desktop/(future app) columns. It sits beside the **logic shared core** (`@keel/domain`: friction model, drivers, observation substrate). Two faces of one core; both surface-agnostic, both inward of the surface columns.
-> - **The "tokens-only" content-overlay tier == the browser Shield-capability renderers** (cooldown, stain, feed-hide). So the friction ladder's rungs (`dim`/`delay`/`block`) render *through* `@keel/ui` tokens — this spec governs how the `FrictionRenderer` adapters *look*; the strategy governs what they *do*.
-> - **Coordinate the popup→React conversion here with the popup toggle-removal** in `strategic-friction` Part IV (same files — do them as one move, not twice).
-> - Naming is already `@keel/*` (post-rename) — consistent. Theme is per-surface (no sync), consistent with the umbrella's separate-storage reality.
+>
+> * **`@keel/ui`** **is the presentation shared core** — surface-agnostic, consumed by the browser/desktop/(future app) columns. It sits beside the **logic shared core** (`@keel/domain`: friction model, drivers, observation substrate). Two faces of one core; both surface-agnostic, both inward of the surface columns.
+>
+> * **The "tokens-only" content-overlay tier == the browser Drogue-capability renderers** (cooldown, stain, feed-hide). So the drag scale's notches (`dim`/`delay`/`block`) render *through* `@keel/ui` tokens — this spec governs how the `FrictionRenderer` adapters *look*; the strategy governs what they *do*.
+>
+> * **Coordinate the popup→React conversion here with the popup toggle-removal** in `strategic-friction` Part IV (same files — do them as one move, not twice).
+>
+> * Naming is already `@keel/*` (post-rename) — consistent. Theme is per-surface (no sync), consistent with the umbrella's separate-storage reality.
 
 **Date:** 2026-06-01
 **Status:** Approved design, pre-plan
@@ -16,21 +20,24 @@ Bring keel's UI/UX onto the same design system as its sibling apps **zenborg** a
 
 ## Non-goals
 
-- Redesigning *behavior* or information architecture. This is a visual/system alignment, not a UX re-think of what the shields or sessions do.
-- Migrating content overlays to shadow-DOM isolation (deferred; see Risks).
-- Cross-surface theme **sync** (desktop and extension are separate processes with separate storage; each remembers its own theme).
-- Touching `packages/domain` (stays pure types, no styling).
+* Redesigning *behavior* or information architecture. This is a visual/system alignment, not a UX re-think of what the shields or sessions do.
+
+* Migrating content overlays to shadow-DOM isolation (deferred; see Risks).
+
+* Cross-surface theme **sync** (desktop and extension are separate processes with separate storage; each remembers its own theme).
+
+* Touching `packages/domain` (stays pure types, no styling).
 
 ## Decisions (locked during brainstorming)
 
-| # | Decision | Choice |
-|---|----------|--------|
+| # | Decision                 | Choice                                                                                                                                             |
+| - | ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1 | Identity under alignment | **Stone base + ensō (sage) accent.** Neutral stone surfaces/text like the siblings; keel's `primary`/`accent` = sage green; charcoal for emphasis. |
-| 2 | Depth of adoption | **Full shadcn rebuild** of every surface that can safely host it. |
-| 3 | Surface scope | **Both** desktop and browser extension. |
-| 4 | Dark mode | **Full light + dark parity**, system-preference aware. |
-| 5 | Where the system lives | **New `@keel/ui` workspace package** as the single source of truth. |
-| 6 | Architecture given WXT | **Tiered.** shadcn for app pages; token-aligned vanilla for injected overlays. |
+| 2 | Depth of adoption        | **Full shadcn rebuild** of every surface that can safely host it.                                                                                  |
+| 3 | Surface scope            | **Both** desktop and browser extension.                                                                                                            |
+| 4 | Dark mode                | **Full light + dark parity**, system-preference aware.                                                                                             |
+| 5 | Where the system lives   | **New** **`@keel/ui`** **workspace package** as the single source of truth.                                                                        |
+| 6 | Architecture given WXT   | **Tiered.** shadcn for app pages; token-aligned vanilla for injected overlays.                                                                     |
 
 ## Architecture
 
@@ -40,9 +47,11 @@ Bring keel's UI/UX onto the same design system as its sibling apps **zenborg** a
 
 Pure CSS custom properties. No JS, no React. The palette, radii, and font variables.
 
-- Scoped to a **`[data-keel-theme]` root selector**, *not* `:root`. This is the critical WXT affordance: a content script injects keel UI into a host page (YouTube, LinkedIn) where `:root` and `html.dark` belong to the host. Scoping tokens to a keel-owned container lets the overlay carry keel's theme regardless of the host page's own light/dark state.
-- Provides both themes: `[data-keel-theme="light"]` and `[data-keel-theme="dark"]`, plus a `system` resolver applied by each surface.
-- Importable **anywhere** — extension pages, desktop, and raw content scripts alike.
+* Scoped to a **`[data-keel-theme]`** **root selector**, *not* `:root`. This is the critical WXT affordance: a content script injects keel UI into a host page (YouTube, LinkedIn) where `:root` and `html.dark` belong to the host. Scoping tokens to a keel-owned container lets the overlay carry keel's theme regardless of the host page's own light/dark state.
+
+* Provides both themes: `[data-keel-theme="light"]` and `[data-keel-theme="dark"]`, plus a `system` resolver applied by each surface.
+
+* Importable **anywhere** — extension pages, desktop, and raw content scripts alike.
 
 ### Layer ② `@keel/ui` (components) — React + shadcn/radix/lucide
 
@@ -52,11 +61,11 @@ Hand-maintained shadcn/ui component library mirroring **zenborg's exact stack**:
 
 ### Three consumer tiers
 
-| Tier | Surfaces | Consumes | Notes |
-|------|----------|----------|-------|
-| **Full** | Desktop (Tauri panel, preferences, overlays) | ① + ② | Already React 19 + Vite + `motion`. Direct import. |
-| **Full** | Extension pages: popup, manage | ① + ② | Convert to **React entrypoints** (`@wxt-dev/module-react`). Isolated extension pages → radix portals to `document.body` are safe. |
-| **Tokens only** | ~15 content overlays (cooldowns, stains, feed-hides) | ① | Stay **vanilla DOM + CSS**. Restyle existing `style.css` against the token variables. Each overlay roots its DOM under a `[data-keel-theme]` container and sets keel's own theme. No React/radix. |
+| Tier            | Surfaces                                              | Consumes | Notes                                                                                                                                                                                             |
+| --------------- | ----------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Full**        | Desktop (Tauri panel, preferences, overlays)          | ① + ②    | Already React 19 + Vite + `motion`. Direct import.                                                                                                                                                |
+| **Full**        | Extension pages: popup, manage                        | ① + ②    | Convert to **React entrypoints** (`@wxt-dev/module-react`). Isolated extension pages → radix portals to `document.body` are safe.                                                                 |
+| **Tokens only** | \~15 content overlays (cooldowns, stains, feed-hides) | ①        | Stay **vanilla DOM + CSS**. Restyle existing `style.css` against the token variables. Each overlay roots its DOM under a `[data-keel-theme]` container and sets keel's own theme. No React/radix. |
 
 ## Token system
 
@@ -88,8 +97,9 @@ A full sage ramp (`sage-50…900`) and charcoal/cream tints are authored as name
 
 ### Typography & radii
 
-- **Fonts:** adopt **Geist Sans + Geist Mono** (zenborg's choice), bundled as woff2 in the package, `--font-sans`/`--font-mono`. System stack fallback. Content overlays apply keel fonts **only inside** their own `[data-keel-theme]` container so the host page is untouched.
-- **Radii:** zenborg/secretariat scale — `--radius: 0.625rem` with `-sm/-md/-lg/-xl` derivations in `@theme inline`.
+* **Fonts:** adopt **Geist Sans + Geist Mono** (zenborg's choice), bundled as woff2 in the package, `--font-sans`/`--font-mono`. System stack fallback. Content overlays apply keel fonts **only inside** their own `[data-keel-theme]` container so the host page is untouched.
+
+* **Radii:** zenborg/secretariat scale — `--radius: 0.625rem` with `-sm/-md/-lg/-xl` derivations in `@theme inline`.
 
 ## Component inventory & surface mapping
 
@@ -99,20 +109,27 @@ shadcn primitives to author in `@keel/ui` (driven by what the surfaces actually 
 
 Surface → component map:
 
-- **Desktop preferences pane** → `Tabs`, `Switch`, `Select`, `Slider`, `Input`, `Card`, `Button`.
-- **Desktop panel (idle/active)** → `Button`, `Card`, `Badge`. **Custom, kept:** the ensō tray button (`BigRedButton`, image-based) and the circular session timer (`react-circular-progressbar`) — no shadcn equivalent; restyled to sage tokens.
-- **Desktop overlays** (capture modal, stain, timer widget, waypoint) → `Dialog`/`Card` where they're keel-owned windows.
-- **Ext popup** → `Card`, `Switch` (per-shield toggles), `Button`, `Badge` (cooldown state), `Separator`.
-- **Ext manage page** → `Tabs`, `Switch`, `Select`, `Input`, `Card`.
-- **Content overlays** → **no shadcn**; vanilla DOM restyled to token vars (cooldown overlay, countdown badge, stain, hidden-element placeholders).
+* **Desktop preferences pane** → `Tabs`, `Switch`, `Select`, `Slider`, `Input`, `Card`, `Button`.
+
+* **Desktop panel (idle/active)** → `Button`, `Card`, `Badge`. **Custom, kept:** the ensō tray button (`BigRedButton`, image-based) and the circular session timer (`react-circular-progressbar`) — no shadcn equivalent; restyled to sage tokens.
+
+* **Desktop overlays** (capture modal, stain, timer widget, waypoint) → `Dialog`/`Card` where they're keel-owned windows.
+
+* **Ext popup** → `Card`, `Switch` (per-shield toggles), `Button`, `Badge` (cooldown state), `Separator`.
+
+* **Ext manage page** → `Tabs`, `Switch`, `Select`, `Input`, `Card`.
+
+* **Content overlays** → **no shadcn**; vanilla DOM restyled to token vars (cooldown overlay, countdown badge, stain, hidden-element placeholders).
 
 ## Theming mechanism (per surface)
 
 No shared runtime exists between surfaces, so theme preference is **per-surface**, default = `system`.
 
-- **Desktop:** theme stored via existing `@tauri-apps/plugin-store`; a small `ThemeProvider` sets `data-keel-theme` on the root and listens to `prefers-color-scheme` for `system`.
-- **Ext popup / manage:** theme stored in `chrome.storage` (alongside existing shield/signal stores in `utils/storage`); same `ThemeProvider` pattern on each page root.
-- **Content overlays:** read keel's stored theme from `chrome.storage`; set `data-keel-theme` on the overlay container. Overlays deliberately **do not** follow the host page's dark/light — they carry keel's own.
+* **Desktop:** theme stored via existing `@tauri-apps/plugin-store`; a small `ThemeProvider` sets `data-keel-theme` on the root and listens to `prefers-color-scheme` for `system`.
+
+* **Ext popup / manage:** theme stored in `chrome.storage` (alongside existing shield/signal stores in `utils/storage`); same `ThemeProvider` pattern on each page root.
+
+* **Content overlays:** read keel's stored theme from `chrome.storage`; set `data-keel-theme` on the overlay container. Overlays deliberately **do not** follow the host page's dark/light — they carry keel's own.
 
 ## WXT-specific concerns (the constraint that shaped this)
 
@@ -125,17 +142,21 @@ No shared runtime exists between surfaces, so theme preference is **per-surface*
 
 ## Build & workspace wiring
 
-- New package `packages/ui` → `@keel/ui`, `"type": "module"`, exports map: `"."` → `src/index.ts` (components), `"./tokens.css"` → `src/tokens.css`.
-- Peer deps: `react`, `react-dom`. Direct deps: `@radix-ui/*`, `lucide-react`, `cva`, `clsx`, `tailwind-merge`.
-- `apps/desktop` and `apps/browser` add `"@keel/ui": "workspace:*"`.
-- Root `pnpm build` / `pnpm typecheck` extended to include the package.
-- Dependency direction stays inward-clean: `domain` (types) ← `ui` (presentation) ← apps. `ui` never imports `domain` runtime logic beyond types if needed.
+* New package `packages/ui` → `@keel/ui`, `"type": "module"`, exports map: `"."` → `src/index.ts` (components), `"./tokens.css"` → `src/tokens.css`.
+
+* Peer deps: `react`, `react-dom`. Direct deps: `@radix-ui/*`, `lucide-react`, `cva`, `clsx`, `tailwind-merge`.
+
+* `apps/desktop` and `apps/browser` add `"@keel/ui": "workspace:*"`.
+
+* Root `pnpm build` / `pnpm typecheck` extended to include the package.
+
+* Dependency direction stays inward-clean: `domain` (types) ← `ui` (presentation) ← apps. `ui` never imports `domain` runtime logic beyond types if needed.
 
 ## Migration sequence (phased; keep the live ext working)
 
 The browser extension is **deployed and in daily use** (loaded unpacked in Brave). Desktop is dormant. Sequence protects the live surface:
 
-1. **Scaffold `@keel/ui`**: package, `tokens.css` (light+dark, sage+stone), Geist fonts, build wiring. No consumers yet.
+1. **Scaffold** **`@keel/ui`**: package, `tokens.css` (light+dark, sage+stone), Geist fonts, build wiring. No consumers yet.
 2. **Author core shadcn components** + a Storybook-less visual smoke (a dev route rendering each component in both themes).
 3. **Desktop adoption** (dormant, lowest risk): swap `App.css` enso theme → `@keel/ui/tokens.css`; rebuild preferences + panel on shadcn; restyle custom ensō button + timer; add `ThemeProvider`.
 4. **Ext popup → React + shadcn**, behind a parallel build; verify all shields/signals/cooldown still function before replacing.
@@ -145,16 +166,25 @@ The browser extension is **deployed and in daily use** (loaded unpacked in Brave
 
 ## Testing & verification
 
-- **Typecheck/build:** `pnpm typecheck` + `pnpm build` green across all three packages.
-- **Extension functional smoke:** load unpacked, confirm every shield/signal toggles, cooldown starts from popup and overlays render, manage page edits persist (`chrome.storage` intact).
-- **Theme matrix:** each surface rendered in light, dark, and system; content overlay shown over a **dark** YouTube page and a **light** LinkedIn page to confirm keel carries its own theme.
-- **Visual parity check:** side-by-side keel popup vs zenborg — same stone/radii/typography family, sage where zenborg is neutral.
-- **No host-page bleed:** confirm content-overlay CSS does not alter host page styles outside keel's container.
+* **Typecheck/build:** `pnpm typecheck` + `pnpm build` green across all three packages.
+
+* **Extension functional smoke:** load unpacked, confirm every shield/signal toggles, cooldown starts from popup and overlays render, manage page edits persist (`chrome.storage` intact).
+
+* **Theme matrix:** each surface rendered in light, dark, and system; content overlay shown over a **dark** YouTube page and a **light** LinkedIn page to confirm keel carries its own theme.
+
+* **Visual parity check:** side-by-side keel popup vs zenborg — same stone/radii/typography family, sage where zenborg is neutral.
+
+* **No host-page bleed:** confirm content-overlay CSS does not alter host page styles outside keel's container.
 
 ## Risks & open questions
 
-- **Hand-maintained shadcn library** drifts from upstream shadcn. Mitigation: pin component versions to zenborg's; document the source-of-truth.
-- **Tailwind v4 cross-package `@source` scanning** must be verified early in both bundlers (Vite-for-Tauri and WXT/Vite) — a known sharp edge. De-risk in Phase 1.
-- **Content overlay isolation** without shadow DOM means host CSS *can* still leak *into* keel's overlay. Accepted for now (status quo); shadow-DOM hardening is a deferred follow-up spec.
-- **Geist font payload** in the extension adds ~100–200 KB. Acceptable; subset if needed.
-- **Open:** do desktop and extension ever need a shared theme preference? Currently no shared backend — left per-surface. Revisit if a keel account/sync layer appears.
+* **Hand-maintained shadcn library** drifts from upstream shadcn. Mitigation: pin component versions to zenborg's; document the source-of-truth.
+
+* **Tailwind v4 cross-package** **`@source`** **scanning** must be verified early in both bundlers (Vite-for-Tauri and WXT/Vite) — a known sharp edge. De-risk in Phase 1.
+
+* **Content overlay isolation** without shadow DOM means host CSS *can* still leak *into* keel's overlay. Accepted for now (status quo); shadow-DOM hardening is a deferred follow-up spec.
+
+* **Geist font payload** in the extension adds \~100–200 KB. Acceptable; subset if needed.
+
+* **Open:** do desktop and extension ever need a shared theme preference? Currently no shared backend — left per-surface. Revisit if a keel account/sync layer appears.
+

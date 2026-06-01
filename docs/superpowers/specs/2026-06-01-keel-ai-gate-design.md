@@ -1,7 +1,7 @@
 # keel AI-Gate — design (Claude Code focus gate)
 
 > **⊛ Reconciled with the umbrella** (`2026-06-01-keel-strategy.md`, canonical). Superseded wording:
-> - The AI-gate hook is a **Shield-capability renderer adapter on the desktop surface** (`block` rung) — not a standalone subsystem. It reads the shared core's `f`/gate decision.
+> - The AI-gate hook is a **Drogue-capability renderer adapter on the desktop surface** (`block` notch) — not a standalone subsystem. It reads the shared core's `f`/gate decision.
 > - **`arm` → `target`**; `f = 1` state is **"cooldown"** (one word; "lockdown" = the desktop cooldown).
 > - **TS core, Rust thin edges:** the gate *decision* is the TS core's; the **Rust daemon** writes `state.json` and the hook enforces. Consistent with the resolved language decision.
 > - The **focus MCP** (read-only tide state) is distinct from the **authoring MCP** (writes shields) — two adapters, two capabilities.
