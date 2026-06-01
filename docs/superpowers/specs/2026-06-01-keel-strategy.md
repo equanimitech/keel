@@ -25,25 +25,34 @@
 
 ***
 
-## Part II — Structure: two contexts, one model, one substrate
+## Part II — Structure: capabilities × surfaces over one core
 
-The authoring spec's boundary is the top structure. The strategy is to **maximize the shared spine and keep the surface-specific edges thin** — that is what "align browser and desktop closely" means concretely.
+The top structure is **two orthogonal axes**, not one surface-bound split. **Capabilities** are concerns (what keel does); **surfaces** are deployment columns (where it runs). Binding a concern to a surface (the authoring spec's first cut — "Shield = browser, Compass = desktop") is a DDD smell and breaks the moment a third surface appears. So:
 
-| <br />                | **Shield context** (browser)                                           | **Compass context** (desktop)                                    | **Shared**                                                                                                                                                      |
-| --------------------- | ---------------------------------------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Owns                  | RuleSpec, 7 primitives, validator, DOM interpreter, authoring pipeline | daemon, sessions, drift, capture, wind-down, AI-gate             | —                                                                                                                                                               |
-| Language              | TS (standalone, in-bundle)                                             | Rust (Tauri backend) + TS (current frontend) — *seam, Part VIII* | kernel mirrored TS↔Rust                                                                                                                                         |
-| Scope key             | `target` = domain/matcher                                              | `target` = activity (e.g. coding-app set)                        | `Friction`, `Duration`                                                                                                                                          |
-| **Shared spine**      | →                                                                      | ←                                                                | **friction model · driver discipline · renderer ports · ladder · skip credits · scoreless reflection · the observer/event substrate · the evidence principles** |
-| Surface-specific edge | DOM mutation                                                           | OS sensing (frontmost app, idle)                                 | *(kept as thin as physics allows)*                                                                                                                              |
+- **Shared core (surface-agnostic):** the **friction model** (`Friction` · drivers→`f` · ladder · `FrictionRenderer` port · skip credits · scoreless reflection) + the **observation substrate** (event schema). Neither shield nor compass, neither browser nor desktop. TS canonical, mirrored to Rust at the seam.
+- **Capabilities (concerns / roles):**
+  - **Shield** — *intervene*: render friction onto whatever the surface controls.
+  - **Compass** — *observe + orient*: sense activity, feed the substrate, drive `f` from intention.
+  - **Authoring** — *generate* interventions (the `AuthoringProvider` port).
+- **Surfaces (deployment columns of adapters):** each surface supplies adapters for one or more capabilities.
 
-The only things that *must* differ are the DOM interpreter (shield) and OS sensing (compass) — both are physics. Everything else is shared.
+| Capability ↓ / Surface → | **browser** | **desktop** | **app** *(future, not now)* |
+|---|---|---|---|
+| **Shield** (intervene) | DOM renderers | overlay (stain) + **AI-gate hook** | app-UI / notification renderers |
+| **Compass** (observe+orient) | tab-watcher | window-watcher + OS sensing | usage-watcher |
+| **Authoring** (generate) | BYOK-in-browser | desktop-connected · Claude-Code-MCP | — |
+
+The only genuinely surface-bound bits are **physics** — DOM mutation (TS-in-browser), OS sensing (Rust-on-desktop). Everything above the adapter line is the shared core. "Align browser and desktop closely" = they're two columns over one core, not two contexts.
+
+**The app test:** a future app is just a new column — it drops in adapters for Shield + Compass against the same core, zero model change. (Not built now; the structure simply doesn't preclude it.)
+
+> This revises the authoring spec's framing: its "two bounded contexts" → "three capabilities × N surfaces." The authoring spec remains correct about the *physics* (shield logic is TS-in-browser; OS sensing is Rust) — that's now expressed as adapter-edge constraints, not a context boundary.
 
 ***
 
 ## Part III — The friction model (shared kernel)
 
-* **`Friction`** — branded scalar `f ∈ [0,1]`, one per **`target`**. `0` = intentional path, unimpeded; `1` = max friction. *("target" replaces "arm" — the bandit metaphor misleads; a target is just the scope* *`f`* *is keyed by, instantiated per context: domain in shield, activity in compass.)*
+* **`Friction`** — branded scalar `f ∈ [0,1]`, one per **`target`**. `0` = intentional path, unimpeded; `1` = max friction. *("target" replaces "arm" — the bandit metaphor misleads; a target is just the scope* *`f`* *is keyed by, instantiated per surface: a domain for a browser Shield target, an activity for a desktop Compass target.)*
 
 * **Driver** — computes `f` for a target; multiple compose by **max** (Part IV).
 
@@ -102,11 +111,15 @@ Every renderer on both surfaces inherits these (from `attention-research-basis.m
 
 ***
 
-## Part VII — Surfaces (thin edges)
+## Part VII — Surface columns (the adapter packs we ship now)
 
-* **Shield (browser, TS, standalone):** RuleSpec + 7 primitives + validator + DOM interpreter; authored via the `AuthoringProvider` port (BYOK-in-browser first). Renders friction on the DOM. Always-deployed (slice A).
+Each surface is a column of adapters over the shared core. We build **browser** and **desktop** now; **app** is a future column.
 
-* **Compass (desktop, Rust daemon):** hard-to-quit, hidden; runs the watchers, the wind-down driver, the overlays (stain), and the **AI-gate hook** (a `FrictionRenderer` whose adapter denies Claude Code coding tools, breakpoint-armed); exposes a read-only **focus MCP** (distinct from the authoring MCP).
+* **browser** — Shield adapters: DOM renderers (RuleSpec + 7 primitives + validator + interpreter, TS, standalone). Compass adapter: tab-watcher. Authoring: BYOK-in-browser. Always-deployed (slice A).
+
+* **desktop** — Compass adapters: hard-to-quit hidden daemon, window-watcher + OS sensing, the wind-down driver, the observation substrate writer. Shield adapters: the stain overlay + the **AI-gate hook** (a `FrictionRenderer` whose adapter denies Claude Code coding tools, breakpoint-armed). Plus a read-only **focus MCP** (distinct from the authoring MCP). Authoring: desktop-connected · Claude-Code-MCP.
+
+> Note the cross-fill: the browser already does *Compass* (tab-watching) and the desktop already does *Shield* (overlay, AI-gate). Neither surface is "the shield" or "the compass" — each plays both roles. That is the alignment.
 
 ***
 
