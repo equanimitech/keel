@@ -8,9 +8,9 @@ Part of the [equanimi monorepo](../../CLAUDE.md). Run from root with `pnpm dev:d
 
 ## Shared Domain
 
-Canonical domain types live in `@equanimi/domain` (`packages/domain/`). Desktop-specific domain logic (fp-ts aggregates, entities, services) lives in `src/domain/`. Value objects in `src/domain/valueObjects/` extend shared types with local utilities.
+Canonical domain types live in `@keel/domain` (`packages/domain/`). Desktop-specific domain logic (fp-ts aggregates, entities, services) lives in `src/domain/`. Value objects in `src/domain/valueObjects/` extend shared types with local utilities.
 
-**Rule:** If a type exists in `@equanimi/domain`, import it. Only define locally what requires fp-ts or desktop-specific behavior.
+**Rule:** If a type exists in `@keel/domain`, import it. Only define locally what requires fp-ts or desktop-specific behavior.
 
 ---
 

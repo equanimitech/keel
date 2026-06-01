@@ -20,7 +20,7 @@ equanimi/
 │   ├── browser/          # Chrome extension (WXT)
 │   └── desktop/          # macOS app (Tauri + React)
 ├── packages/
-│   └── domain/           # Shared domain types (@equanimi/domain)
+│   └── domain/           # Shared domain types (@keel/domain)
 ├── package.json          # Workspace scripts
 └── pnpm-workspace.yaml
 ```

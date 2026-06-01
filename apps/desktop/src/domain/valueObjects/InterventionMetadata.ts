@@ -3,12 +3,12 @@ import type {
   BCTReference,
   PDPReference,
   InterventionMetadata,
-} from "@equanimi/domain";
+} from "@keel/domain";
 
 /**
  * InterventionMetadata Value Object
  *
- * Types imported from @equanimi/domain. The INTERVENTION_METADATA registry
+ * Types imported from @keel/domain. The INTERVENTION_METADATA registry
  * is desktop-specific — it maps each desktop InterventionType to its
  * BCT/PDP specification.
  *

@@ -10,7 +10,7 @@ equanimi/
 │   ├── browser/          # Chrome extension (WXT) — attention shields
 │   └── desktop/          # macOS app (Tauri + React) — attention compass
 ├── packages/
-│   └── domain/           # Shared domain types (@equanimi/domain)
+│   └── domain/           # Shared domain types (@keel/domain)
 └── package.json          # Workspace scripts
 ```
 
@@ -27,7 +27,7 @@ pnpm typecheck            # Typecheck all packages
 
 **Do not run dev commands.** The user runs them manually.
 
-## Shared Domain (`@equanimi/domain`)
+## Shared Domain (`@keel/domain`)
 
 Pure types. No runtime dependencies. Both surfaces import from this package.
 

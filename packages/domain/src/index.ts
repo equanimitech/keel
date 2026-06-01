@@ -1,5 +1,5 @@
 /**
- * @equanimi/domain — Shared domain types for the equanimi platform.
+ * @keel/domain — Shared domain types for the equanimi platform.
  *
  * Pure types. No runtime dependencies. No framework coupling.
  * Both surfaces (desktop + browser) import from this package.

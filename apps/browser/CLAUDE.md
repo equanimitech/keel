@@ -8,7 +8,7 @@ Part of the [equanimi monorepo](../../CLAUDE.md). Run from root with `pnpm dev:b
 
 ## Shared Domain
 
-Types from `@equanimi/domain` provide canonical intervention classification, behavioral mechanisms, budget dimensions, and trigger conditions. Browser-specific runtime logic (shield definitions, signal definitions, content script behavior) stays in this app.
+Types from `@keel/domain` provide canonical intervention classification, behavioral mechanisms, budget dimensions, and trigger conditions. Browser-specific runtime logic (shield definitions, signal definitions, content script behavior) stays in this app.
 
 ---
 
@@ -32,7 +32,7 @@ apps/browser/
 │   │   ├── types.ts                 # SignalDefinition interface
 │   │   ├── registry.ts
 │   │   └── <name>/definition.ts
-│   └── budgets/                     # Budget types (re-exported from @equanimi/domain)
+│   └── budgets/                     # Budget types (re-exported from @keel/domain)
 │       └── types.ts
 ├── utils/                           # Shared utilities (storage helpers)
 └── public/                          # Static assets (icons, manifest)
@@ -86,7 +86,7 @@ pnpm typecheck
 - Content scripts use `defineContentScript()` from WXT
 - Each content script targets specific URL patterns via `matches`
 - Shields modify the DOM; signals observe and report
-- All module types reference `BehavioralMechanism` from `@equanimi/domain`
+- All module types reference `BehavioralMechanism` from `@keel/domain`
 
 ---
 

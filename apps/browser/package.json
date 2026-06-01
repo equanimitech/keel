@@ -1,5 +1,5 @@
 {
-  "name": "@equanimi/browser",
+  "name": "@keel/browser",
   "description": "Stopping cues for the internet. A modular attention intervention platform.",
   "private": true,
   "version": "0.1.0",
@@ -16,7 +16,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@equanimi/domain": "workspace:*"
+    "@keel/domain": "workspace:*"
   },
   "devDependencies": {
     "typescript": "~5.8.3",

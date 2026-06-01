@@ -8,7 +8,7 @@
  * The `mechanism` field uses `BehavioralMechanism` from the shared domain,
  * ensuring consistent behavioral classification across surfaces.
  */
-import type { BehavioralMechanism } from "@equanimi/domain";
+import type { BehavioralMechanism } from "@keel/domain";
 
 export interface ShieldDefinition {
   readonly id: string; // unique, kebab-case (e.g. "youtube-shorts-scroll-lock")

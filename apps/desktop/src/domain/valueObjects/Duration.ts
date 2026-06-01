@@ -1,11 +1,11 @@
 /**
  * Value Object: Duration
  *
- * Base branded type imported from @equanimi/domain.
+ * Base branded type imported from @keel/domain.
  * Desktop-specific utilities (between, formatDuration) defined locally.
  */
-import type { Duration } from "@equanimi/domain";
-import { createDuration } from "@equanimi/domain";
+import type { Duration } from "@keel/domain";
+import { createDuration } from "@keel/domain";
 
 // Re-export base type and shared factory
 export type { Duration };

@@ -17,7 +17,7 @@ importers:
 
   apps/browser:
     dependencies:
-      '@equanimi/domain':
+      '@keel/domain':
         specifier: workspace:*
         version: link:../../packages/domain
     devDependencies:
@@ -30,7 +30,7 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@equanimi/domain':
+      '@keel/domain':
         specifier: workspace:*
         version: link:../../packages/domain
       '@legendapp/state':

@@ -1,10 +1,10 @@
 /**
  * Value Object: AppName
  *
- * Base branded type imported from @equanimi/domain.
+ * Base branded type imported from @keel/domain.
  * Desktop-specific utilities (matching, equality, null handling) defined locally.
  */
-import type { AppName } from "@equanimi/domain";
+import type { AppName } from "@keel/domain";
 
 // Re-export base type
 export type { AppName };
