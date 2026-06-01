@@ -107,8 +107,11 @@ test("reflection counts observed nights, held = no skip (honest label)", () => {
 test("renderOrient: silent by day, voiced otherwise", () => {
   const t = mergeTarget({});
   assert.equal(renderOrient(t, "day", emptyState(), now), "");
-  assert.match(renderOrient(t, "wind_down", { ...emptyState(), lastPromptTs: now, sessionStartTs: now }, now), /\[keel\].*winding down|landing/i);
+  const wd = renderOrient(t, "wind_down", { ...emptyState(), lastPromptTs: now, sessionStartTs: now }, now);
+  assert.match(wd, /\[keel\].*winding down|landing/i);
+  assert.match(wd, /high-level/); // wind-down granularity nudge
   const locked = renderOrient(t, "lockdown", { ...emptyState(), skipUntilTs: 0, lastPromptTs: now }, now);
   assert.match(locked, /parked until 05:00/);
   assert.match(locked, /Instead:/); // substitution included
+  assert.match(locked, /Coarsest only/); // lockdown granularity nudge
 });

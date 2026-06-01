@@ -18,7 +18,11 @@
         "lockdown": "Coding's parked until {reset}. Conversation's fine; spend a skip if it's truly worth it: `node ~/.keel/keel.mjs skip` ({credits} left).",
         "substitution": "Instead: jot tomorrow's first task, then sleep.",
         "consequence": "",
-        "identity": ""
+        "identity": "",
+        "granularity": {
+          "windDown": "Keep it high-level — summaries and next steps, not deep multi-file dives.",
+          "lockdown": "Coarsest only — one-line status + tomorrow's first step; no detail."
+        }
       }
     }
   }

@@ -9,7 +9,8 @@
 /** @typedef {{ notch: Notch, engagesAt: Friction, arming?: Arming, maxGraceMin?: number, tools: string[] }} Rule */
 /** @typedef {{ perMonth: number, cap: number }} SkipBudget */
 /** @typedef {{ bellAfterMin: number, sessionGapMin: number }} Orient */
-/** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string }} Voice */
+/** @typedef {{ windDown: string, lockdown: string }} Granularity */
+/** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, granularity: Granularity }} Voice */
 /** @typedef {{ driver: Driver, rules: Rule[], orient: Orient, skipBudget: SkipBudget, voice: Voice }} Target */
 /** @typedef {{ observed?: boolean, skipped?: boolean }} Night */
 /** @typedef {{ credits: number, creditsMonth: string, skipUntilTs: number, sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, nights: Record<string, Night> }} State */
@@ -27,6 +28,10 @@ export const DEFAULT_TARGET = {
     substitution: "Instead: jot tomorrow's first task, then sleep.",
     consequence: "",
     identity: "",
+    granularity: {
+      windDown: "Keep it high-level — summaries and next steps, not deep multi-file dives.",
+      lockdown: "Coarsest only — one-line status + tomorrow's first step; no detail.",
+    },
   },
 };
 
@@ -172,7 +177,9 @@ export function renderOrient(target, phase, state, now) {
   const dur = unbrokenMin(state, now);
   const bell = dur >= target.orient.bellAfterMin
     ? ` You've been at it ${Math.floor(dur / 60)}h unbroken — worth landing the current thread.` : "";
-  const extra = [target.voice.consequence, target.voice.identity].filter(Boolean).join(" ");
+  // Adaptive-granularity nudge (Compass-orient): coarser as the night deepens. Applies even on a skipped night.
+  const gran = phase === "lockdown" ? target.voice.granularity?.lockdown : target.voice.granularity?.windDown;
+  const extra = [gran, target.voice.consequence, target.voice.identity].filter(Boolean).join(" ");
   const tail = `${bell}${extra ? " " + extra : ""}`;
   const body = phase === "lockdown" && !skipActive(state, now)
     ? denyReason(target, state)
