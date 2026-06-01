@@ -11,6 +11,12 @@ export default defineConfig({
   // (harmless at runtime). A global vite override would break desktop (vite@7).
   vite: () => ({
     plugins: [tailwindcss()] as never,
+    // Pin the dep-optimizer to source entrypoints. Without this, Vite's dev
+    // scanner also globs the build output (outDir "dist") and ENOENTs on stale
+    // dist/*.html mid-rebuild (regression from adding @tailwindcss/vite).
+    optimizeDeps: {
+      entries: ["entrypoints/**/*.html"],
+    },
   }),
   manifest: {
     name: "keel",
