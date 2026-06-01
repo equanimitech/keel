@@ -1,5 +1,5 @@
 /**
- * Budget and constraint types for the equanimi platform.
+ * Budget and constraint types for the keel platform.
  *
  * Budgets are aspirational constraints that encode user intention.
  * They modulate intervention intensity — never block access.

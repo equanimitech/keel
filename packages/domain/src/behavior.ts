@@ -1,5 +1,5 @@
 /**
- * Behavioral science types for the equanimi platform.
+ * Behavioral science types for the keel platform.
  *
  * Grounded in the BCT Taxonomy v1 (Michie et al., 2013) and
  * Persuasive Design Principles (Oinas-Kukkonen & Harjumaa, 2009).

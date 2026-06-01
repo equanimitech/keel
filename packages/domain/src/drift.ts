@@ -1,5 +1,5 @@
 /**
- * Drift signal types for the equanimi platform.
+ * Drift signal types for the keel platform.
  *
  * A drift signal represents the moment a user moves away
  * from their declared intention toward a compulsive pattern.

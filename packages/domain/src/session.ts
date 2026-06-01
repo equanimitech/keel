@@ -1,5 +1,5 @@
 /**
- * Session context types for the equanimi platform.
+ * Session context types for the keel platform.
  *
  * Sessions represent a bounded period of user activity.
  *

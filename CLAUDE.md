@@ -5,7 +5,7 @@ A pnpm monorepo with two surfaces (browser extension + desktop app) sharing a pu
 ## Structure
 
 ```
-equanimi/
+keel/
 ├── apps/
 │   ├── browser/          # Chrome extension (WXT) — attention shields
 │   └── desktop/          # macOS app (Tauri + React) — attention compass

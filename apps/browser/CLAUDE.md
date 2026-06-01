@@ -2,7 +2,7 @@
 
 **A Chrome extension providing attention shields using WXT (WebExtension Toolkit)**
 
-Part of the [equanimi monorepo](../../CLAUDE.md). Run from root with `pnpm dev:browser` or locally with `pnpm dev`.
+Part of the [keel monorepo](../../CLAUDE.md). Run from root with `pnpm dev:browser` or locally with `pnpm dev`.
 
 ---
 

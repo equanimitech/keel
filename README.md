@@ -15,7 +15,7 @@ Digital platforms have removed every natural stopping cue. keel puts them back.
 ## Structure
 
 ```
-equanimi/
+keel/
 ├── apps/
 │   ├── browser/          # Chrome extension (WXT)
 │   └── desktop/          # macOS app (Tauri + React)

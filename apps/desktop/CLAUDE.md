@@ -2,7 +2,7 @@
 
 **An attention compass using DDD architecture with Tauri + React + TypeScript**
 
-Part of the [equanimi monorepo](../../CLAUDE.md). Run from root with `pnpm dev:desktop` or locally with `pnpm tauri dev`.
+Part of the [keel monorepo](../../CLAUDE.md). Run from root with `pnpm dev:desktop` or locally with `pnpm tauri dev`.
 
 ---
 

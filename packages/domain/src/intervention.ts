@@ -1,5 +1,5 @@
 /**
- * Core intervention types for the equanimi platform.
+ * Core intervention types for the keel platform.
  *
  * An intervention is the atomic unit of attention management.
  * Both surfaces (desktop and browser) express their features
