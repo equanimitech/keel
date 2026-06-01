@@ -2,53 +2,56 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make YouTube watch time drive a gradual friction dial that, at a configurable daily limit, triggers a cooldown lasting until a configurable reset hour (default 05:00) — and remove the on/off toggles from the extension popup.
+**Goal:** Land the Strategic Friction model in the domain (with the renderer port + band, and the definition schism resolved), classify every intervention onto the friction ladder declaratively, and implement YouTube as the first real driver+renderer: watch time drives a friction dial that dims the player (stain) and, at a configurable daily limit, triggers a cooldown until a configurable reset hour — overridable by spending a scarce monthly skip credit, with a scoreless reflection. Remove the popup on/off toggles.
 
-**Architecture:** Introduce a shared `Friction` primitive (`f ∈ [0,1]`) and pure helpers in `@equanimi/domain`. A driver in the YouTube watch-time content script computes `f` from accumulated daily seconds vs the user's `time-per-day` budget, persists it per-arm (`domainFriction`), and pins the existing per-domain cooldown to the next reset hour when the limit is crossed. The popup drops its toggles (control stays in the manage page) and becomes cooldown + read-only status. The two existing YouTube signals are refactored to consume the shared curve (DRY).
+**Architecture:** `Friction` (`f ∈ [0,1]`), `frictionCurve`, reset helpers, `FrictionRung`/`FrictionBand`, and the `FrictionRenderer` port are canonical in `@equanimi/domain`. `frictionBand?` is added to the canonical `InterventionDefinition`; the browser's `ShieldDefinition`/`SignalDefinition` become aliases of it (one model). The YouTube watch-time content script becomes the usage-vs-budget **driver** (writes `domainFriction("youtube.com")`, pins the cooldown at the limit). The watch-stain becomes the first **dim renderer** reading that friction. The 8 binary shields gain a *declared* band but keep their on/off runtime.
 
-**Tech Stack:** TypeScript, WXT (WebExtension Toolkit), `wxt/storage`, pnpm workspaces, Vitest (newly added to `@equanimi/domain` for the pure primitives).
+**Tech Stack:** TypeScript, WXT, `wxt/storage`, pnpm workspaces, Vitest (new, in `@equanimi/domain`).
 
-**Verification model:** Pure domain logic is TDD'd with Vitest. Extension/DOM wiring has no test harness in this repo, so it is verified with `pnpm typecheck` + explicit manual steps. **Do not run dev servers — ask the user to load/observe the extension.**
+**Verification model:** Pure domain logic is TDD'd with Vitest. Extension/DOM wiring has no test harness here, so it is verified with `pnpm typecheck` + explicit manual steps. **Do not run dev servers — ask the user to load/observe the extension.**
 
-**Decision flagged for review:** Task 1 adds Vitest to `packages/domain`. The repo currently has no test framework. If you would rather keep it test-free, skip Tasks 1–4's test steps and keep only the implementation steps (verified by `pnpm typecheck`).
+**Phasing:** Phase 0 (Tasks 1–7) is domain model + schism refactor — no behaviour change, verified by typecheck/tests. Phase 1 (Tasks 8–13) is the YouTube feature (driver, stain renderer, popup, manage, skip-credit override + reflection). Each task commits independently.
+
+**Known limitation (accepted for this slice):** the friction driver lives in the watch-time content script, so friction only accrues while the Watch Time signal is enabled (default on). Moving the driver to the background worker is deferred.
 
 ---
 
 ## File Structure
 
 **Create:**
-- `packages/domain/src/friction.ts` — pure friction helpers: `frictionCurve`, `logicalDayString`, `nextResetTimestamp`.
-- `packages/domain/src/value-objects.test.ts` — tests for `createFriction`.
-- `packages/domain/src/friction.test.ts` — tests for the friction helpers.
+- `packages/domain/src/friction.ts` — `frictionCurve`, `logicalDayString`, `nextResetTimestamp`, `FrictionRung`, `FRICTION_LADDER`, `FrictionBand`, `createFrictionBand`, `FrictionRenderer`.
+- `packages/domain/src/value-objects.test.ts`, `packages/domain/src/friction.test.ts`.
 
 **Modify:**
-- `packages/domain/src/value-objects.ts` — add `Friction` branded type + `createFriction` clamp.
-- `packages/domain/src/index.ts` — export the new type + functions.
-- `packages/domain/package.json` — add Vitest devDep + `test` script.
-- `apps/browser/utils/storage.ts` — add `domainFriction(domain)` store factory.
-- `apps/browser/entrypoints/youtube-watch-time.content/index.ts` — reset-hour-based day boundary, friction driver, limit→cooldown trigger; later, consume shared curve.
-- `apps/browser/entrypoints/youtube-stain.content/index.ts` — consume shared curve (DRY).
-- `apps/browser/entrypoints/popup/main.ts` — remove toggles; render read-only status; keep cooldown.
-- `apps/browser/entrypoints/manage/main.ts` — add soft-start + reset-hour inputs to the watch-time settings panel.
+- `packages/domain/src/value-objects.ts` — `Friction` + `createFriction`.
+- `packages/domain/src/intervention.ts` — add `frictionBand?` to `InterventionDefinition`.
+- `packages/domain/src/index.ts` — export new types/functions.
+- `packages/domain/package.json` — Vitest devDep + `test` script.
+- `apps/browser/modules/shields/types.ts`, `apps/browser/modules/signals/types.ts` — become aliases of `InterventionDefinition`.
+- All 9 shield definitions + 2 signal definitions — nested `classification` + `frictionBand`.
+- `apps/browser/utils/storage.ts` — `domainFriction(domain)` + `domainCooldownOverride(domain)`.
+- `apps/browser/entrypoints/youtube-watch-time.content/index.ts` — reset-hour day boundary + friction driver + limit→cooldown + counter styled by `f` + `limit-history` recording.
+- `apps/browser/entrypoints/youtube-stain.content/index.ts` — dim renderer reading `domainFriction`.
+- `apps/browser/entrypoints/youtube-cooldown.content/index.ts` + `style.css` — skip-credit override (suppress enforcement during override window) + scoreless reflection.
+- `apps/browser/entrypoints/popup/main.ts` + `style.css` — read-only status, no toggles.
+- `apps/browser/entrypoints/manage/main.ts` — add soft-start + reset-hour + skip config; remove dead stain range inputs.
 
 ---
 
+# Phase 0 — Domain model + schism resolution
+
 ## Task 1: Add Vitest to the domain package
 
-**Files:**
-- Modify: `packages/domain/package.json`
+**Files:** Modify `packages/domain/package.json`
 
-- [ ] **Step 1: Add the dev dependency and test script**
+- [ ] **Step 1: Add the dev dependency**
 
-Run:
-```bash
-pnpm --filter @equanimi/domain add -D vitest
-```
-Expected: `vitest` appears under `devDependencies` in `packages/domain/package.json`.
+Run: `pnpm --filter @equanimi/domain add -D vitest`
+Expected: `vitest` under `devDependencies`.
 
 - [ ] **Step 2: Add the `test` script**
 
-Edit `packages/domain/package.json` so the `scripts` block reads:
+Edit `packages/domain/package.json` `scripts` to:
 ```json
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -56,13 +59,12 @@ Edit `packages/domain/package.json` so the `scripts` block reads:
   },
 ```
 
-- [ ] **Step 3: Verify Vitest runs (no tests yet)**
+- [ ] **Step 3: Verify the toolchain**
 
 Run: `pnpm --filter @equanimi/domain test`
-Expected: Vitest starts and reports "No test files found" (exit is acceptable). This confirms the toolchain resolves.
+Expected: Vitest starts; "No test files found" is acceptable.
 
 - [ ] **Step 4: Commit**
-
 ```bash
 git add packages/domain/package.json pnpm-lock.yaml
 git commit -m "chore(domain): add vitest for pure-primitive tests"
@@ -72,9 +74,7 @@ git commit -m "chore(domain): add vitest for pure-primitive tests"
 
 ## Task 2: `Friction` value object (clamp)
 
-**Files:**
-- Modify: `packages/domain/src/value-objects.ts`
-- Test: `packages/domain/src/value-objects.test.ts`
+**Files:** Modify `packages/domain/src/value-objects.ts`; Test `packages/domain/src/value-objects.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -104,9 +104,9 @@ describe("createFriction", () => {
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @equanimi/domain test`
-Expected: FAIL — `createFriction` is not exported from `./value-objects.js`.
+Expected: FAIL — `createFriction` not exported.
 
-- [ ] **Step 3: Implement `Friction` + `createFriction`**
+- [ ] **Step 3: Implement**
 
 Append to `packages/domain/src/value-objects.ts`:
 ```ts
@@ -131,7 +131,6 @@ Run: `pnpm --filter @equanimi/domain test`
 Expected: PASS (4 tests).
 
 - [ ] **Step 5: Commit**
-
 ```bash
 git add packages/domain/src/value-objects.ts packages/domain/src/value-objects.test.ts
 git commit -m "feat(domain): add Friction value object with clamp"
@@ -139,11 +138,9 @@ git commit -m "feat(domain): add Friction value object with clamp"
 
 ---
 
-## Task 3: `frictionCurve` (shared asymptotic curve)
+## Task 3: `frictionCurve`
 
-**Files:**
-- Create: `packages/domain/src/friction.ts`
-- Test: `packages/domain/src/friction.test.ts`
+**Files:** Create `packages/domain/src/friction.ts`; Test `packages/domain/src/friction.test.ts`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -181,16 +178,13 @@ describe("frictionCurve", () => {
 Run: `pnpm --filter @equanimi/domain test`
 Expected: FAIL — cannot resolve `./friction.js`.
 
-- [ ] **Step 3: Implement `frictionCurve`**
+- [ ] **Step 3: Implement**
 
 Create `packages/domain/src/friction.ts`:
 ```ts
 /**
- * Pure friction helpers shared by all compulsion arms.
- *
- * The curve is the single source of truth previously copy-pasted into
- * the YouTube stain and watch-time signals. No DOM, no storage, no
- * framework coupling — vanilla math + Date arithmetic.
+ * Pure friction helpers + the friction-ladder vocabulary shared by all
+ * compulsion arms. No DOM, no storage, no framework coupling.
  */
 import type { Friction } from "./value-objects.js";
 import { createFriction } from "./value-objects.js";
@@ -201,12 +195,10 @@ const NEAR_MAX = -Math.log(0.05);
 /**
  * Asymptotic friction curve.
  *
- * Returns 0 below `minMinutes` of accumulated time, then rises
- * asymptotically toward ~0.95 right at `maxMinutes`:
- *
  *   f(t) = 1 − exp(−(t − min) / τ),  τ = (max − min) / −ln(0.05)
  *
- * `maxMinutes` is guarded to be at least `minMinutes + 1` so τ is finite.
+ * Returns 0 below `minMinutes`, rising toward ~0.95 at `maxMinutes`.
+ * `maxMinutes` is guarded to at least `minMinutes + 1` so τ is finite.
  */
 export const frictionCurve = (
   seconds: number,
@@ -226,10 +218,9 @@ export const frictionCurve = (
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @equanimi/domain test`
-Expected: PASS (curve tests green; clamp tests still green).
+Expected: PASS.
 
 - [ ] **Step 5: Commit**
-
 ```bash
 git add packages/domain/src/friction.ts packages/domain/src/friction.test.ts
 git commit -m "feat(domain): add shared frictionCurve"
@@ -239,15 +230,13 @@ git commit -m "feat(domain): add shared frictionCurve"
 
 ## Task 4: Reset-hour day boundary + next-reset timestamp
 
-**Files:**
-- Modify: `packages/domain/src/friction.ts`
-- Test: `packages/domain/src/friction.test.ts`
+**Files:** Modify `packages/domain/src/friction.ts`; Test `packages/domain/src/friction.test.ts`
 
 - [ ] **Step 1: Write the failing tests**
 
 Append to `packages/domain/src/friction.test.ts`:
 ```ts
-import { logicalDayString, nextResetTimestamp } from "./friction.js";
+import { logicalDayString, nextResetTimestamp, monthKey } from "./friction.js";
 
 describe("logicalDayString", () => {
   it("groups times after the reset hour into the same day", () => {
@@ -289,24 +278,33 @@ describe("nextResetTimestamp", () => {
     );
   });
 });
+
+describe("monthKey", () => {
+  it("returns YYYY-MM for the local month", () => {
+    expect(monthKey(new Date(2026, 5, 15, 12, 0, 0).getTime())).toBe("2026-06");
+  });
+  it("changes at the month boundary", () => {
+    const jun = monthKey(new Date(2026, 5, 30, 23, 0, 0).getTime());
+    const jul = monthKey(new Date(2026, 6, 1, 1, 0, 0).getTime());
+    expect(jun).not.toBe(jul);
+  });
+});
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @equanimi/domain test`
-Expected: FAIL — `logicalDayString` / `nextResetTimestamp` not exported.
+Expected: FAIL — helpers not exported.
 
-- [ ] **Step 3: Implement both helpers**
+- [ ] **Step 3: Implement**
 
 Append to `packages/domain/src/friction.ts`:
 ```ts
 
 /**
- * Logical-day key for a reset-hour-based day boundary.
- *
- * The "day" rolls over at `resetHour` local time, not midnight. Shift
- * the clock back by `resetHour` hours, then take the calendar date, so
- * two instants in the same logical day share a key.
+ * Logical-day key for a reset-hour-based day boundary. The "day" rolls
+ * over at `resetHour` local time, not midnight: shift the clock back by
+ * `resetHour` hours, then take the calendar date.
  */
 export const logicalDayString = (
   nowMs: number,
@@ -331,6 +329,99 @@ export const nextResetTimestamp = (
   }
   return next.getTime();
 };
+
+/** Calendar-month key "YYYY-MM" in local time — for monthly credit refills. */
+export const monthKey = (nowMs: number): string => {
+  const d = new Date(nowMs);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+};
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `pnpm --filter @equanimi/domain test`
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+```bash
+git add packages/domain/src/friction.ts packages/domain/src/friction.test.ts
+git commit -m "feat(domain): add logicalDayString + nextResetTimestamp"
+```
+
+---
+
+## Task 5: Friction ladder, band, and renderer port
+
+**Files:** Modify `packages/domain/src/friction.ts`; Test `packages/domain/src/friction.test.ts`
+
+- [ ] **Step 1: Write the failing tests**
+
+Append to `packages/domain/src/friction.test.ts`:
+```ts
+import { FRICTION_LADDER, createFrictionBand } from "./friction.js";
+
+describe("FRICTION_LADDER", () => {
+  it("is ordered from least to most friction", () => {
+    expect(FRICTION_LADDER).toEqual(["hide", "dim", "delay", "blur", "block"]);
+  });
+});
+
+describe("createFrictionBand", () => {
+  it("keeps the rung and clamps engagesAt into [0,1]", () => {
+    expect(createFrictionBand("hide", 1)).toEqual({ rung: "hide", engagesAt: 1 });
+    expect(createFrictionBand("dim", -2)).toEqual({ rung: "dim", engagesAt: 0 });
+    expect(createFrictionBand("block", 5)).toEqual({ rung: "block", engagesAt: 1 });
+  });
+});
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `pnpm --filter @equanimi/domain test`
+Expected: FAIL — `FRICTION_LADDER` / `createFrictionBand` not exported.
+
+- [ ] **Step 3: Implement**
+
+Append to `packages/domain/src/friction.ts`:
+```ts
+
+// ── Friction ladder ─────────────────────────────────────────────
+
+/** A rung on the friction ladder — escalating cost of access. */
+export type FrictionRung = "hide" | "dim" | "delay" | "blur" | "block";
+
+/** The ladder, ordered from least to most friction. */
+export const FRICTION_LADDER: readonly FrictionRung[] = [
+  "hide",
+  "dim",
+  "delay",
+  "blur",
+  "block",
+];
+
+/**
+ * The friction band an intervention expresses: the ladder `rung` it
+ * paints, and the `engagesAt` threshold at which it begins. A binary
+ * shield is the degenerate band { rung, engagesAt: 1 }.
+ */
+export interface FrictionBand {
+  readonly rung: FrictionRung;
+  readonly engagesAt: Friction;
+}
+
+export const createFrictionBand = (
+  rung: FrictionRung,
+  engagesAt: number,
+): FrictionBand => ({ rung, engagesAt: createFriction(engagesAt) });
+
+/**
+ * Renderer port. Implemented by DOM adapters in the browser surface —
+ * never in the domain. Given the current friction, paint it.
+ */
+export interface FrictionRenderer {
+  render(f: Friction): void;
+  clear(): void;
+}
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -339,30 +430,39 @@ Run: `pnpm --filter @equanimi/domain test`
 Expected: PASS (all friction + clamp tests green).
 
 - [ ] **Step 5: Commit**
-
 ```bash
 git add packages/domain/src/friction.ts packages/domain/src/friction.test.ts
-git commit -m "feat(domain): add logicalDayString + nextResetTimestamp"
+git commit -m "feat(domain): add friction ladder, band, and renderer port"
 ```
 
 ---
 
-## Task 5: Export friction primitives from the domain barrel
+## Task 6: Add `frictionBand` to the canonical definition + export everything
 
-**Files:**
-- Modify: `packages/domain/src/index.ts`
+**Files:** Modify `packages/domain/src/intervention.ts`, `packages/domain/src/index.ts`
 
-- [ ] **Step 1: Export the new type**
+- [ ] **Step 1: Add the field to `InterventionDefinition`**
 
-In `packages/domain/src/index.ts`, change the Value Objects type export (currently lines 15) to:
+In `packages/domain/src/intervention.ts`, add a `FrictionBand` import and the optional field. Change the import block (currently lines 12–16) to:
 ```ts
-export type { Duration, Domain, AppName, Friction } from "./value-objects.js";
+import type {
+  BehavioralMechanism,
+  UIPresentation,
+  InterventionMetadata,
+} from "./behavior.js";
+import type { FrictionBand } from "./friction.js";
+```
+Then add to `InterventionDefinition`, right after the `defaultEnabled` field (currently line 56):
+```ts
+  /** Where this intervention sits on the friction ladder. */
+  readonly frictionBand?: FrictionBand;
 ```
 
-- [ ] **Step 2: Export the new functions**
+- [ ] **Step 2: Export from the barrel**
 
-In the same file, change the Value Objects value export (currently lines 16–22) to:
+In `packages/domain/src/index.ts`, change the Value Objects exports (currently lines 15–22) to include `Friction` + `createFriction`, and add the friction module exports after them:
 ```ts
+export type { Duration, Domain, AppName, Friction } from "./value-objects.js";
 export {
   createDuration,
   fromMinutes,
@@ -373,48 +473,200 @@ export {
 } from "./value-objects.js";
 
 // ── Friction ────────────────────────────────────────────────────
+export type { FrictionRung, FrictionBand, FrictionRenderer } from "./friction.js";
 export {
   frictionCurve,
   logicalDayString,
   nextResetTimestamp,
+  monthKey,
+  FRICTION_LADDER,
+  createFrictionBand,
 } from "./friction.js";
 ```
 
-- [ ] **Step 3: Typecheck the workspace**
+- [ ] **Step 3: Typecheck**
 
 Run: `pnpm typecheck`
-Expected: PASS — domain + browser typecheck clean.
+Expected: PASS.
 
 - [ ] **Step 4: Commit**
-
 ```bash
-git add packages/domain/src/index.ts
-git commit -m "feat(domain): export friction primitives"
+git add packages/domain/src/intervention.ts packages/domain/src/index.ts
+git commit -m "feat(domain): add frictionBand to InterventionDefinition + export friction module"
 ```
 
 ---
 
-## Task 6: `domainFriction` storage factory
+## Task 7: Resolve the definition schism + declare bands
 
-**Files:**
-- Modify: `apps/browser/utils/storage.ts`
+Make the browser definition types aliases of the canonical `InterventionDefinition`, migrate all 11 definitions to nested `classification` + a `frictionBand`. No runtime/behaviour change (the popup/manage/background mappers read `id/name/description/domain/icon/defaultEnabled` only).
+
+**Files:** Modify `apps/browser/modules/shields/types.ts`, `apps/browser/modules/signals/types.ts`, and all 11 definition files.
+
+- [ ] **Step 1: Replace the shield type with the canonical alias**
+
+Overwrite `apps/browser/modules/shields/types.ts` with:
+```ts
+/**
+ * A shield is an intervention with a subtractive behavioral mechanism.
+ * Structurally it is the canonical InterventionDefinition; the
+ * shield/signal distinction lives in classification.mechanism and in
+ * which registry it belongs to.
+ */
+export type { InterventionDefinition as ShieldDefinition } from "@equanimi/domain";
+```
+
+- [ ] **Step 2: Replace the signal type with the canonical alias**
+
+Overwrite `apps/browser/modules/signals/types.ts` with:
+```ts
+/**
+ * A signal is an intervention with an additive (awareness) mechanism.
+ * Structurally it is the canonical InterventionDefinition.
+ */
+export type { InterventionDefinition as SignalDefinition } from "@equanimi/domain";
+```
+
+- [ ] **Step 3: Migrate one definition as the worked example**
+
+Overwrite `apps/browser/modules/shields/youtube-shorts/definition.ts` with:
+```ts
+import type { ShieldDefinition } from "../types";
+import { createFrictionBand } from "@equanimi/domain";
+
+export const youtubeShorts: ShieldDefinition = {
+  id: "youtube-shorts-scroll-lock",
+  name: "Shorts Scroll Lock",
+  description: "Blocks compulsive scrolling on YouTube Shorts",
+  domain: "youtube.com",
+  icon: "\u{1F4FA}",
+  classification: { mechanism: "access-block" },
+  frictionBand: createFrictionBand("block", 1),
+  defaultEnabled: true,
+};
+```
+
+The transform for every file: drop `mechanism: "<m>",` → add `classification: { mechanism: "<m>" },` and `frictionBand: createFrictionBand("<rung>", <engagesAt>),`, and add the `createFrictionBand` import. Keep all other fields verbatim.
+
+- [ ] **Step 4: Migrate the remaining 8 shields**
+
+Apply the Step-3 transform to each file below using these exact values:
+
+| File (under `apps/browser/modules/shields/`) | const | mechanism | rung | engagesAt |
+|---|---|---|---|---|
+| `youtube-shorts-homepage/definition.ts` | `youtubeShortsHomepage` | `cue-removal` | `hide` | `1` |
+| `youtube-sidebar-recs/definition.ts` | `youtubeSidebarRecs` | `cue-removal` | `hide` | `1` |
+| `youtube-comments-hide/definition.ts` | `youtubeCommentsHide` | `access-block` | `hide` | `1` |
+| `youtube-sponsored/definition.ts` | `youtubeSponsored` | `cue-removal` | `hide` | `1` |
+| `chess-post-game-cooldown/definition.ts` | `chessPostGameCooldown` | `friction` | `delay` | `1` |
+| `linkedin-feed-hide/definition.ts` | `linkedinFeedHide` | `cue-removal` | `hide` | `1` |
+| `linkedin-notification-badge/definition.ts` | `linkedinNotificationBadge` | `cue-removal` | `hide` | `1` |
+| `linkedin-promoted-posts/definition.ts` | `linkedinPromotedPosts` | `cue-removal` | `hide` | `1` |
+
+Preserve each file's existing `id`, `name`, `description`, `domain`, `icon`, `defaultEnabled`, and (for chess) its doc comment. Example for chess:
+```ts
+import type { ShieldDefinition } from "../types";
+import { createFrictionBand } from "@equanimi/domain";
+
+/**
+ * Post-game cooldown for chess.com.
+ * ... (keep existing comment) ...
+ */
+export const chessPostGameCooldown: ShieldDefinition = {
+  id: "chess-post-game-cooldown",
+  name: "Post-Game Cooldown",
+  description: "Pauses before you can start a new game after finishing one",
+  domain: "chess.com",
+  icon: "♟️",
+  classification: { mechanism: "friction" },
+  frictionBand: createFrictionBand("delay", 1),
+  defaultEnabled: true,
+};
+```
+
+- [ ] **Step 5: Migrate the 2 signals**
+
+`apps/browser/modules/signals/youtube-watch-time/definition.ts` (pure indicator — no band):
+```ts
+import type { SignalDefinition } from "../types";
+
+export const youtubeWatchTime: SignalDefinition = {
+  id: "youtube-watch-time",
+  name: "Watch Time",
+  description: "Shows how long you’ve been watching YouTube today",
+  domain: "youtube.com",
+  icon: "⏱",
+  classification: { mechanism: "self-monitoring" },
+  defaultEnabled: true,
+};
+```
+
+`apps/browser/modules/signals/youtube-stain/definition.ts` (dim renderer — engages early):
+```ts
+import type { SignalDefinition } from "../types";
+import { createFrictionBand } from "@equanimi/domain";
+
+export const youtubeStain: SignalDefinition = {
+  id: "youtube-stain",
+  name: "Watch Stain",
+  description: "A growing dark stain over the player as you watch",
+  domain: "youtube.com",
+  icon: "\u{1FAB8}",
+  classification: { mechanism: "self-monitoring" },
+  frictionBand: createFrictionBand("dim", 0),
+  defaultEnabled: true,
+};
+```
+(If the existing file's `name`/`description`/`icon` differ, keep the existing values — only the `classification` + `frictionBand` shape is being added.)
+
+- [ ] **Step 6: Typecheck**
+
+Run: `pnpm typecheck`
+Expected: PASS. If the typechecker flags any consumer reading `.mechanism` directly, change it to `.classification.mechanism`. (Expected: none — popup/manage/background do not read it.)
+
+- [ ] **Step 7: Commit**
+```bash
+git add apps/browser/modules/shields apps/browser/modules/signals
+git commit -m "refactor(browser): unify definitions on canonical InterventionDefinition + declare friction bands"
+```
+
+---
+
+# Phase 1 — YouTube feature
+
+## Task 8: `domainFriction` storage factory
+
+**Files:** Modify `apps/browser/utils/storage.ts`
 
 - [ ] **Step 1: Add the store factory**
 
-Append to `apps/browser/utils/storage.ts` (after `domainCooldown`):
+Append to `apps/browser/utils/storage.ts`:
 ```ts
 
 /**
  * Per-arm friction value, f ∈ [0, 1].
  *
  * Convention: `local:friction:<domain>:value`
- * Written by usage-vs-budget / manual drivers; read by friction-aware
- * renderers. Mirrors `domainCooldown` — cooldown is friction pinned to 1.
+ * Written by drivers; read by friction-aware renderers. Mirrors
+ * `domainCooldown` — cooldown is friction pinned to 1.
  */
 export function domainFriction(domain: string) {
   return storage.defineItem<number>(`local:friction:${domain}:value`, {
     fallback: 0,
   });
+}
+
+/**
+ * Per-arm cooldown override window (ms timestamp). While `now` is before
+ * this, an active cooldown is suppressed — the user spent a skip credit.
+ *
+ * Convention: `local:cooldown:<domain>:override-until`
+ */
+export function domainCooldownOverride(domain: string) {
+  return storage.defineItem<number>(
+    `local:cooldown:${domain}:override-until`,
+    { fallback: 0 },
+  );
 }
 ```
 
@@ -424,24 +676,22 @@ Run: `pnpm typecheck`
 Expected: PASS.
 
 - [ ] **Step 3: Commit**
-
 ```bash
 git add apps/browser/utils/storage.ts
-git commit -m "feat(browser): add per-arm domainFriction store"
+git commit -m "feat(browser): add per-arm domainFriction + cooldown-override stores"
 ```
 
 ---
 
-## Task 7: YouTube friction driver (the reference usage-vs-budget driver)
+## Task 9: YouTube friction driver
 
-**Files:**
-- Modify: `apps/browser/entrypoints/youtube-watch-time.content/index.ts`
+Make the watch-time content script the usage-vs-budget driver: reset-hour day boundary, write `domainFriction("youtube.com")`, style the counter by `f`, and pin the cooldown at the limit.
 
-This task: load limit config, switch the day boundary to the reset hour, write `domainFriction` as watch time accrues, and trigger the cooldown when the daily limit is crossed.
+**Files:** Modify `apps/browser/entrypoints/youtube-watch-time.content/index.ts`
 
-- [ ] **Step 1: Add imports**
+- [ ] **Step 1: Replace the top imports**
 
-In `youtube-watch-time.content/index.ts`, change the top imports (currently lines 1–3) to:
+Change the imports (currently lines 1–3) to:
 ```ts
 import {
   signalEnabled,
@@ -460,9 +710,9 @@ import type { BudgetDefinition } from "@/modules/budgets/types";
 import "./style.css";
 ```
 
-- [ ] **Step 2: Add the new stores**
+- [ ] **Step 2: Remove the local counter curve**
 
-Immediately after the existing `dailyDateStore` definition (currently lines 41–45), add:
+Delete the counter-curve block (currently lines 49–67: the comment, `COUNTER_MIN_SECONDS`, `COUNTER_MAX_SECONDS`, `NEAR_MAX`, `COUNTER_TAU`, `timeProgress`). Keep `lerp` (move it to the Math helpers area if needed). Add the driver stores after `dailyDateStore` (currently ends line 45):
 ```ts
 
 // ── Friction driver stores ────────────────────────────────────────
@@ -482,12 +732,18 @@ const youtubeBudget = budgetDefinition<BudgetDefinition | null>(
   "youtube.com",
   null,
 );
+const limitHistoryStore = signalSetting<string[]>(
+  youtubeWatchTime.id,
+  "limit-history",
+  [],
+);
 ```
 
-- [ ] **Step 3: Add limit-config state**
+- [ ] **Step 3: Add driver state**
 
-In the `// ── State ──` block (currently lines 99–107), add three module-level variables after `let dailySeconds = 0;`:
+In the `// ── State ──` block, after `let dailySeconds = 0;` add:
 ```ts
+let currentFriction = 0;
 let softStartMin = 5;
 let resetHour = 5;
 let dailyLimitMin = 60;
@@ -495,7 +751,7 @@ let dailyLimitMin = 60;
 
 - [ ] **Step 4: Add the config loader + friction updater**
 
-Add these two functions just above `function tick()` (currently line 222):
+Add above `function tick()`:
 ```ts
 async function loadLimitConfig(): Promise<void> {
   softStartMin = await softStartStore.getValue();
@@ -508,25 +764,38 @@ async function loadLimitConfig(): Promise<void> {
 async function updateFriction(): Promise<void> {
   const until = await cooldownStore.getValue();
   if (until && until > Date.now()) {
-    // Cooldown active → friction is pinned to max.
+    currentFriction = 1;
     await frictionStore.setValue(1);
+    updateDisplay();
     return;
   }
 
-  const f = frictionCurve(dailySeconds, softStartMin, dailyLimitMin);
-  await frictionStore.setValue(f);
+  currentFriction = frictionCurve(dailySeconds, softStartMin, dailyLimitMin);
+  await frictionStore.setValue(currentFriction);
 
   if (dailySeconds >= dailyLimitMin * 60) {
-    // Limit crossed → start a cooldown until the next reset hour.
     await cooldownStore.setValue(nextResetTimestamp(Date.now(), resetHour));
+    await recordLimitHit();
+    currentFriction = 1;
     await frictionStore.setValue(1);
   }
+  updateDisplay();
+}
+
+// Append today's logical day to the 7-day reflection history (deduped,
+// capped at 30 entries). Runs once per day — the cooldown early-return
+// above prevents re-entry after the limit is first crossed.
+async function recordLimitHit(): Promise<void> {
+  const today = logicalDayString(Date.now(), resetHour);
+  const history = await limitHistoryStore.getValue();
+  if (history.includes(today)) return;
+  await limitHistoryStore.setValue([...history, today].slice(-30));
 }
 ```
 
-- [ ] **Step 5: Switch the day boundary to the reset hour + seed friction**
+- [ ] **Step 5: Reset at the reset hour + seed friction in `activate()`**
 
-Replace the body of `activate()` from its start through the day-rollover block (currently lines 111–124) with:
+Replace the start of `activate()` through the day-rollover block (currently lines 111–124) with:
 ```ts
 async function activate(): Promise<void> {
   if (active) return;
@@ -547,11 +816,11 @@ async function activate(): Promise<void> {
 
   await updateFriction();
 ```
-(Leave the rest of `activate()` — `createOverlay()`, `watchVideos()`, etc. — unchanged.)
+(Leave the rest of `activate()` unchanged.)
 
 - [ ] **Step 6: Drive friction from the tick**
 
-Replace the `tick()` function (currently lines 222–234) with:
+Replace `tick()` (currently lines 222–234) with:
 ```ts
 function tick(): void {
   if (!counterEl) return;
@@ -569,25 +838,29 @@ function tick(): void {
 }
 ```
 
-- [ ] **Step 7: Typecheck**
+- [ ] **Step 7: Style the counter from friction**
+
+In `updateDisplay()`, replace the line that computes the styling factor (currently `const t = timeProgress(dailySeconds);`, line 250) with:
+```ts
+  const t = currentFriction;
+```
+
+- [ ] **Step 8: Typecheck**
 
 Run: `pnpm typecheck`
-Expected: PASS. (If `BudgetDefinition` import is reported unused, confirm it is used in `youtubeBudget`'s generic — it is.)
+Expected: PASS. (No remaining references to `timeProgress`, `COUNTER_TAU`, or the removed constants.)
 
-- [ ] **Step 8: Manual verification (ask the user — do not run dev yourself)**
+- [ ] **Step 9: Manual verification (ask the user)**
 
 Ask the user to:
-1. `pnpm dev:browser`, load the extension, open the manage page.
-2. Budgets tab → set youtube.com **Time per day = 1** (minute) for a fast test.
-3. Watch any YouTube video for ~1 minute (keep the tab focused, video playing).
-4. Confirm: at ~60s the **YouTube cooldown overlay** ("Take a break.") appears and pauses the video; the toolbar badge turns purple with a countdown.
-5. In DevTools console on the YouTube tab, run `await chrome.storage.local.get("local:friction:youtube.com:value")` and confirm the value rose toward ~0.95 and is `1` once cooldown started.
-6. Confirm the countdown targets the next 05:00 (or your configured reset hour).
+1. `pnpm dev:browser`, load extension, open manage → Budgets → set youtube.com **Time per day = 1**.
+2. Watch a YouTube video ~1 min (tab focused, playing).
+3. Confirm the cooldown overlay ("Take a break.") appears + pauses video at ~60s, badge turns purple with a countdown targeting the next 05:00.
+4. In the YouTube tab console: `await chrome.storage.local.get("local:friction:youtube.com:value")` → rose toward ~0.95, then `1` at cooldown.
 
-Report the observations back. Only proceed when confirmed.
+Report back; proceed when confirmed.
 
-- [ ] **Step 9: Commit**
-
+- [ ] **Step 10: Commit**
 ```bash
 git add apps/browser/entrypoints/youtube-watch-time.content/index.ts
 git commit -m "feat(browser): YouTube friction driver + limit-triggered cooldown"
@@ -595,16 +868,126 @@ git commit -m "feat(browser): YouTube friction driver + limit-triggered cooldown
 
 ---
 
-## Task 8: Remove popup toggles → cooldown + read-only status
+## Task 10: Watch-stain becomes the first `dim` renderer
 
-**Files:**
-- Modify: `apps/browser/entrypoints/popup/main.ts`
+The stain stops computing its own curve from daily seconds and instead reads `domainFriction("youtube.com")`, conforming to the `FrictionRenderer` port.
 
-The popup keeps `renderCooldown` and the manage link, but the intervention list becomes read-only status rows (no switches, no "enable all", no change listeners).
+**Files:** Modify `apps/browser/entrypoints/youtube-stain.content/index.ts`
 
-- [ ] **Step 1: Remove the toggle plumbing from the `Intervention` type and list**
+- [ ] **Step 1: Replace the top imports**
 
-In `popup/main.ts`, the `Intervention` type and `allInterventions` array (currently lines 7–39) only need display fields + the store getter for reading state. Replace the `getStore` usage to read-only. Replace the whole `renderDomainGroup` function (currently lines 246–351) and the `createToggle` helper (currently lines 355–373) with the read-only renderer below:
+Change the imports (currently lines 1–4) to:
+```ts
+import { signalEnabled } from "@/utils/storage";
+import { domainFriction } from "@/utils/storage";
+import { youtubeStain } from "@/modules/signals/youtube-stain/definition";
+import type { Friction, FrictionRenderer } from "@equanimi/domain";
+import "./style.css";
+```
+
+- [ ] **Step 2: Replace the tunnel-math + watch-time-read blocks with a friction store**
+
+Delete the tunnel stores + `dailySecondsStore` + tunnel math (currently lines 21–59: `tunnelMinStore`, `tunnelMaxStore`, `dailySecondsStore`, `NEAR_MAX`, `tunnelMinSeconds`, `tunnelMaxSeconds`, `tau`, `deriveTau`, and their comments). Replace with:
+```ts
+// ── Friction source ───────────────────────────────────────────────
+// The stain is a `dim` renderer of the arm's friction. The YouTube
+// driver (watch-time content script) computes and writes it.
+
+const frictionStore = domainFriction("youtube.com");
+```
+
+- [ ] **Step 3: Replace the daily-seconds state with friction state**
+
+In the `// ── State ──` block (currently lines 106–110), replace `let dailySeconds = 0;` with:
+```ts
+let friction = 0;
+```
+
+- [ ] **Step 4: Read + watch friction in `activate()`**
+
+Replace the block in `activate()` that loaded tunnel settings and watched daily seconds (currently lines 120–139) with:
+```ts
+  friction = await frictionStore.getValue();
+
+  frictionStore.watch((newFriction) => {
+    friction = newFriction;
+    updateStain();
+  });
+```
+
+- [ ] **Step 5: Render from friction directly + conform to the port**
+
+Replace `updateStain()` and `stainProgress()` (currently lines 189–227) with:
+```ts
+const stainRenderer: FrictionRenderer = {
+  render(f: Friction): void {
+    friction = f;
+    updateStain();
+  },
+  clear(): void {
+    removeStain();
+  },
+};
+void stainRenderer; // documents conformance; the store watcher drives it
+
+function updateStain(): void {
+  if (!stainEl) {
+    return;
+  }
+
+  const t = friction;
+
+  if (t <= 0) {
+    stainEl.style.width = "0";
+    stainEl.style.paddingBottom = "0";
+    stainEl.style.opacity = "0";
+    return;
+  }
+
+  const size = lerp(BLOB_SIZE_MIN, BLOB_SIZE_MAX, t);
+  const alpha = lerp(BLOB_ALPHA_MIN, BLOB_ALPHA_MAX, t);
+
+  stainEl.style.width = `${size.toFixed(1)}%`;
+  stainEl.style.paddingBottom = `${size.toFixed(1)}%`;
+  stainEl.style.opacity = "1";
+  stainEl.style.background = [
+    `radial-gradient(circle,`,
+    `  rgba(0, 0, 0, ${alpha.toFixed(3)}) 0%,`,
+    `  rgba(0, 0, 0, ${(alpha * 0.975).toFixed(3)}) 25%,`,
+    `  rgba(0, 0, 0, ${(alpha * 0.95).toFixed(3)}) 50%,`,
+    `  rgba(0, 0, 0, ${(alpha * 0.925).toFixed(3)}) 75%,`,
+    `  transparent 100%)`,
+  ].join(" ");
+}
+```
+(Keep the `lerp` helper that follows.)
+
+- [ ] **Step 6: Typecheck**
+
+Run: `pnpm typecheck`
+Expected: PASS. (No remaining references to `deriveTau`, `tunnelMinStore`, `dailySecondsStore`, `stainProgress`.)
+
+- [ ] **Step 7: Manual verification (ask the user)**
+
+Ask the user to reload the extension, ensure Watch Time + Watch Stain signals are on, and watch YouTube with a low daily limit set. Confirm the stain darkens as friction rises and is fully dark once the limit/cooldown hits. No errors in console.
+
+Report back; proceed when confirmed.
+
+- [ ] **Step 8: Commit**
+```bash
+git add apps/browser/entrypoints/youtube-stain.content/index.ts
+git commit -m "feat(browser): watch-stain renders arm friction (first dim renderer)"
+```
+
+---
+
+## Task 11: Remove popup toggles → cooldown + read-only status
+
+**Files:** Modify `apps/browser/entrypoints/popup/main.ts`, `apps/browser/entrypoints/popup/style.css`
+
+- [ ] **Step 1: Replace the renderer + drop the toggle helper**
+
+Replace `renderDomainGroup` (currently lines 246–351) and the `createToggle` helper (currently lines 355–373) with this read-only renderer:
 ```ts
 // ── Domain group component (read-only status) ─────────────────────
 
@@ -649,7 +1032,7 @@ function renderDomainGroup(group: DomainGroup): HTMLElement {
 
     const statusDot = document.createElement("span");
     statusDot.className = "status-dot";
-    statusDot.textContent = "○"; // ○ inactive
+    statusDot.textContent = "○"; // ○
 
     nameRow.appendChild(nameEl);
     nameRow.appendChild(statusDot);
@@ -684,7 +1067,11 @@ function renderDomainGroup(group: DomainGroup): HTMLElement {
 }
 ```
 
-- [ ] **Step 2: Add a status-dot style**
+- [ ] **Step 2: Remove the now-unused `ToggleEntry` type**
+
+If `type ToggleEntry = ...` (currently line 244) is now unreferenced, delete it. Typecheck in Step 4 will confirm.
+
+- [ ] **Step 3: Add the status-dot style**
 
 Append to `apps/browser/entrypoints/popup/style.css`:
 ```css
@@ -697,21 +1084,18 @@ Append to `apps/browser/entrypoints/popup/style.css`:
 }
 ```
 
-- [ ] **Step 3: Typecheck**
+- [ ] **Step 4: Typecheck**
 
 Run: `pnpm typecheck`
-Expected: PASS. (No remaining references to `createToggle`, `ToggleEntry`, `allToggle`, or `syncDomainToggle` in `popup/main.ts` — remove any that the typechecker flags as undefined.)
+Expected: PASS. Remove anything the typechecker flags as now-unused (`ToggleEntry`, leftover `createToggle` references).
 
-- [ ] **Step 4: Manual verification (ask the user)**
+- [ ] **Step 5: Manual verification (ask the user)**
 
-Ask the user to reload the extension and open the popup on a YouTube tab. Confirm:
-1. No on/off switches appear — only the cooldown card and a read-only list with ●/○ status dots.
-2. The manage page still shows working toggles, and toggling there flips the popup's status dot live.
+Ask the user to reload and open the popup on a YouTube tab. Confirm: no switches — only the cooldown card + read-only ●/○ status list; toggling an intervention in the manage page flips the popup's dot live.
 
 Report back; proceed when confirmed.
 
-- [ ] **Step 5: Commit**
-
+- [ ] **Step 6: Commit**
 ```bash
 git add apps/browser/entrypoints/popup/main.ts apps/browser/entrypoints/popup/style.css
 git commit -m "feat(browser): popup becomes cooldown + read-only status (toggles move to manage)"
@@ -719,16 +1103,23 @@ git commit -m "feat(browser): popup becomes cooldown + read-only status (toggles
 
 ---
 
-## Task 9: Manage page — soft-start + reset-hour inputs
+## Task 12: Manage — soft-start + reset-hour; drop dead stain range
 
-**Files:**
-- Modify: `apps/browser/entrypoints/manage/main.ts`
+The stain no longer has its own min/max (it reads arm friction), so remove those inputs and add the two per-person YouTube tactics.
 
-Add the two per-person YouTube tactics (soft-start minutes, reset hour) to the existing watch-time settings panel. The daily limit itself is already configurable via the Budgets tab (`time-per-day` for youtube.com).
+**Files:** Modify `apps/browser/entrypoints/manage/main.ts`
 
-- [ ] **Step 1: Add the setting stores**
+- [ ] **Step 1: Remove the stain range stores**
 
-In `manage/main.ts`, after the `watchTimePositionStore` definition (currently lines 56–61), add:
+Delete the `tunnelMinStore` / `tunnelMaxStore` definitions (currently lines 63–64).
+
+- [ ] **Step 2: Remove the stain settings panel**
+
+Delete the entire `if (intervention.id === "youtube-stain") { ... }` block (currently lines 320–370).
+
+- [ ] **Step 3: Add the soft-start + reset-hour stores**
+
+After the `watchTimePositionStore` definition (currently lines 56–61), add:
 ```ts
 const softStartStore = signalSetting<number>(
   "youtube-watch-time",
@@ -740,19 +1131,27 @@ const resetHourStore = signalSetting<number>(
   "reset-hour",
   5,
 );
+const skipPerMonthStore = signalSetting<number>(
+  "youtube-watch-time",
+  "skip-credits-per-month",
+  1,
+);
+const skipBlockStore = signalSetting<number>(
+  "youtube-watch-time",
+  "skip-block-minutes",
+  120,
+);
 ```
 
-- [ ] **Step 2: Render the two inputs inside the watch-time panel**
+- [ ] **Step 4: Render the inputs in the watch-time panel**
 
 In the `if (intervention.id === "youtube-watch-time")` block, immediately before `body.appendChild(settingsPanel);` (currently line 316), insert:
 ```ts
-      // ── Daily-limit tactics ───────────────────────────────────
       const limitRow = document.createElement("div");
       limitRow.className = "settings-row";
-
       const limitLabel = document.createElement("span");
       limitLabel.className = "settings-label";
-      limitLabel.textContent = "Daily limit (set via Budgets → Time per day)";
+      limitLabel.textContent = "Daily limit: set via Budgets → Time per day";
       limitRow.appendChild(limitLabel);
       settingsPanel.appendChild(limitRow);
 
@@ -801,111 +1200,294 @@ In the `if (intervention.id === "youtube-watch-time")` block, immediately before
       resetRow.appendChild(resetLabel);
       resetRow.appendChild(resetInput.wrapper);
       settingsPanel.appendChild(resetRow);
+
+      const skipRow = document.createElement("div");
+      skipRow.className = "settings-row";
+      const skipLabel = document.createElement("span");
+      skipLabel.className = "settings-label";
+      skipLabel.textContent = "Skip credits per month";
+      const skipInput = createNumberInput(
+        "yt-skip-per-month",
+        "Credits",
+        await skipPerMonthStore.getValue(),
+      );
+      skipInput.input.min = "0";
+      skipInput.input.max = "31";
+      skipInput.input.addEventListener(
+        "input",
+        debounce(async () => {
+          const val = Math.max(0, Math.min(31, parseInt(skipInput.input.value, 10) || 0));
+          await skipPerMonthStore.setValue(val);
+        }, 400),
+      );
+      skipRow.appendChild(skipLabel);
+      skipRow.appendChild(skipInput.wrapper);
+      settingsPanel.appendChild(skipRow);
+
+      const blockRow = document.createElement("div");
+      blockRow.className = "settings-row";
+      const blockLabel = document.createElement("span");
+      blockLabel.className = "settings-label";
+      blockLabel.textContent = "Skip duration (min)";
+      const blockInput = createNumberInput(
+        "yt-skip-block",
+        "Minutes",
+        await skipBlockStore.getValue(),
+      );
+      blockInput.input.min = "5";
+      blockInput.input.addEventListener(
+        "input",
+        debounce(async () => {
+          const val = Math.max(5, parseInt(blockInput.input.value, 10) || 120);
+          await skipBlockStore.setValue(val);
+        }, 400),
+      );
+      blockRow.appendChild(blockLabel);
+      blockRow.appendChild(blockInput.wrapper);
+      settingsPanel.appendChild(blockRow);
 ```
 
-- [ ] **Step 3: Typecheck**
+- [ ] **Step 5: Typecheck**
 
 Run: `pnpm typecheck`
-Expected: PASS.
+Expected: PASS. (No remaining references to `tunnelMinStore` / `tunnelMaxStore`.)
 
-- [ ] **Step 4: Manual verification (ask the user)**
+- [ ] **Step 6: Manual verification (ask the user)**
 
-Ask the user to open the manage page, expand the youtube.com group, and confirm the Watch Time settings now show "Friction starts at (min)" and "Reset hour (0–23)" inputs that persist on reload.
+Ask the user to open the manage page, expand youtube.com. Confirm: the Watch Time panel shows "Friction starts at (min)" and "Reset hour (0–23)" (persist on reload); the old "Stain range (min)" inputs are gone; the stain still works (driven by friction).
 
 Report back; proceed when confirmed.
 
-- [ ] **Step 5: Commit**
-
+- [ ] **Step 7: Commit**
 ```bash
 git add apps/browser/entrypoints/manage/main.ts
-git commit -m "feat(browser): manage page exposes YouTube soft-start + reset-hour"
+git commit -m "feat(browser): manage exposes YouTube soft-start + reset-hour; drop dead stain range"
 ```
 
 ---
 
-## Task 10: DRY — both YouTube signals consume the shared curve
+## Task 13: Skip-credit override + scoreless reflection in the cooldown overlay
 
-**Files:**
-- Modify: `apps/browser/entrypoints/youtube-stain.content/index.ts`
-- Modify: `apps/browser/entrypoints/youtube-watch-time.content/index.ts`
+The auto-cooldown becomes overridable by spending a scarce monthly skip credit (configurable, default 1/month) for a fixed block (default 2h). During the override the overlay is suppressed and video plays, but `f`/stain stay at max (handled by the Task 9 driver — no change needed there). The overlay also shows a scoreless "N of last 7 days" reflection.
 
-Remove the two copy-pasted curve implementations in favour of `frictionCurve`. Behaviour must be identical.
+**Files:** Modify `apps/browser/entrypoints/youtube-cooldown.content/index.ts`, `apps/browser/entrypoints/youtube-cooldown.content/style.css`
 
-- [ ] **Step 1: Stain — import the shared curve**
+- [ ] **Step 1: Imports + stores**
 
-In `youtube-stain.content/index.ts`, add to the top imports:
+Change the imports (currently lines 19–20) to:
 ```ts
-import { frictionCurve } from "@equanimi/domain";
+import {
+  domainCooldown,
+  domainCooldownOverride,
+  signalSetting,
+} from "@/utils/storage";
+import { monthKey, logicalDayString } from "@equanimi/domain";
+import "./style.css";
+```
+After `const cooldownUntilStore = domainCooldown("youtube.com");` add:
+```ts
+const overrideStore = domainCooldownOverride("youtube.com");
+
+// Skip credits (per-person tactics + state).
+const skipPerMonthStore = signalSetting<number>(
+  "youtube-watch-time",
+  "skip-credits-per-month",
+  1,
+);
+const skipRemainingStore = signalSetting<number>(
+  "youtube-watch-time",
+  "skip-credits-remaining",
+  1,
+);
+const skipMonthStore = signalSetting<string>(
+  "youtube-watch-time",
+  "skip-credits-month",
+  "",
+);
+const skipBlockStore = signalSetting<number>(
+  "youtube-watch-time",
+  "skip-block-minutes",
+  120,
+);
+const resetHourStore = signalSetting<number>(
+  "youtube-watch-time",
+  "reset-hour",
+  5,
+);
+const limitHistoryStore = signalSetting<string[]>(
+  "youtube-watch-time",
+  "limit-history",
+  [],
+);
 ```
 
-- [ ] **Step 2: Stain — replace the local curve with tracked min/max**
+- [ ] **Step 2: Credit + reflection helpers**
 
-Replace the tunnel-math block (currently lines 48–59: `NEAR_MAX`, `tunnelMinSeconds`, `tunnelMaxSeconds`, `tau`, `deriveTau`) with:
+Add near the top of the helpers section:
 ```ts
-// ── Tunnel range (minutes), fed to the shared frictionCurve) ──────
+async function refillCreditsIfNeeded(): Promise<void> {
+  const thisMonth = monthKey(Date.now());
+  const storedMonth = await skipMonthStore.getValue();
+  if (storedMonth !== thisMonth) {
+    await skipMonthStore.setValue(thisMonth);
+    await skipRemainingStore.setValue(await skipPerMonthStore.getValue());
+  }
+}
 
-let tunnelMinMinutes = 5;
-let tunnelMaxMinutes = 60;
-```
-Then replace `stainProgress` (currently lines 221–227) with:
-```ts
-function stainProgress(seconds: number): number {
-  return frictionCurve(seconds, tunnelMinMinutes, tunnelMaxMinutes);
+async function spendCredit(): Promise<void> {
+  const remaining = await skipRemainingStore.getValue();
+  await skipRemainingStore.setValue(Math.max(0, remaining - 1));
+}
+
+async function renderSkipButton(btn: HTMLButtonElement): Promise<void> {
+  await refillCreditsIfNeeded();
+  const remaining = await skipRemainingStore.getValue();
+  if (remaining <= 0) {
+    btn.textContent = "No skips left this month";
+    btn.disabled = true;
+    return;
+  }
+  // Rendered as a depleting resource, never a growing score.
+  btn.textContent = `Use a skip (${remaining} left this month)`;
+  btn.disabled = false;
+  btn.onclick = async (e) => {
+    e.stopPropagation();
+    await spendCredit();
+    const blockMin = await skipBlockStore.getValue();
+    await overrideStore.setValue(Date.now() + blockMin * 60 * 1000);
+    // Suppression happens on the next cooldownTick.
+  };
+}
+
+async function renderReflection(el: HTMLElement): Promise<void> {
+  const resetHour = await resetHourStore.getValue();
+  const history = await limitHistoryStore.getValue();
+  const now = Date.now();
+  const last7 = new Set<string>();
+  for (let i = 0; i < 7; i++) {
+    last7.add(logicalDayString(now - i * 86_400_000, resetHour));
+  }
+  const n = history.filter((d) => last7.has(d)).length;
+  el.textContent = `Limit reached ${n} of the last 7 days.`;
 }
 ```
 
-- [ ] **Step 3: Stain — update the min/max wiring in `activate()`**
+- [ ] **Step 3: Make enforcement override-aware**
 
-In `activate()`, replace the `deriveTau(...)` setup (currently lines 120–131) with:
+Replace `applyCooldownUI()` (currently lines 80–97) with a tick that honors the override window:
 ```ts
-  tunnelMinMinutes = await tunnelMinStore.getValue();
-  tunnelMaxMinutes = await tunnelMaxStore.getValue();
+function applyCooldownUI(): void {
+  void cooldownTick();
+  cooldownTimer = setInterval(() => void cooldownTick(), 1000);
+}
 
-  tunnelMinStore.watch((newMin) => {
-    tunnelMinMinutes = newMin;
-    updateStain();
-  });
-  tunnelMaxStore.watch((newMax) => {
-    tunnelMaxMinutes = newMax;
-    updateStain();
-  });
+async function cooldownTick(): Promise<void> {
+  const now = Date.now();
+  const until = await cooldownUntilStore.getValue();
+  if (!until || until <= now) {
+    clearCooldown(true);
+    return;
+  }
+
+  const overrideUntil = await overrideStore.getValue();
+  if (overrideUntil && overrideUntil > now) {
+    // Skip credit active — suppress enforcement, keep cooldown state.
+    suppressCooldown();
+    return;
+  }
+
+  enforceCooldown();
+  cooldownRemaining = Math.ceil((until - now) / 1000);
+  pauseAllVideos();
+  updateOverlay();
+  updateBadge();
+}
+
+// Show overlay + enforce pausing (idempotent — inner inserts early-return).
+function enforceCooldown(): void {
+  startVideoEnforcement();
+  insertPlayerOverlay();
+  showBadge();
+  pauseAllVideos();
+}
+
+// Hide overlay + stop pausing WITHOUT clearing cooldown state (override window).
+function suppressCooldown(): void {
+  removePlayerOverlay();
+  hideBadge();
+  stopVideoEnforcement();
+}
 ```
 
-- [ ] **Step 4: Watch-time — import the shared curve**
+- [ ] **Step 4: Clear the override when the cooldown ends**
 
-In `youtube-watch-time.content/index.ts`, add to the domain import added in Task 7 so it reads:
+In `clearCooldown` (currently the `if (clearStorage)` block, line 106–108), also reset the override so it can't leak into a future cooldown:
 ```ts
-import {
-  frictionCurve,
-  logicalDayString,
-  nextResetTimestamp,
-} from "@equanimi/domain";
-```
-(`frictionCurve` is now also used by the counter display.)
-
-- [ ] **Step 5: Watch-time — replace the local counter curve**
-
-Remove the counter-curve constants and `timeProgress` (currently lines 49–67: `COUNTER_MIN_SECONDS`, `COUNTER_MAX_SECONDS`, `NEAR_MAX`, `COUNTER_TAU`, `timeProgress`, and the `lerp` helper stays). Then in `updateDisplay()`, replace the line `const t = timeProgress(dailySeconds);` (currently line 250) with:
-```ts
-  const t = frictionCurve(dailySeconds, 5, 60);
+  if (clearStorage) {
+    await cooldownUntilStore.setValue(0);
+    await overrideStore.setValue(0);
+  }
 ```
 
-- [ ] **Step 6: Typecheck**
+- [ ] **Step 5: Add the skip button + reflection to the overlay**
+
+In `insertPlayerOverlay()`, after the `leave` button is appended to `content` (currently line 218, `content.appendChild(leave);` is just before `overlay.appendChild(content)`), insert:
+```ts
+  const reflection = document.createElement("span");
+  reflection.className = "equanimi-yt-cooldown-reflection";
+  void renderReflection(reflection);
+  content.appendChild(reflection);
+
+  const skip = document.createElement("button");
+  skip.className = "equanimi-yt-cooldown-skip";
+  void renderSkipButton(skip);
+  content.appendChild(skip);
+```
+
+- [ ] **Step 6: Style the new elements**
+
+Append to `apps/browser/entrypoints/youtube-cooldown.content/style.css`:
+```css
+.equanimi-yt-cooldown-reflection {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 8px;
+}
+.equanimi-yt-cooldown-skip {
+  margin-top: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  background: transparent;
+  color: #cbd5e1;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.equanimi-yt-cooldown-skip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+```
+
+- [ ] **Step 7: Typecheck**
 
 Run: `pnpm typecheck`
-Expected: PASS — no references remain to `deriveTau`, `timeProgress`, `COUNTER_TAU`, or the removed `NEAR_MAX` constants.
+Expected: PASS.
 
-- [ ] **Step 7: Manual verification (ask the user)**
+- [ ] **Step 8: Manual verification (ask the user)**
 
-Ask the user to reload the extension and watch YouTube. Confirm the stain still appears after the soft-start minutes and grows, and the watch-time counter still grows in size/opacity exactly as before. No visual regression.
+Ask the user (with a low daily limit + at least 1 skip credit configured) to:
+1. Watch past the limit → cooldown overlay appears with a "Use a skip (1 left this month)" button and a "Limit reached N of the last 7 days." line.
+2. Click the skip → overlay disappears, video plays again; the stain stays fully dark (friction still max).
+3. Confirm in console: `await chrome.storage.local.get(["local:cooldown:youtube.com:override-until","signal:youtube-watch-time:skip-credits-remaining"])` → override-until is ~2h out, remaining decremented to 0.
+4. With 0 credits, after the block lapses (or by manually setting override-until to a past value in DevTools), the cooldown overlay reasserts and the skip button reads "No skips left this month".
 
 Report back; proceed when confirmed.
 
-- [ ] **Step 8: Commit**
-
+- [ ] **Step 9: Commit**
 ```bash
-git add apps/browser/entrypoints/youtube-stain.content/index.ts apps/browser/entrypoints/youtube-watch-time.content/index.ts
-git commit -m "refactor(browser): YouTube signals consume shared frictionCurve (DRY)"
+git add apps/browser/entrypoints/youtube-cooldown.content/index.ts apps/browser/entrypoints/youtube-cooldown.content/style.css
+git commit -m "feat(browser): skip-credit override + scoreless reflection on YouTube cooldown"
 ```
 
 ---
@@ -913,16 +1495,24 @@ git commit -m "refactor(browser): YouTube signals consume shared frictionCurve (
 ## Self-review notes
 
 **Spec coverage:**
-- Gradual friction rising with usage → Task 7 (`updateFriction` + `frictionCurve`). ✓
-- Limit → cooldown until configurable reset hour → Task 7 (`nextResetTimestamp`, `cooldownStore`). ✓
-- Day resets at reset hour (counter + cooldown consistent) → Task 4 + Task 7 (`logicalDayString`). ✓
-- Remove popup toggles; manage keeps them → Task 8 (popup) + Task 9 leaves manage toggles intact. ✓
-- `Friction`, `domainFriction`, `frictionCurve` exist as shared primitives → Tasks 2, 3, 6. ✓
-- Reuse `time-per-day` budget as the daily limit → Task 7 (`loadLimitConfig`). ✓
-- Soft-start + reset-hour configurable per person → Task 9. ✓
-- No "produces equanimity" claims in copy/comments → all comment text says "friction"/"cooldown", none claim equanimity. ✓
-- Binary shields + DOM renderers untouched (out of scope) → not modified. ✓
+- Friction primitive + curve + reset helpers → Tasks 2–4. ✓
+- Friction ladder + band + renderer port (domain) → Task 5. ✓
+- `frictionBand` on canonical definition + schism resolved (browser defs = aliases) → Tasks 6–7. ✓
+- Declarative alignment: all 9 shields + 2 signals classified → Task 7 table. ✓
+- `domainFriction` store → Task 8. ✓
+- YouTube usage-vs-budget driver, gradual friction, reset-hour day boundary, limit→cooldown → Task 9. ✓
+- First real renderer reading `f` (stain = dim; cooldown overlay = block, pre-existing) → Task 10. ✓
+- Popup toggles removed; manage keeps control → Task 11. ✓
+- Soft-start + reset-hour configurable per person; limit reuses `time-per-day` budget → Tasks 9, 12. ✓
+- **Skip-credit override** (scarce, configurable, `f` stays max during override, depleting-not-score) → Tasks 8 (override store), 12 (config), 13 (overlay + spend/refill). ✓
+- **Scoreless reflection** ("N of last 7 days") → Task 9 (record `limit-history`), Task 13 (`renderReflection`). ✓
+- `monthKey` for monthly refill → Task 4. ✓
+- No "produces equanimity" claims → all copy/comments say friction/cooldown/skip. ✓
+- Out of scope (8 binary shields stay binary; other arms' drivers; detection) → not built; bands declared only. ✓
 
-**Type consistency:** `createFriction`/`frictionCurve` return `Friction` (assignable to the `number` that `domainFriction`/`signalSetting` store); `logicalDayString` returns `string` matching `dailyDateStore`; `nextResetTimestamp` returns `number` matching `domainCooldown`. Store keys: `local:friction:<domain>:value` (new), `signal:youtube-watch-time:{soft-start-minutes,reset-hour}` (consistent between Task 7 reader and Task 9 writer). Setting ids match (`youtube-watch-time`).
+**Type consistency:** `createFriction`/`frictionCurve`/`createFrictionBand` use the branded `Friction`; `FrictionBand.engagesAt: Friction`; `domainFriction`/`domainCooldownOverride`/`signalSetting` store plain `number`/`string`/`string[]` (Friction is assignable to number). `FrictionRenderer.render(f: Friction)` matches the stain's `render`. Browser `ShieldDefinition`/`SignalDefinition` are `InterventionDefinition`, so every migrated definition uses nested `classification: { mechanism }` (Task 7) — consistent across all 11 files. Store keys consistent across writers/readers: `signal:youtube-watch-time:{soft-start-minutes,reset-hour,limit-history,skip-credits-per-month,skip-credits-remaining,skip-credits-month,skip-block-minutes}` are written/read by Tasks 9, 12, 13; `local:cooldown:youtube.com:override-until` by Tasks 8/13. `resetHour` default `5` is duplicated across the driver (Task 9), manage (Task 12), and the cooldown script (Task 13) — all use the same key + fallback, so they agree.
 
-**Placeholder scan:** none — every step has concrete code or an exact command.
+**Placeholder scan:** none — every step has concrete code, exact paths, or exact commands. The Task 7 table gives exact per-file values (not "similar to").
+
+**Override correctness:** `enforceCooldown`/`suppressCooldown` rely on `insertPlayerOverlay`/`showBadge`/`startVideoEnforcement` being idempotent (they early-return when their element/observer exists) and on `removePlayerOverlay`/`hideBadge`/`stopVideoEnforcement` being null-safe — both hold in the current file. During an override the Task 9 driver still sets `f = 1` (cooldown `until` is in the future), so the stain stays dark — verified against `updateFriction`'s early-return branch.
+```
