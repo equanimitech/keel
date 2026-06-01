@@ -13,6 +13,12 @@ import type {
   SessionUnit,
 } from "@/modules/budgets/types";
 import { createBudgetDefinition } from "@/modules/budgets/types";
+import { SEED_BLOCKED_DOMAINS } from "@/modules/drogues/blocklist/seed";
+import {
+  userBlockedDomains,
+  addDomain,
+  removeDomain,
+} from "@/modules/drogues/blocklist/store";
 import "./style.css";
 
 // ── Unified intervention type ─────────────────────────────────────
@@ -680,6 +686,104 @@ function debounce<T extends (...args: unknown[]) => void>(
   };
 }
 
+// ── Blocklist tab rendering ────────────────────────────────────────
+
+const blocklistPanel = document.getElementById("blocklist-panel")!;
+
+async function renderBlocklist(): Promise<void> {
+  blocklistPanel.replaceChildren();
+
+  const intro = document.createElement("p");
+  intro.className = "budget-intro";
+  intro.textContent =
+    "Full-drag targets. Page never loads — f = 1, no skip. Holds in incognito once you allow keel there.";
+  blocklistPanel.appendChild(intro);
+
+  // ── Add row ─────────────────────────────────────────────────
+  const addRow = document.createElement("div");
+  addRow.className = "blocklist-add";
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "number-input blocklist-input";
+  input.placeholder = "add a domain (e.g. example.com)";
+  input.autocapitalize = "off";
+  input.autocomplete = "off";
+  input.spellcheck = false;
+
+  const addBtn = document.createElement("button");
+  addBtn.className = "blocklist-add-btn";
+  addBtn.textContent = "Block";
+
+  const err = document.createElement("span");
+  err.className = "blocklist-err";
+
+  async function submit(): Promise<void> {
+    err.textContent = "";
+    const result = await addDomain(input.value);
+    if (result === null) {
+      err.textContent = "not a valid domain";
+      return;
+    }
+    input.value = "";
+    await renderBlocklist();
+  }
+
+  addBtn.addEventListener("click", () => void submit());
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      void submit();
+    }
+  });
+
+  addRow.appendChild(input);
+  addRow.appendChild(addBtn);
+  blocklistPanel.appendChild(addRow);
+  blocklistPanel.appendChild(err);
+
+  // ── Current list ────────────────────────────────────────────
+  const user = await userBlockedDomains.getValue();
+  const list = document.createElement("div");
+  list.className = "blocklist-items";
+
+  const entries: { domain: string; seed: boolean }[] = [
+    ...SEED_BLOCKED_DOMAINS.map((d) => ({ domain: d, seed: true })),
+    ...user.map((d) => ({ domain: d, seed: false })),
+  ];
+
+  for (const { domain, seed } of entries) {
+    const item = document.createElement("div");
+    item.className = "blocklist-item";
+
+    const name = document.createElement("span");
+    name.className = "blocklist-domain";
+    name.textContent = domain;
+    item.appendChild(name);
+
+    if (seed) {
+      const tag = document.createElement("span");
+      tag.className = "blocklist-tag";
+      tag.textContent = "seed · edit in code";
+      tag.title = "Defined in seed.ts — remove there + rebuild (deliberate friction)";
+      item.appendChild(tag);
+    } else {
+      const remove = document.createElement("button");
+      remove.className = "blocklist-remove";
+      remove.textContent = "remove";
+      remove.addEventListener("click", async () => {
+        await removeDomain(domain);
+        await renderBlocklist();
+      });
+      item.appendChild(remove);
+    }
+
+    list.appendChild(item);
+  }
+
+  blocklistPanel.appendChild(list);
+}
+
 // ── Init ──────────────────────────────────────────────────────────
 render();
 renderBudgets();
+renderBlocklist();

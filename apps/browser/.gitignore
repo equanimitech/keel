@@ -1,5 +1,10 @@
 node_modules/
 .output/
+dist/
 .wxt/
 *.tgz
 web-ext.config.ts
+
+# Personal blocklist — never commit real domains to a public repo.
+# The committed seed is empty; personal/Claude entries live here, gitignored.
+modules/drogues/blocklist/seed.local.ts

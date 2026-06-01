@@ -76,6 +76,57 @@ Built with [WXT](https://wxt.dev).
 - [ ] Usage time tracking / weekly reflection
 - [ ] Firefox support
 
+## Sovereignty & privacy
+
+keel is built foundation-first: **sovereignty before everything**. The privacy
+properties below aren't a policy you have to trust — they're structural, enforced
+by what the extension is *capable* of.
+
+**Local-First Ownership.** All state lives in `chrome.storage.local`. No account,
+no server, no sync. keel works fully offline and nothing breaks if equanimitech
+disappears tomorrow — there is no equanimitech server in any code path.
+
+**keel cannot read your browsing.** The manifest requests `declarativeNetRequest`
+— *not* `declarativeNetRequestWithHostAccess`, *not* `webRequest`, and *no*
+`host_permissions`. Blocking happens by static rule inside the browser engine;
+the extension never sees request contents, page bodies, or your history. The only
+network egress anywhere in keel is *your own* BYOK authoring call, to *your own*
+API key.
+
+**Modification Rights.** Open source, forkable. Your blocklist is yours to read
+and reason about — a small, legible list, not a black box. Pin any version via
+load-unpacked + the stable extension `key`.
+
+### The blocklist Drogue
+
+A **simple, user-owned blocker**. Each domain is a full-drag target — notch
+`block`, friction `f = 1`, **no skip** — enforced at the network layer
+(`declarativeNetRequest` dynamic rules) so the page never loads, in normal and
+incognito windows alike. Two ways to define it, mirroring "me *or* Claude":
+
+- **You** — the **Blocklist** tab in the manage page. Type a domain, hit Block.
+  Remove any you added. State lives in `chrome.storage.local` (local-first).
+- **Claude / code** — a gitignored seed file (`modules/drogues/blocklist/seed.local.ts`,
+  copy from `seed.local.example.ts`). Edit + rebuild. Kept out of the repo so no
+  personal domains are ever committed. The effective blocklist is `unique(seed ∪ yours)`.
+
+**Holistic Control — by design, not by black box.** Every block is a domain
+*you or Claude chose* and can read in the list. User-added domains are removable
+in one click. Seed domains are removable too — but in code (`seed.ts` + rebuild):
+**compassionate friction**, a door you open with deliberate effort, never a
+locked one. The friction is the point; the fact that you *can* is the sovereignty.
+
+## Incognito
+
+For the porn Drogue (or any keel block) to hold in incognito — where porn is most
+often browsed — you must flip the switch once:
+
+1. `chrome://extensions` → keel → **Details**
+2. Enable **Allow in Incognito**
+
+keel runs `incognito: "spanning"` (one shared instance, shared local storage), so
+your shields and blocks carry over with no separate setup.
+
 ## Philosophy
 
 Buddhism speaks of three poisons: lobha (craving), dosa (aversion), moha (delusion). Platforms have industrialized these poisons at global scale. keel is named after equanimity (upekkhā) — the balanced awareness that interrupts compulsive cycles.

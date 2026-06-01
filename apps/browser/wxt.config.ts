@@ -21,8 +21,33 @@ export default defineConfig({
     // docs/deploy-browser.md and the Slice A design doc.
     key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr4PXcGQDz4++ZW7uNr5Y+T1GCHEid5cwAReGiiLBNyjhO5bhM1PqzZ4fYrrzhMY21N1I7htN1Pp/bhuoqgcl0W+fvtzMicQjrQSaCM4PmSPlZbxg1mETT1EPLGWSKiy1NRj8NXAm6QxKGQNVaNNLH+raMz7zJL58K8lB1VLiwkPpKdAp0qMZbHfjlXBr/qoVlCrZwpQ30kWB1TtEj0x0GXISOjAOEIIXu8PHzf4pjnAy9AeWJxsBRSr0WxekdsWGLYn8Do5HEVM42WWRUERn7eMjrauDLEcaoXZh4mVjBPCrzF76/Inby6cltdZCIBLiHJBfPrtPWjYeF3SU4pM6cwIDAQAB",
     description:
-      "Stopping cues for the internet. Modular attention shields for YouTube, LinkedIn, Chess.com and more.",
-    permissions: ["storage", "tabs", "activeTab"],
+      "Stopping cues for the internet. Local-only, no tracking: keel runs entirely on your device and cannot read your browsing.",
+    // Sovereignty by permission-minimalism (the manifest IS the privacy
+    // statement). Note what is DELIBERATELY absent:
+    //   • no host_permissions — keel injects no scripts via host grants
+    //   • declarativeNetRequest, NOT declarativeNetRequestWithHostAccess and
+    //     NOT webRequest — keel blocks by static rule and literally cannot read
+    //     request contents, URLs-as-data, or page bodies.
+    //   • storage is local (chrome.storage.local) — no sync, no server.
+    // Only egress anywhere in keel is the user's own BYOK authoring call.
+    permissions: ["storage", "tabs", "activeTab", "declarativeNetRequest"],
+    // Single shared instance in incognito so the porn Drogue's block holds
+    // there too (where porn is most often browsed). The user must still flip
+    // "Allow in incognito" once — see README. Shared storage = one source of
+    // truth for shields/cooldowns across normal + incognito.
+    incognito: "spanning",
+    // The keel block page must be reachable as a redirect target from the
+    // porn Drogue's DNR rules.
+    web_accessible_resources: [
+      {
+        resources: ["block.html"],
+        matches: ["<all_urls>"],
+      },
+    ],
+    // No static rulesets. The blocklist Drogue uses DNR *dynamic* rules synced
+    // from chrome.storage.local (modules/drogues/blocklist + background.ts) —
+    // user- and Claude-editable, fully legible. The `declarativeNetRequest`
+    // permission above is what those dynamic rules need.
     icons: {
       "16": "/icons/icon-16.png",
       "32": "/icons/icon-32.png",

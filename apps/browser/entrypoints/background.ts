@@ -1,6 +1,8 @@
 import { shields } from "@/modules/shields/registry";
 import { signals } from "@/modules/signals/registry";
 import { shieldEnabled, signalEnabled, domainCooldown } from "@/utils/storage";
+import { userBlockedDomains } from "@/modules/drogues/blocklist/store";
+import { syncBlocklistRules } from "@/modules/drogues/blocklist/sync";
 
 /**
  * Background service worker.
@@ -45,6 +47,12 @@ const cooldownStores = allDomains.map((d) => ({
 }));
 
 export default defineBackground(() => {
+  // ── Blocklist Drogue: keep DNR dynamic rules in sync with the store ──
+  // chrome.storage.local is the source of truth; project it onto dynamic
+  // rules on startup and on every change (add/remove from the manage page).
+  void syncBlocklistRules();
+  userBlockedDomains.watch(() => void syncBlocklistRules());
+
   // Update badge when any intervention's state changes.
   for (const intervention of allInterventions) {
     intervention.getStore().watch(() => refreshActiveBadge());
