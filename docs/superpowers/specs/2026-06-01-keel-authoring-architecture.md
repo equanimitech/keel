@@ -1,5 +1,11 @@
 # keel Authoring Architecture — design
 
+> **⊛ Reconciled with the umbrella** (`2026-06-01-keel-strategy.md`, canonical). Superseded wording:
+> - This doc's **"two bounded contexts (Shield=browser / Compass=desktop)" is superseded by capabilities × surfaces**: Shield/Compass/**Authoring** are *capabilities*; browser/desktop/app are *surfaces*. A surface hosts adapters for one or more capabilities (the desktop already does both).
+> - The **physics** this doc establishes remains correct, re-expressed as **adapter-edge** constraints: shield/DOM logic is TS-in-browser; OS sensing is Rust. Per the resolved language decision, the friction *model/drivers/rollup* are **TS core**; **Rust is tooling only** (sensing + executing interventions) — so no heavy `RuleSpec`/`Friction` Rust port is needed.
+> - **Authoring is the third capability**; BYOK-in-browser, desktop-connected, and Claude-Code-MCP are its per-surface adapters behind the `AuthoringProvider` port (unchanged).
+> - `@equanimi/domain` → `@keel/domain` (rename plan).
+
 **Date:** 2026-06-01
 **Surface:** keel (platform-wide; shield authoring lands browser-first)
 **Status:** design, settled in conversation — ready for implementation plan

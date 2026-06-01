@@ -1,5 +1,12 @@
 # Tides v1 — Nightly Wind-Down — design
 
+> **⊛ Reconciled with the umbrella** (`2026-06-01-keel-strategy.md`, canonical). Superseded wording:
+> - **`arm` → `target`**; the coding-app set is a *target*.
+> - Desktop is a **surface column**, not "the Compass context": it hosts both capabilities — *Compass* (window-watcher, wind-down driver) and *Shield* (stain overlay, AI-gate). Read "compass context" as "the desktop surface."
+> - **Language: TS core, Rust thin edges.** The `wind-down` driver, `CadenceRollup`, and `SkipBudget` are **TS** (shared with the browser); the **Rust daemon** only senses (window/idle) and executes interventions. No heavy `Friction` Rust mirror.
+> - The observer writes the **shared** observation substrate (umbrella Part V) that the browser `tab` watcher also writes — one event schema, not desktop-only.
+> - `f = 1` state is **"cooldown"** (one word across surfaces); "lockdown" here = the desktop cooldown.
+
 **Date:** 2026-06-01
 **Surface:** keel desktop (Tauri/macOS); consumes shared `@keel/domain` primitives
 **Status:** design, approved in brainstorming — ready for implementation plan

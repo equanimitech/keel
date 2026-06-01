@@ -1,5 +1,11 @@
 # Strategic Friction — design
 
+> **⊛ Reconciled with the umbrella** (`2026-06-01-keel-strategy.md`, canonical; this doc is detail). Superseded wording:
+> - **`arm` → `target`** — the scope `f` is keyed by (read every "arm" below as "target").
+> - **Structure is capabilities × surfaces**, not surface-bound contexts: *Shield* is a **capability** (intervene); browser/desktop are **surfaces**. The friction model here is the **shared core**, not browser-only.
+> - **`usage-vs-budget` is demoted** to a weak/optional signal — kept as this slice's *plumbing-prover*, not the flagship. Primary drivers are intention-first (`wind-down` → Zenborg → `detected-compulsion`); see umbrella Part IV. ("give it another try" — kept, not dropped.)
+> - The research-led renderer principles apply to *every* renderer here, including the YouTube cooldown: **breakpoint-arming, periphery-first, nudge>block, meta-awareness, personalization** (umbrella Part VI; `docs/references/attention-research-basis.md`).
+
 **Date:** 2026-06-01
 **Surface:** keel (browser extension first; model is platform-wide)
 **Status:** design, approved in brainstorming — ready for implementation plan

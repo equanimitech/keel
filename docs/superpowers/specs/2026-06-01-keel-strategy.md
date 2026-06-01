@@ -127,13 +127,13 @@ Each surface is a column of adapters over the shared core. We build **browser** 
 
 Concrete moves that pull the surfaces together:
 
-1. **One model, mirrored.** `Friction`/`frictionCurve`/`FrictionRung`/`FrictionBand` canonical in TS `@keel/domain`; **mirrored to Rust at the seam** (authoring-spec open item). JSONL substrate needs no mirror (language-agnostic).
+1. **One model, in TS.** `Friction`/`frictionCurve`/`FrictionRung`/`FrictionBand` + the drivers + rollup logic are canonical TS in `@keel/domain`, shared by both surfaces. Rust does **not** re-implement them (decided — see open-seam below); it senses and executes. JSONL substrate is language-agnostic.
 2. **Kill the definition schism.** Browser `ShieldDefinition`/`SignalDefinition` become aliases of the canonical `InterventionDefinition` (parent spec already specifies this).
 3. **One observation substrate** (Part V) both surfaces write.
 4. **Shared driver/credit/reflection discipline** — same primitives, per-target tactics.
 5. **Cross-surface friction modulation** (future) — once both write the substrate, a target's `f` can read cross-surface signals.
 
-**Open seam:** the *language* of compass friction logic. Authoring spec says compass = Rust; current desktop domain is TS (fp-ts). Decide per-component: the daemon/sensing is Rust; the pure driver/rollup could be Rust (matches authoring spec) or stay TS (matches today). `Friction` mirror is required either way. *Recorded, not yet decided.*
+**Resolved — TS core, Rust thin edges.** The friction model, drivers, and rollup logic stay **TS** (same code-family as the browser shield → the core is genuinely *shared*, not duplicated). **Rust is tooling only**: the daemon, OS sensing (observation), and executing interventions (the AI-gate hook / overlay). The seam is the daemon boundary — Rust emits events (JSONL, language-agnostic) and executes what the TS core decides. So the heavy `Friction` Rust-mirror in item 1 shrinks to near-nothing: Rust passes raw events up and renders decisions down; it doesn't re-implement the model.
 
 ***
 
@@ -143,9 +143,9 @@ Concrete moves that pull the surfaces together:
 2. **`packages/domain/src/rules/`** — RuleSpec + 7 primitives + `frictionBand` (TS). Upstream of everything (authoring spec).
 3. **Friction core (shared kernel)** — `Friction`, `frictionCurve`, `FrictionRung`, `FrictionBand`, `FrictionRenderer` port. + the browser **reference slice** (renderer/credits/reflection plumbing; `usage-vs-budget` as the demoted proof-driver).
 4. **Observation substrate** — watcher/event model + JSONL/rollup (shared; desktop `window` watcher + browser `tab` watcher).
-5. **Tides desktop** — `wind-down` driver + stain renderer + skip budget on the coding target. *(needs* *`Friction`* *Rust mirror or TS compass — Part VIII)*
+5. **Tides desktop** — `wind-down` driver + stain renderer + skip budget on the coding target. *(driver/rollup logic in TS; Rust daemon senses + executes — Part VIII)*
 6. **AI-gate** — hook renderer (breakpoint-armed) + meta-awareness bell + focus MCP.
-7. **Authoring pipeline** — `AuthoringProvider` port + BYOK-in-browser + validation gate (own track, shield-context).
+7. **Authoring pipeline** — `AuthoringProvider` port + BYOK-in-browser + validation gate (own track; the Authoring capability, browser column first).
 8. **Zenborg intention source** — replace clock-proxy with real declared intention. *(future)*
 
 ***
