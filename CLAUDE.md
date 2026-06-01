@@ -1,4 +1,4 @@
-# Equanimi - Attentive Technology Platform
+# Keel - Attentive Technology Platform
 
 A pnpm monorepo with two surfaces (browser extension + desktop app) sharing a pure domain types package.
 

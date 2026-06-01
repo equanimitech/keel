@@ -1,4 +1,4 @@
-# Equanimi
+# Keel
 
 **Stopping cues for the internet.**
 
@@ -8,7 +8,7 @@ A modular attention intervention platform. Part of the [mindful tech](https://gi
 
 Digital experiences have removed every stopping cue that physical experiences provide naturally. Books end. Meals finish. Even Pringles cans eventually empty. But Netflix never runs out, ChatGPT never stops talking, and the feed is bottomless.
 
-Equanimi puts stopping cues back. Each module targets a specific compulsion pattern on a specific platform — and you toggle exactly what you need.
+Keel puts stopping cues back. Each module targets a specific compulsion pattern on a specific platform — and you toggle exactly what you need.
 
 ## Modules
 
@@ -78,7 +78,7 @@ Built with [WXT](https://wxt.dev).
 
 ## Philosophy
 
-Buddhism speaks of three poisons: lobha (craving), dosa (aversion), moha (delusion). Platforms have industrialized these poisons at global scale. Equanimi is named after equanimity (upekkhā) — the balanced awareness that interrupts compulsive cycles.
+Buddhism speaks of three poisons: lobha (craving), dosa (aversion), moha (delusion). Platforms have industrialized these poisons at global scale. Keel is named after equanimity (upekkhā) — the balanced awareness that interrupts compulsive cycles.
 
 We don't block the internet. We put gaps back where platforms removed them. Gaps where awareness can enter.
 

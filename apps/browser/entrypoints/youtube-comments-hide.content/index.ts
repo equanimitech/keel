@@ -56,7 +56,7 @@ function injectPlaceholder(): void {
 
   const placeholder = document.createElement("div");
   placeholder.id = PLACEHOLDER_ID;
-  placeholder.textContent = "Comments hidden by Equanimi";
+  placeholder.textContent = "Comments hidden by Keel";
   placeholder.style.cssText = `
     padding: 24px;
     text-align: center;

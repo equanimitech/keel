@@ -1,4 +1,4 @@
-# Equanimi Browser - Development Guide
+# Keel Browser - Development Guide
 
 **A Chrome extension providing attention shields using WXT (WebExtension Toolkit)**
 

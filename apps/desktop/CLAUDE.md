@@ -1,4 +1,4 @@
-# Equanimi Desktop - Development Guide
+# Keel Desktop - Development Guide
 
 **An attention compass using DDD architecture with Tauri + React + TypeScript**
 
@@ -16,7 +16,7 @@ Canonical domain types live in `@keel/domain` (`packages/domain/`). Desktop-spec
 
 ## Architecture Overview
 
-Equanimi Desktop follows **Domain-Driven Design** with **hexagonal architecture**:
+Keel Desktop follows **Domain-Driven Design** with **hexagonal architecture**:
 
 ```
 src/
