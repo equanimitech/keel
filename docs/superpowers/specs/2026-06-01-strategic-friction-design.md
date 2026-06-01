@@ -142,6 +142,10 @@ The YouTube daily-limit feature is the **reference implementation of the `usage-
 1. **Gradual friction.** As today's YouTube watch time accumulates, `f("youtube.com")` rises along `frictionCurve(dailySeconds, softStartMin, dailyLimitMin)`. Friction is visible and escalating *before* the limit — gain-reduction on the loop.
 2. **Limit → cooldown.** When `dailySeconds ≥ dailyLimitMin`, set `domainCooldown("youtube.com")` to the next **configurable reset hour (default 05:00 local)**. The existing `youtube-cooldown` overlay enforces it verbatim — pauses video, overlays "take a break," re-pauses on play attempts.
 3. **Reset.** At the reset hour the cooldown expires, `dailySeconds` resets for the new day, `f` returns to 0, the intentional path is clean again.
+4. **Skip credits (compassionate override via scarcity).** The auto-cooldown is *not* a locked door — but the exit is a **finite, scarce resource**, not a cheap repeatable speed bump. You hold a small monthly allowance of *skip credits* (**configurable, default 1/month**). Spending one lifts the cooldown for a fixed block (**configurable, default 2h**) via a `cooldown:<domain>:override-until` window; when the block lapses the cooldown reasserts. With zero credits left, the cooldown is firm until the reset hour (credits refill at the calendar-month boundary).
+
+   Scarcity is the friction here, and it is *uncheatable* — unlike a "type a reason" prompt an impulse can fake, a credit simply runs out, so you won't spend a precious all-nighter on a 2am Shorts urge but you can on a genuine one. **`f` stays at 1 throughout an override** — the stain stays fully dark. You see the full cost while choosing to proceed: cost visible, choice yours, and the choice is rationed. The credit count is rendered as a *depleting resource* ("2 skips left this month"), never as a growing score (that would be gamification = washing).
+5. **Reflection, not score.** When the limit is first crossed on a logical day, that day is appended to a 7-day `limit-history`. The overlay (and manage page) shows one quiet, muted line — "Limit reached N of the last 7 days." No streak, no badge, no number-to-grow. A mirror that builds judgment toward needing the limit less.
 
 ### Popup change
 
@@ -168,10 +172,22 @@ Binary shields and DOM renderers are untouched in this slice. The stain/counter 
 
 ---
 
+## Equanimitech alignment (diagnostic on record)
+
+Run against the nine principles + four layers. Foundation holds: **Local-First** ✅ (client-side, `chrome.storage.local`, survives company death), **Modification Rights** ✅ (open WXT extension, forkable, version-freezable). The two gaps the first cut had — and how this design closes them:
+
+- **Holistic Control / Strategic Friction.** An auto-cooldown with no exit is a locked door (paternalism — a control failure even when well-meant; the framework names this exact tension). Resolved by **skip credits**: a real but *scarce* exit. Scarcity favors intention without being gameable. *Construct: ES-16 Non-reactivity — the rationed skip is the structural stand-in for the gap between stimulus and reaction.*
+- **Fade-by-Design / Production layer (Franklin).** A pure blocker builds no judgment — a permanent crutch. Resolved by the **scoreless reflection** ("limit reached N of the last 7 days"): a mirror that builds self-knowledge toward needing the limit less. *Construct: EQUA-S Hedonic Independence.* No streak/score (that would re-couple to hedonic reward = washing).
+
+**Measurement honesty (load-bearing):** these constructs are validated in *people*, not *products*. This design *targets the structural conditions* mapped to Non-reactivity / Hedonic Independence; whether that translates to measured equanimity gains is an open empirical question. Nothing here claims to *produce* equanimity.
+
 ## Acceptance
 
 - Watching YouTube past the configured daily limit triggers a cooldown that holds until the configured reset hour, then clears.
 - Below the limit, friction rises gradually and the experience remains usable (near-enemy: not numb).
+- The auto-cooldown is overridable by spending a skip credit, which lifts it for the configured block; with zero credits it is firm until reset; credits refill monthly. `f` (and the stain) stay at max during an override.
+- The skip count renders as a depleting resource, never a growing score; the overlay shows the scoreless "N of last 7 days" reflection.
 - The popup shows no on/off toggles; the manage page still does.
-- `Friction`, `domainFriction`, and `frictionCurve` exist as the shared primitives a second arm could consume without touching the strategy.
+- Every shield + signal carries a declared `frictionBand`; browser definitions are aliases of the canonical `InterventionDefinition` (one model).
+- `Friction`, `domainFriction`, `frictionCurve`, `FrictionBand`, and the `FrictionRenderer` port exist as shared primitives a second arm could consume without touching the strategy.
 - No claim, in copy or code comments, that the feature *produces* equanimity — only that it raises the cost of the compulsive path.
