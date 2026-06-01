@@ -1,0 +1,11 @@
+{
+  "name": "@keel/gate",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "keel": "./keel.mjs" },
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "tsc --noEmit --checkJs --allowJs --target es2022 --module nodenext --moduleResolution nodenext core.mjs store.mjs keel.mjs"
+  }
+}
