@@ -12,7 +12,7 @@ import { appState$ } from "./ui/state/appState";
  * 4. Return initialized container
  */
 export async function bootstrap(): Promise<ServiceContainer> {
-  console.log("🧭 Bootstrapping Keel...");
+  console.log("🧭 Bootstrapping keel...");
 
   // Step 1: Initialize ServiceContainer
   console.log("  → Initializing ServiceContainer...");

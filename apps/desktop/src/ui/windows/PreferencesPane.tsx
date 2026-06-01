@@ -92,7 +92,7 @@ export const PreferencesPane = observer(function PreferencesPane() {
         <section>
           <h2 className="text-base font-semibold mb-3">About</h2>
           <div className="text-sm text-gray-600">
-            <p className="my-1">Keel v0.1.0</p>
+            <p className="my-1">keel v0.1.0</p>
             <p className="my-1">An attention compass</p>
           </div>
         </section>

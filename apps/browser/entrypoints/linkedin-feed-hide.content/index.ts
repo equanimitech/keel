@@ -74,7 +74,7 @@ function injectPlaceholder(feed: Element): void {
 
   const placeholder = document.createElement("div");
   placeholder.id = PLACEHOLDER_ID;
-  placeholder.textContent = "Feed hidden by Keel";
+  placeholder.textContent = "Feed hidden by keel";
   placeholder.style.cssText = `
     padding: 48px 24px;
     text-align: center;

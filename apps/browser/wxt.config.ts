@@ -3,7 +3,7 @@ import { defineConfig } from "wxt";
 export default defineConfig({
   outDir: "dist",
   manifest: {
-    name: "Keel",
+    name: "keel",
     // Stable extension ID: Chromium derives a deterministic ID from this
     // public key, so chrome.storage contents and granted permissions survive
     // every rebuild, reload, and browser restart. Public key is safe to commit;

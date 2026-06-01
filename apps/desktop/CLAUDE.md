@@ -1,4 +1,4 @@
-# Keel Desktop - Development Guide
+# keel Desktop - Development Guide
 
 **An attention compass using DDD architecture with Tauri + React + TypeScript**
 
@@ -16,7 +16,7 @@ Canonical domain types live in `@keel/domain` (`packages/domain/`). Desktop-spec
 
 ## Architecture Overview
 
-Keel Desktop follows **Domain-Driven Design** with **hexagonal architecture**:
+keel Desktop follows **Domain-Driven Design** with **hexagonal architecture**:
 
 ```
 src/

@@ -1,4 +1,4 @@
-# Keel - Attentive Technology Platform
+# keel - Attentive Technology Platform
 
 A pnpm monorepo with two surfaces (browser extension + desktop app) sharing a pure domain types package.
 

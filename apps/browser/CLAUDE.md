@@ -1,4 +1,4 @@
-# Keel Browser - Development Guide
+# keel Browser - Development Guide
 
 **A Chrome extension providing attention shields using WXT (WebExtension Toolkit)**
 

@@ -1,4 +1,4 @@
-# Keel
+# keel
 
 **Attentive technology for the distracted age.**
 
@@ -6,7 +6,7 @@ A monorepo with two surfaces — a browser extension and a desktop app — shari
 
 ## What it does
 
-Digital platforms have removed every natural stopping cue. Keel puts them back.
+Digital platforms have removed every natural stopping cue. keel puts them back.
 
 - **Browser extension** (`apps/browser`): Shields that block compulsive UI patterns (Shorts scrolling, sidebar recommendations, post-game rematch loops) and signals that surface hidden information (watch time).
 - **Desktop app** (`apps/desktop`): An attention compass for macOS. Declare an intention, start a focus session, and the app detects drift — gently guiding you back without judgment.
@@ -59,7 +59,7 @@ pnpm tauri dev
 
 ## Philosophy
 
-Platforms have industrialized craving, aversion, and delusion at global scale. Keel is named after equanimity (*upekkha*) — the balanced awareness that interrupts compulsive cycles.
+Platforms have industrialized craving, aversion, and delusion at global scale. keel is named after equanimity (*upekkha*) — the balanced awareness that interrupts compulsive cycles.
 
 We don't block the internet. We put gaps back where platforms removed them.
 

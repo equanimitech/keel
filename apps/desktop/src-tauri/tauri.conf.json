@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Keel",
+  "productName": "keel",
   "version": "0.1.0",
   "identifier": "tech.equanimi.keel",
   "build": {
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Keel",
+        "title": "keel",
         "url": "/",
         "width": 380,
         "height": 400,
