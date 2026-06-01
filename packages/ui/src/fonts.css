@@ -1,0 +1,25 @@
+/* ============================================================
+   @keel/ui — Geist fonts, self-hosted (woff2 variable).
+   Import once per surface (extension page / desktop):
+     @import "@keel/ui/fonts.css";
+   CSP-safe: no external font requests. Family names match
+   --font-sans / --font-mono in tokens.css.
+   ============================================================ */
+
+@font-face {
+  font-family: "Geist";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/Geist-Variable.woff2") format("woff2-variations"),
+       url("./fonts/Geist-Variable.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("./fonts/GeistMono-Variable.woff2") format("woff2-variations"),
+       url("./fonts/GeistMono-Variable.woff2") format("woff2");
+}

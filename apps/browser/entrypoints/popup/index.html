@@ -4,24 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>keel</title>
-    <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
-    <div class="popup">
-      <header>
-        <h1>keel</h1>
-        <p class="subtitle">Stopping cues for the internet</p>
-      </header>
-
-      <div id="cooldown-section"></div>
-      <div id="shield-list"></div>
-      <p id="empty-state" class="empty-state" style="display: none;"></p>
-
-      <footer>
-        <button id="manage-link" class="manage-link">Manage all interventions &rarr;</button>
-      </footer>
-    </div>
-
-    <script type="module" src="./main.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
   </body>
 </html>

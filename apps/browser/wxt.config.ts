@@ -1,7 +1,17 @@
 import { defineConfig } from "wxt";
+import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   outDir: "dist",
+  // React for the extension PAGES (popup, manage). Content scripts stay vanilla.
+  modules: ["@wxt-dev/module-react"],
+  // Tailwind v4 for page entrypoints; per-entrypoint CSS scopes utilities.
+  // Cast: @tailwindcss/vite resolves vite@7 types while wxt bundles vite@6 —
+  // the Plugin shapes differ only in an internal `hotUpdate` `this` type
+  // (harmless at runtime). A global vite override would break desktop (vite@7).
+  vite: () => ({
+    plugins: [tailwindcss()] as never,
+  }),
   manifest: {
     name: "keel",
     // Stable extension ID: Chromium derives a deterministic ID from this

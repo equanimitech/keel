@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@keel/domain": "workspace:*",
+    "@keel/ui": "workspace:*",
     "@legendapp/state": "^2.1.15",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "~2",

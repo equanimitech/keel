@@ -1,9 +1,15 @@
 @import "tailwindcss";
 
-/* Explicitly include all UI directories for scanning */
-@source "../ui";
+/* keel design system (single source of truth: @keel/ui) */
+@import "@keel/ui/tokens.css";
+@import "@keel/ui/theme.css";
+@import "@keel/ui/fonts.css";
 
-/* Custom theme configuration */
+/* Scan this app's UI + the shared component library for utilities */
+@source "../ui";
+@source "../../../../packages/ui/src";
+
+/* ensō signature accents (sage source; kept for the custom tray button + timer) */
 @theme {
   --color-enso-cream: #E8DCC4;
   --color-enso-green: #8B9D83;
@@ -17,9 +23,9 @@
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: white;
-  color: #1a1a1a;
+  font-family: var(--font-sans);
+  background: var(--background);
+  color: var(--foreground);
 }
 
 #root {

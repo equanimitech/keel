@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { ServiceProvider } from "./ui/hooks/useServices";
+import { ThemeProvider } from "./ui/components/ThemeProvider";
 import { App } from "./ui/App";
 import { bootstrap } from "./bootstrap";
 
@@ -18,9 +19,11 @@ bootstrap()
   .then((container) => {
     ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
       <React.StrictMode>
-        <ServiceProvider container={container}>
-          <App />
-        </ServiceProvider>
+        <ThemeProvider>
+          <ServiceProvider container={container}>
+            <App />
+          </ServiceProvider>
+        </ThemeProvider>
       </React.StrictMode>
     );
   })

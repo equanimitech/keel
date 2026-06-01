@@ -1,5 +1,6 @@
 import { observer } from "@legendapp/state/react";
 import { useState } from "react";
+import { Button } from "@keel/ui";
 import { useServices } from "../hooks/useServices";
 import { appState$ } from "../state/appState";
 import { BigRedButton } from "./BigRedButton";
@@ -59,17 +60,19 @@ export const IdleState = observer(function IdleState() {
 
       {error && (
         <div
-          className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-center justify-between gap-4"
+          className="mt-6 p-4 bg-destructive/10 border border-destructive/20 rounded-lg flex items-center justify-between gap-4"
           role="alert"
         >
-          <p className="text-red-400 text-sm">{error}</p>
-          <button
-            className="text-red-400 hover:text-red-300 text-xl leading-none"
+          <p className="text-destructive text-sm">{error}</p>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive hover:text-destructive"
             onClick={() => setError(null)}
-            type="button"
+            aria-label="Dismiss error"
           >
             ×
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -1,0 +1,116 @@
+/* ============================================================
+   @keel/ui — design tokens (Layer ①, framework-free)
+   Single source of truth for keel's visual system.
+
+   Family: stone neutrals lifted from zenborg/secretariat so the
+   org reads as one. keel's differentiator is the SAGE (ensō)
+   primary/accent, derived from --color-enso-green #8B9D83, with
+   charcoal (#2D3436) and cream (#E8DCC4) as ensō signature tints.
+
+   CRITICAL (WXT affordance): tokens are scoped to a keel-owned
+   [data-keel-theme] root, NOT :root. A content script injects keel
+   UI into host pages (YouTube/LinkedIn) whose :root and .dark
+   belong to the host. Rooting under [data-keel-theme] lets an
+   overlay carry keel's own light/dark regardless of the host page.
+
+   Each surface sets data-keel-theme="light"|"dark" on its root
+   (a `system` resolver flips it from prefers-color-scheme).
+   ============================================================ */
+
+/* ── Shared: named ramps, radii, fonts (theme-independent) ───── */
+[data-keel-theme] {
+  /* Stone neutral ramp (oklch, warm grey) — from zenborg */
+  --stone-50:  oklch(0.985 0.001 106.423);
+  --stone-100: oklch(0.97 0.001 106.424);
+  --stone-200: oklch(0.923 0.003 48.717);
+  --stone-300: oklch(0.869 0.005 56.366);
+  --stone-400: oklch(0.709 0.01 56.259);
+  --stone-500: oklch(0.553 0.013 58.071);
+  --stone-600: oklch(0.444 0.011 73.639);
+  --stone-700: oklch(0.374 0.01 67.558);
+  --stone-800: oklch(0.268 0.007 34.298);
+  --stone-900: oklch(0.216 0.006 56.043);
+  --stone-950: oklch(0.147 0.004 49.25);
+
+  /* Sage (ensō) ramp — derived from --color-enso-green #8B9D83 */
+  --sage-50:  oklch(0.97 0.012 145);
+  --sage-100: oklch(0.94 0.020 145);
+  --sage-200: oklch(0.89 0.030 145);
+  --sage-300: oklch(0.82 0.038 145);
+  --sage-400: oklch(0.74 0.044 145);
+  --sage-500: oklch(0.66 0.045 145); /* ≈ #8B9D83 — ensō base */
+  --sage-600: oklch(0.57 0.042 145);
+  --sage-700: oklch(0.47 0.036 145);
+  --sage-800: oklch(0.37 0.028 145);
+  --sage-900: oklch(0.28 0.020 145);
+
+  /* ensō signature accents */
+  --enso-charcoal: oklch(0.32 0.012 197); /* ≈ #2D3436 */
+  --enso-cream:    oklch(0.90 0.030 85);  /* ≈ #E8DCC4 */
+
+  /* Radii (zenborg scale) */
+  --radius: 0.625rem;
+
+  /* Fonts — Geist (per the alignment spec). Self-hosted woff2 via
+     @keel/ui/fonts.css for CSP safety in the extension. */
+  --font-sans: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+/* ── Light theme ────────────────────────────────────────────── */
+[data-keel-theme="light"] {
+  --background: oklch(1 0 0);
+  --foreground: var(--stone-950);
+
+  --card: oklch(1 0 0);
+  --card-foreground: var(--stone-950);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--stone-950);
+
+  --muted: var(--stone-100);
+  --muted-foreground: var(--stone-500);
+  --border: var(--stone-200);
+  --input: var(--stone-200);
+
+  --secondary: var(--stone-100);
+  --secondary-foreground: var(--stone-900);
+
+  /* ensō: sage as primary/accent (keel's differentiator) */
+  --primary: var(--sage-500);
+  --primary-foreground: oklch(0.985 0.001 106);
+  --accent: oklch(0.95 0.02 145);          /* sage tint surface */
+  --accent-foreground: oklch(0.30 0.03 150); /* deep sage */
+  --ring: var(--sage-500);
+
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.985 0.001 106);
+}
+
+/* ── Dark theme (also the .dark consumers expect) ───────────── */
+[data-keel-theme="dark"] {
+  --background: var(--stone-950);
+  --foreground: oklch(0.985 0.001 106.423);
+
+  --card: var(--stone-900);
+  --card-foreground: oklch(0.985 0.001 106.423);
+  --popover: var(--stone-900);
+  --popover-foreground: oklch(0.985 0.001 106.423);
+
+  --muted: var(--stone-800);
+  --muted-foreground: var(--stone-400);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+
+  --secondary: var(--stone-800);
+  --secondary-foreground: oklch(0.985 0.001 106.423);
+
+  /* sage brightened for contrast on dark surfaces */
+  --primary: oklch(0.72 0.05 145);
+  --primary-foreground: var(--stone-950);
+  --accent: oklch(0.30 0.03 150);          /* deep sage surface */
+  --accent-foreground: oklch(0.92 0.03 145); /* light sage text */
+  --ring: oklch(0.72 0.05 145);
+
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.985 0.001 106);
+}
