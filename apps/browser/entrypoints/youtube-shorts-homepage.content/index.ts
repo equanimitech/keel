@@ -9,7 +9,7 @@ import "./style.css";
  * the active class. This JS only manages adding/removing the class.
  */
 
-const CSS_CLASS = `equanimi-${youtubeShortsHomepage.id}-active`;
+const CSS_CLASS = `keel-${youtubeShortsHomepage.id}-active`;
 const enabled = shieldEnabled(youtubeShortsHomepage.id, youtubeShortsHomepage.defaultEnabled);
 
 export default defineContentScript({

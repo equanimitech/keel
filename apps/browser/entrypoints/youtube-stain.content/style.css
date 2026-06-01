@@ -9,7 +9,7 @@
 /* width + padding-bottom trick keeps it circular regardless of   */
 /* player aspect ratio. Height must be 0 (padding creates it).    */
 /* z-index 25: above video, below YouTube controls (~30–60).      */
-.equanimi-watch-stain {
+.keel-watch-stain {
   position: absolute;
   z-index: 25;
   height: 0;

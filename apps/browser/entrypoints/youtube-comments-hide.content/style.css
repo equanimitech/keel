@@ -2,21 +2,21 @@
  * Keel — Comments Hide (CSS layer)
  *
  * Hides comments on both regular videos and Shorts.
- * Scoped under .equanimi-youtube-comments-hide-active on <html>.
+ * Scoped under .keel-youtube-comments-hide-active on <html>.
  */
 
 /* ── Hide comments section on watch pages ─────────────────────── */
-.equanimi-youtube-comments-hide-active ytd-watch-flexy #comments {
+.keel-youtube-comments-hide-active ytd-watch-flexy #comments {
   display: none !important;
 }
 
 /* ── Hide comments engagement panel on Shorts ─────────────────── */
-.equanimi-youtube-comments-hide-active ytd-engagement-panel-section-list-renderer[target-id="comments-section"] {
+.keel-youtube-comments-hide-active ytd-engagement-panel-section-list-renderer[target-id="comments-section"] {
   display: none !important;
 }
 
 /* ── Hide the comments button in Shorts action bar ────────────── */
-.equanimi-youtube-comments-hide-active ytd-reel-video-renderer #comments-button,
-.equanimi-youtube-comments-hide-active ytd-reel-video-renderer [aria-label="Comments"] {
+.keel-youtube-comments-hide-active ytd-reel-video-renderer #comments-button,
+.keel-youtube-comments-hide-active ytd-reel-video-renderer [aria-label="Comments"] {
   display: none !important;
 }

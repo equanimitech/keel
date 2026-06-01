@@ -8,7 +8,7 @@ import "./style.css";
  * Pure CSS shield — hides #secondary on watch pages.
  */
 
-const CSS_CLASS = `equanimi-${youtubeSidebarRecs.id}-active`;
+const CSS_CLASS = `keel-${youtubeSidebarRecs.id}-active`;
 const enabled = shieldEnabled(youtubeSidebarRecs.id, youtubeSidebarRecs.defaultEnabled);
 
 export default defineContentScript({

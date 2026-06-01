@@ -2,43 +2,43 @@
  * Keel — Sponsored Content Removal (CSS layer)
  *
  * Hides ad slots, promoted videos, masthead ads, and in-feed ad layouts.
- * Scoped under .equanimi-youtube-sponsored-active on <html>.
+ * Scoped under .keel-youtube-sponsored-active on <html>.
  */
 
 /* ── Generic ad slot renderer ─────────────────────────────────── */
-.equanimi-youtube-sponsored-active ytd-ad-slot-renderer,
-.equanimi-youtube-sponsored-active ytd-in-feed-ad-layout-renderer,
-.equanimi-youtube-sponsored-active ytd-banner-promo-renderer,
-.equanimi-youtube-sponsored-active ytd-statement-banner-renderer {
+.keel-youtube-sponsored-active ytd-ad-slot-renderer,
+.keel-youtube-sponsored-active ytd-in-feed-ad-layout-renderer,
+.keel-youtube-sponsored-active ytd-banner-promo-renderer,
+.keel-youtube-sponsored-active ytd-statement-banner-renderer {
   display: none !important;
 }
 
 /* ── Promoted / sponsored sparkles badge + container ──────────── */
-.equanimi-youtube-sponsored-active ytd-promoted-sparkles-web-renderer,
-.equanimi-youtube-sponsored-active ytd-promoted-video-renderer {
+.keel-youtube-sponsored-active ytd-promoted-sparkles-web-renderer,
+.keel-youtube-sponsored-active ytd-promoted-video-renderer {
   display: none !important;
 }
 
 /* ── Display ads (sidebar, overlay, companion) ────────────────── */
-.equanimi-youtube-sponsored-active ytd-display-ad-renderer,
-.equanimi-youtube-sponsored-active ytd-companion-slot-renderer {
+.keel-youtube-sponsored-active ytd-display-ad-renderer,
+.keel-youtube-sponsored-active ytd-companion-slot-renderer {
   display: none !important;
 }
 
 /* ── Masthead ad on homepage ──────────────────────────────────── */
-.equanimi-youtube-sponsored-active ytd-primetime-promo-renderer,
-.equanimi-youtube-sponsored-active ytd-brand-video-singleton-renderer,
-.equanimi-youtube-sponsored-active #masthead-ad {
+.keel-youtube-sponsored-active ytd-primetime-promo-renderer,
+.keel-youtube-sponsored-active ytd-brand-video-singleton-renderer,
+.keel-youtube-sponsored-active #masthead-ad {
   display: none !important;
 }
 
 /* ── Rich items marked as ads in the feed ─────────────────────── */
-.equanimi-youtube-sponsored-active ytd-rich-item-renderer:has(ytd-ad-slot-renderer) {
+.keel-youtube-sponsored-active ytd-rich-item-renderer:has(ytd-ad-slot-renderer) {
   display: none !important;
 }
 
 /* ── Search result ads ────────────────────────────────────────── */
-.equanimi-youtube-sponsored-active ytd-search-pyv-renderer,
-.equanimi-youtube-sponsored-active ytd-promoted-sparkles-text-search-renderer {
+.keel-youtube-sponsored-active ytd-search-pyv-renderer,
+.keel-youtube-sponsored-active ytd-promoted-sparkles-text-search-renderer {
   display: none !important;
 }

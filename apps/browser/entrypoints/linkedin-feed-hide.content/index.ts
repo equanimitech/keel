@@ -9,8 +9,8 @@ import { linkedinFeedHide } from "@/modules/shields/linkedin-feed-hide/definitio
  */
 
 const enabled = shieldEnabled(linkedinFeedHide.id, linkedinFeedHide.defaultEnabled);
-const PLACEHOLDER_ID = "equanimi-linkedin-feed-placeholder";
-const HIDDEN_ATTR = "data-equanimi-feed-hidden";
+const PLACEHOLDER_ID = "keel-linkedin-feed-placeholder";
+const HIDDEN_ATTR = "data-keel-feed-hidden";
 
 export default defineContentScript({
   matches: ["*://*.linkedin.com/*"],

@@ -155,7 +155,7 @@ function deactivate(): void {
 
 function createStain(): void {
   stainEl = document.createElement("div");
-  stainEl.className = "equanimi-watch-stain";
+  stainEl.className = "keel-watch-stain";
   stainEl.style.left = `${blobX}%`;
   stainEl.style.top = `${blobY}%`;
 

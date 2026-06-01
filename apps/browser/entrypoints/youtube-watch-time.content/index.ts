@@ -14,7 +14,7 @@ import "./style.css";
  * - Shows a timer counter (configurable corner position).
  */
 
-const CSS_CLASS = `equanimi-${youtubeWatchTime.id}-active`;
+const CSS_CLASS = `keel-${youtubeWatchTime.id}-active`;
 const enabled = signalEnabled(
   youtubeWatchTime.id,
   youtubeWatchTime.defaultEnabled,
@@ -206,7 +206,7 @@ async function createOverlay(): Promise<void> {
   const position = await positionStore.getValue();
 
   counterEl = document.createElement("div");
-  counterEl.className = "equanimi-watch-counter";
+  counterEl.className = "keel-watch-counter";
   counterEl.textContent = "0:00";
   counterEl.dataset.position = position;
   document.body.appendChild(counterEl);

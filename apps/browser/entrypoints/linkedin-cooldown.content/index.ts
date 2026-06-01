@@ -103,21 +103,21 @@ function insertOverlay(): void {
   }
 
   overlay = document.createElement("div");
-  overlay.className = "equanimi-li-cooldown-overlay";
+  overlay.className = "keel-li-cooldown-overlay";
 
   const content = document.createElement("div");
-  content.className = "equanimi-li-cooldown-content";
+  content.className = "keel-li-cooldown-content";
 
   const label = document.createElement("span");
-  label.className = "equanimi-li-cooldown-label";
+  label.className = "keel-li-cooldown-label";
   label.textContent = "Take a break from LinkedIn.";
 
   overlayTimerEl = document.createElement("span");
-  overlayTimerEl.className = "equanimi-li-cooldown-timer";
+  overlayTimerEl.className = "keel-li-cooldown-timer";
   overlayTimerEl.textContent = formatTime(cooldownRemaining);
 
   const leave = document.createElement("button");
-  leave.className = "equanimi-li-cooldown-leave";
+  leave.className = "keel-li-cooldown-leave";
   leave.textContent = "Leave LinkedIn";
   leave.addEventListener("click", (e) => {
     e.stopPropagation();

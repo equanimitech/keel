@@ -9,9 +9,9 @@ import "./style.css";
  * message so users know comments are intentionally hidden, not broken.
  */
 
-const CSS_CLASS = `equanimi-${youtubeCommentsHide.id}-active`;
+const CSS_CLASS = `keel-${youtubeCommentsHide.id}-active`;
 const enabled = shieldEnabled(youtubeCommentsHide.id, youtubeCommentsHide.defaultEnabled);
-const PLACEHOLDER_ID = "equanimi-comments-placeholder";
+const PLACEHOLDER_ID = "keel-comments-placeholder";
 
 export default defineContentScript({
   matches: ["*://*.youtube.com/*"],

@@ -3,15 +3,15 @@
  *
  * Hides the recommendations sidebar on watch pages.
  * Live chat on streams is preserved (#chat is separate from #secondary).
- * Scoped under .equanimi-youtube-sidebar-recs-active on <html>.
+ * Scoped under .keel-youtube-sidebar-recs-active on <html>.
  */
 
 /* ── Hide the entire secondary sidebar on watch pages ─────────── */
-.equanimi-youtube-sidebar-recs-active ytd-watch-flexy #secondary {
+.keel-youtube-sidebar-recs-active ytd-watch-flexy #secondary {
   display: none !important;
 }
 
 /* ── Let the primary column expand into the freed space ───────── */
-.equanimi-youtube-sidebar-recs-active ytd-watch-flexy #primary {
+.keel-youtube-sidebar-recs-active ytd-watch-flexy #primary {
   max-width: 100% !important;
 }

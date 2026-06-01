@@ -191,21 +191,21 @@ function insertPlayerOverlay(): void {
   if (!player) return;
 
   overlay = document.createElement("div");
-  overlay.className = "equanimi-yt-cooldown-overlay";
+  overlay.className = "keel-yt-cooldown-overlay";
 
   const content = document.createElement("div");
-  content.className = "equanimi-yt-cooldown-content";
+  content.className = "keel-yt-cooldown-content";
 
   const label = document.createElement("span");
-  label.className = "equanimi-yt-cooldown-label";
+  label.className = "keel-yt-cooldown-label";
   label.textContent = "Take a break.";
 
   overlayTimerEl = document.createElement("span");
-  overlayTimerEl.className = "equanimi-yt-cooldown-timer";
+  overlayTimerEl.className = "keel-yt-cooldown-timer";
   overlayTimerEl.textContent = formatTime(cooldownRemaining);
 
   const leave = document.createElement("button");
-  leave.className = "equanimi-yt-cooldown-leave";
+  leave.className = "keel-yt-cooldown-leave";
   leave.textContent = "Leave YouTube";
   leave.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -239,14 +239,14 @@ function showBadge(): void {
   if (badge) return;
 
   badge = document.createElement("div");
-  badge.className = "equanimi-yt-cooldown-badge";
+  badge.className = "keel-yt-cooldown-badge";
 
   const icon = document.createElement("span");
-  icon.className = "equanimi-yt-cooldown-badge-icon";
+  icon.className = "keel-yt-cooldown-badge-icon";
   icon.textContent = "\u23F8"; // ⏸
 
   badgeTimerEl = document.createElement("span");
-  badgeTimerEl.className = "equanimi-yt-cooldown-badge-timer";
+  badgeTimerEl.className = "keel-yt-cooldown-badge-timer";
   badgeTimerEl.textContent = formatTime(cooldownRemaining);
 
   badge.appendChild(icon);

@@ -8,7 +8,7 @@ import "./style.css";
  * Pure CSS shield — hides ad slots, promoted videos, and masthead ads.
  */
 
-const CSS_CLASS = `equanimi-${youtubeSponsored.id}-active`;
+const CSS_CLASS = `keel-${youtubeSponsored.id}-active`;
 const enabled = shieldEnabled(youtubeSponsored.id, youtubeSponsored.defaultEnabled);
 
 export default defineContentScript({

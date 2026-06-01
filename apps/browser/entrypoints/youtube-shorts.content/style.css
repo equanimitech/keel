@@ -1,30 +1,30 @@
 /*
  * Keel — YouTube Shorts Scroll Lock (CSS layer)
  *
- * All rules scoped under .equanimi-youtube-shorts-scroll-lock-active
+ * All rules scoped under .keel-youtube-shorts-scroll-lock-active
  * (added to <html> by the content script). Removing the class restores
  * normal scrolling — no reload needed.
  */
 
 /* ── Kill the scroll-snap container ────────────────────────────── */
-.equanimi-youtube-shorts-scroll-lock-active #shorts-inner-container {
+.keel-youtube-shorts-scroll-lock-active #shorts-inner-container {
   scroll-snap-type: none !important;
   overflow-y: hidden !important;
 }
 
 /* ── Remove snap targets from individual reels ─────────────────── */
-.equanimi-youtube-shorts-scroll-lock-active ytd-reel-video-renderer {
+.keel-youtube-shorts-scroll-lock-active ytd-reel-video-renderer {
   scroll-snap-align: none !important;
 }
 
 /* ── Hide prev / next navigation buttons ───────────────────────── */
-.equanimi-youtube-shorts-scroll-lock-active ytd-shorts .navigation-button,
-.equanimi-youtube-shorts-scroll-lock-active button[aria-label="Previous video"],
-.equanimi-youtube-shorts-scroll-lock-active button[aria-label="Next video"] {
+.keel-youtube-shorts-scroll-lock-active ytd-shorts .navigation-button,
+.keel-youtube-shorts-scroll-lock-active button[aria-label="Previous video"],
+.keel-youtube-shorts-scroll-lock-active button[aria-label="Next video"] {
   display: none !important;
 }
 
 /* ── Prevent the Shorts container from expanding for preloaded reels */
-.equanimi-youtube-shorts-scroll-lock-active ytd-shorts {
+.keel-youtube-shorts-scroll-lock-active ytd-shorts {
   overflow: hidden !important;
 }

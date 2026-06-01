@@ -5,7 +5,7 @@
  */
 
 /* ── Timer counter ────────────────────────────────────────────── */
-.equanimi-watch-counter {
+.keel-watch-counter {
   position: fixed;
   z-index: 9998;
   font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
@@ -16,22 +16,22 @@
 }
 
 /* ── Position variants ────────────────────────────────────────── */
-.equanimi-watch-counter[data-position="bottom-right"] {
+.keel-watch-counter[data-position="bottom-right"] {
   bottom: 16px;
   right: 16px;
 }
 
-.equanimi-watch-counter[data-position="bottom-left"] {
+.keel-watch-counter[data-position="bottom-left"] {
   bottom: 16px;
   left: 16px;
 }
 
-.equanimi-watch-counter[data-position="top-right"] {
+.keel-watch-counter[data-position="top-right"] {
   top: 16px;
   right: 16px;
 }
 
-.equanimi-watch-counter[data-position="top-left"] {
+.keel-watch-counter[data-position="top-left"] {
   top: 16px;
   left: 16px;
 }

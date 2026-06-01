@@ -83,7 +83,7 @@ async function getCurrentDomain(): Promise<string> {
       return new URL(tab.url).hostname.replace(/^www\./, "");
     }
   } catch (e) {
-    console.error("[equanimi] popup: failed to query active tab", e);
+    console.error("[keel] popup: failed to query active tab", e);
   }
   return "";
 }

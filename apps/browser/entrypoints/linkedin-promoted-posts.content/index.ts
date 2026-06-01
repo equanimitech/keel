@@ -43,7 +43,7 @@ export default defineContentScript({
   },
 });
 
-const HIDDEN_ATTR = "data-equanimi-promoted-hidden";
+const HIDDEN_ATTR = "data-keel-promoted-hidden";
 
 function isPromotedItem(listitem: Element): boolean {
   for (const p of listitem.querySelectorAll("p")) {

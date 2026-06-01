@@ -40,7 +40,7 @@ const cooldownUntilStore = domainCooldown("chess.com");
 
 // ── Constants ────────────────────────────────────────────────
 
-const CSS_CLASS = `equanimi-${chessPostGameCooldown.id}-active`;
+const CSS_CLASS = `keel-${chessPostGameCooldown.id}-active`;
 
 /** Action buttons to disable during cooldown (by data-cy). */
 const ACTION_BUTTON_SELECTORS = [
@@ -372,7 +372,7 @@ async function clearCooldown(clearStorage: boolean): Promise<void> {
 
 function clearCooldownUI(): void {
   for (const btn of cooldownState.disabledButtons) {
-    btn.classList.remove("equanimi-btn-disabled");
+    btn.classList.remove("keel-btn-disabled");
   }
   for (const bar of cooldownState.bars) {
     bar.remove();
@@ -387,7 +387,7 @@ function disableVisibleActionButtons(): void {
   const buttons = findActionButtons();
   for (const btn of buttons) {
     if (!cooldownState.disabledButtons.includes(btn)) {
-      btn.classList.add("equanimi-btn-disabled");
+      btn.classList.add("keel-btn-disabled");
       cooldownState.disabledButtons.push(btn);
     }
   }
@@ -461,7 +461,7 @@ function findActionButtons(): HTMLElement[] {
 function insertCooldownBars(): void {
   const points = findBarInsertionPoints();
   for (const point of points) {
-    if (point.nextElementSibling?.classList.contains("equanimi-cooldown-bar"))
+    if (point.nextElementSibling?.classList.contains("keel-cooldown-bar"))
       continue;
     const bar = createCooldownBar();
     point.after(bar);
@@ -508,7 +508,7 @@ function watchNewGameTab(): void {
         const text = btn.textContent?.trim() ?? "";
         if (NEW_GAME_TAB_TEXT.test(text) || /new\s*\d/i.test(text)) {
           if (!cooldownState.disabledButtons.includes(btn)) {
-            btn.classList.add("equanimi-btn-disabled");
+            btn.classList.add("keel-btn-disabled");
             cooldownState.disabledButtons.push(btn);
           }
         }
@@ -517,7 +517,7 @@ function watchNewGameTab(): void {
       const tabContent =
         sidebarContent.querySelector('[data-tab-content="newGame"]') ??
         sidebarContent;
-      if (!tabContent.querySelector(".equanimi-cooldown-bar")) {
+      if (!tabContent.querySelector(".keel-cooldown-bar")) {
         const bar = createCooldownBar();
         tabContent.appendChild(bar);
         cooldownState.bars.push(bar);
@@ -533,24 +533,24 @@ function watchNewGameTab(): void {
 
 function createCooldownBar(): HTMLElement {
   const bar = document.createElement("div");
-  bar.className = "equanimi-cooldown-bar";
+  bar.className = "keel-cooldown-bar";
 
   const top = document.createElement("div");
-  top.className = "equanimi-cooldown-top";
+  top.className = "keel-cooldown-top";
 
   const label = document.createElement("span");
-  label.className = "equanimi-cooldown-label";
+  label.className = "keel-cooldown-label";
   label.textContent = lastGameWasLoss ? "Tilt protection." : "Take a breath.";
 
   const timer = document.createElement("span");
-  timer.className = "equanimi-cooldown-timer";
+  timer.className = "keel-cooldown-timer";
   timer.textContent = formatTime(cooldownRemaining);
 
   top.appendChild(label);
   top.appendChild(timer);
 
   const stop = document.createElement("button");
-  stop.className = "equanimi-stop-playing";
+  stop.className = "keel-stop-playing";
   stop.textContent = "Stop playing";
   stop.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -567,7 +567,7 @@ function createCooldownBar(): HTMLElement {
 function updateAllBars(): void {
   const timeStr = formatTime(cooldownRemaining);
   for (const bar of cooldownState.bars) {
-    const timer = bar.querySelector<HTMLElement>(".equanimi-cooldown-timer");
+    const timer = bar.querySelector<HTMLElement>(".keel-cooldown-timer");
     if (timer) timer.textContent = timeStr;
   }
 }
@@ -578,21 +578,21 @@ function createFab(): void {
   if (fab) return;
 
   fab = document.createElement("div");
-  fab.className = "equanimi-fab";
+  fab.className = "keel-fab";
 
   const icon = document.createElement("span");
-  icon.className = "equanimi-fab-icon";
+  icon.className = "keel-fab-icon";
   icon.textContent = "\u23F8"; // ⏸
 
   fabTimerEl = document.createElement("span");
-  fabTimerEl.className = "equanimi-fab-timer";
+  fabTimerEl.className = "keel-fab-timer";
 
   fab.appendChild(icon);
   fab.appendChild(fabTimerEl);
 
   // Dropdown
   fabDropdown = document.createElement("div");
-  fabDropdown.className = "equanimi-fab-dropdown";
+  fabDropdown.className = "keel-fab-dropdown";
   fab.appendChild(fabDropdown);
 
   fab.addEventListener("click", (e) => {
@@ -637,7 +637,7 @@ function openFabDropdown(): void {
     // No cooldown: show duration options
     for (const opt of COOLDOWN_OPTIONS) {
       const item = document.createElement("button");
-      item.className = "equanimi-fab-option";
+      item.className = "keel-fab-option";
       item.textContent = opt.label;
       item.addEventListener("click", (e) => {
         e.stopPropagation();
@@ -661,11 +661,11 @@ function updateFab(): void {
   if (cooldownRemaining > 0) {
     fabTimerEl.textContent = formatTime(cooldownRemaining);
     fabTimerEl.style.display = "";
-    fab.classList.add("equanimi-fab--active");
+    fab.classList.add("keel-fab--active");
   } else {
     fabTimerEl.textContent = "";
     fabTimerEl.style.display = "none";
-    fab.classList.remove("equanimi-fab--active");
+    fab.classList.remove("keel-fab--active");
   }
 }
 
@@ -698,21 +698,21 @@ function applyPuzzleOverlay(): void {
   }
 
   puzzleOverlay = document.createElement("div");
-  puzzleOverlay.className = "equanimi-puzzle-overlay";
+  puzzleOverlay.className = "keel-puzzle-overlay";
 
   const content = document.createElement("div");
-  content.className = "equanimi-puzzle-overlay-content";
+  content.className = "keel-puzzle-overlay-content";
 
   const label = document.createElement("span");
-  label.className = "equanimi-puzzle-overlay-label";
+  label.className = "keel-puzzle-overlay-label";
   label.textContent = "Take a break.";
 
   puzzleOverlayTimer = document.createElement("span");
-  puzzleOverlayTimer.className = "equanimi-puzzle-overlay-timer";
+  puzzleOverlayTimer.className = "keel-puzzle-overlay-timer";
   puzzleOverlayTimer.textContent = formatTime(cooldownRemaining);
 
   const stop = document.createElement("button");
-  stop.className = "equanimi-stop-playing";
+  stop.className = "keel-stop-playing";
   stop.textContent = "Stop playing";
   stop.addEventListener("click", (e) => {
     e.stopPropagation();

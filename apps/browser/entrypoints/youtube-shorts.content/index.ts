@@ -10,11 +10,11 @@ import "./style.css";
  * 2. JS   — locks scroll position & intercepts wheel/touch/keyboard events
  *
  * The CSS is always loaded (WXT injects the stylesheet for matching URLs),
- * but all rules are scoped under `.equanimi-youtube-shorts-scroll-lock-active`
+ * but all rules are scoped under `.keel-youtube-shorts-scroll-lock-active`
  * so they only take effect when the JS adds that class to <html>.
  */
 
-const CSS_CLASS = `equanimi-${youtubeShorts.id}-active`;
+const CSS_CLASS = `keel-${youtubeShorts.id}-active`;
 const enabled = shieldEnabled(youtubeShorts.id, youtubeShorts.defaultEnabled);
 
 export default defineContentScript({
@@ -78,8 +78,8 @@ function applyShortsLock(): void {
   if (!container) return;
 
   // Already patched?
-  if (container.dataset.equanimiLocked === "true") return;
-  container.dataset.equanimiLocked = "true";
+  if (container.dataset.keelLocked === "true") return;
+  container.dataset.keelLocked = "true";
 
   // Lock current scroll position.
   const lockPosition = container.scrollTop;
@@ -99,7 +99,7 @@ function removeShortsLock(): void {
   const container = document.querySelector<HTMLElement>(SCROLL_CONTAINER);
   if (!container) return;
 
-  delete container.dataset.equanimiLocked;
+  delete container.dataset.keelLocked;
 
   // We can't easily remove anonymous listeners, so we clone-replace the node
   // to strip all listeners.  YouTube will re-hydrate it on next navigation.

@@ -8,7 +8,7 @@ import "./style.css";
  * Pure CSS shield — hides notification count badges in the nav bar.
  */
 
-const CSS_CLASS = `equanimi-${linkedinNotificationBadge.id}-active`;
+const CSS_CLASS = `keel-${linkedinNotificationBadge.id}-active`;
 const enabled = shieldEnabled(
   linkedinNotificationBadge.id,
   linkedinNotificationBadge.defaultEnabled,
