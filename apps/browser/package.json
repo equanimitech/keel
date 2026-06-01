@@ -9,6 +9,7 @@
     "dev:firefox": "wxt --browser firefox",
     "build": "wxt build",
     "build:firefox": "wxt build --browser firefox",
+    "deploy": "wxt build && node -e \"console.log('\\nLoad unpacked: ' + require('path').resolve('dist/chrome-mv3'))\"",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip --browser firefox",
     "postinstall": "wxt prepare",

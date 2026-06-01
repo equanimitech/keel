@@ -7,6 +7,7 @@
     "dev:browser": "pnpm --filter @equanimi/browser dev",
     "dev:desktop": "pnpm --filter @equanimi/desktop dev",
     "build:browser": "pnpm --filter @equanimi/browser build",
+    "deploy:browser": "pnpm --filter @equanimi/browser run deploy",
     "build:desktop": "pnpm --filter @equanimi/desktop build",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
