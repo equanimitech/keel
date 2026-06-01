@@ -12,7 +12,7 @@ import {
 /**
  * Tauri Store implementation of Capture Repository
  *
- * Stores captures in ~/.monotask/store.bin with keys:
+ * Stores captures in ~/.keel/store.bin with keys:
  * - "captures:{id}" for individual captures
  */
 export class TauriStoreCaptureRepository implements ICaptureRepository {

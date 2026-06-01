@@ -12,7 +12,7 @@ import {
 /**
  * Tauri Store implementation of Drift Event Repository
  *
- * Stores drift events in ~/.monotask/store.bin with keys:
+ * Stores drift events in ~/.keel/store.bin with keys:
  * - "driftEvents:{id}" for individual events
  */
 export class TauriStoreDriftEventRepository implements IDriftEventRepository {

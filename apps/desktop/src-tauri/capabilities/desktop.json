@@ -29,8 +29,8 @@
     {
       "identifier": "fs:scope",
       "allow": [
-        { "path": "$HOME/.monotask" },
-        { "path": "$HOME/.monotask/**" }
+        { "path": "$HOME/.keel" },
+        { "path": "$HOME/.keel/**" }
       ]
     },
     "notification:default",

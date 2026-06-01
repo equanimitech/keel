@@ -1,7 +1,7 @@
 /**
  * Application Configuration
  *
- * Stored in ~/.monotask/config.json
+ * Stored in ~/.keel/config.json
  */
 export interface AppConfig {
   /**

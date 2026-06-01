@@ -90,8 +90,8 @@ export class ServiceContainer {
    * Creates Tauri Store instance and wires all dependencies
    */
   static async initialize(): Promise<ServiceContainer> {
-    // Initialize Tauri Store at ~/.monotask/store.bin
-    const store = await Store.load(".monotask/store.bin");
+    // Initialize Tauri Store at ~/.keel/store.bin
+    const store = await Store.load(".keel/store.bin");
 
     return new ServiceContainer(store);
   }

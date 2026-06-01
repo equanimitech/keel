@@ -49,7 +49,7 @@ src/
 
 - **Frontend**: React 19 + TypeScript (strict mode)
 - **State**: Legend State (ephemeral UI state only)
-- **Persistence**: Tauri Store (`~/.monotask/store.bin`)
+- **Persistence**: Tauri Store (`~/.keel/store.bin`)
 - **Backend**: Rust (minimal - only window tracking + permissions)
 - **FP Library**: fp-ts (TaskEither, Option, pipe)
 
@@ -172,12 +172,12 @@ See `VERIFICATION.md` for comprehensive testing checklist.
 
 ### Persistence
 
-**Tauri Store** (`~/.monotask/store.bin`):
+**Tauri Store** (`~/.keel/store.bin`):
 - Sessions (`sessions:{id}`, `activeSessionId`)
 - Captures (`captures:{id}`)
 - Drift events (`driftEvents:{id}`)
 
-**FileSystem** (`~/.monotask/config.json`):
+**FileSystem** (`~/.keel/config.json`):
 - App configuration
 - Default blocklist
 
@@ -300,7 +300,7 @@ cargo check --manifest-path=src-tauri/Cargo.toml
 - Check console for errors
 
 **Persistence not working:**
-- Verify `~/.monotask/store.bin` exists
+- Verify `~/.keel/store.bin` exists
 - Check repository save methods return Right
 - Look for Tauri Store errors in console
 

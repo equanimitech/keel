@@ -13,7 +13,7 @@ import {
 /**
  * Tauri Store implementation of Session Repository
  *
- * Stores sessions in ~/.monotask/store.bin with keys:
+ * Stores sessions in ~/.keel/store.bin with keys:
  * - "sessions:{id}" for individual sessions
  * - "activeSessionId" for quick active session lookup
  */

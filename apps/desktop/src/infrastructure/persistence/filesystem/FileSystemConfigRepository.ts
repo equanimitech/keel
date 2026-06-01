@@ -13,12 +13,12 @@ import { AppConfig, DEFAULT_CONFIG } from "../../../types/AppConfig";
 /**
  * File System implementation of Config Repository
  *
- * Stores configuration in ~/.monotask/config.json
+ * Stores configuration in ~/.keel/config.json
  * Creates directory if it doesn't exist
  * Returns DEFAULT_CONFIG if file doesn't exist
  */
 export class FileSystemConfigRepository implements IConfigRepository {
-  private readonly configPath = ".monotask/config.json";
+  private readonly configPath = ".keel/config.json";
 
   load(): TE.TaskEither<string, AppConfig> {
     return pipe(
@@ -63,13 +63,13 @@ export class FileSystemConfigRepository implements IConfigRepository {
     return pipe(
       TE.tryCatch(
         async () => {
-          // Ensure .monotask directory exists
-          const dirExists = await exists(".monotask", {
+          // Ensure .keel directory exists
+          const dirExists = await exists(".keel", {
             baseDir: BaseDirectory.Home,
           });
 
           if (!dirExists) {
-            await mkdir(".monotask", {
+            await mkdir(".keel", {
               baseDir: BaseDirectory.Home,
               recursive: true,
             });

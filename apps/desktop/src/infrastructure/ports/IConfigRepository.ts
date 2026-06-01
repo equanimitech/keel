@@ -4,7 +4,7 @@ import { AppConfig } from "../../types/AppConfig";
 /**
  * Repository Port: Application Configuration
  *
- * Defines contract for config persistence (typically ~/.monotask/config.json).
+ * Defines contract for config persistence (typically ~/.keel/config.json).
  * Returns default config if file doesn't exist.
  */
 export interface IConfigRepository {
