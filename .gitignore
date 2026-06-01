@@ -4,6 +4,9 @@ node_modules/
 *.tgz
 web-ext.config.ts
 
+# Extension signing key (private) — public key lives in wxt.config.ts manifest.key
+.keys/
+
 apps/**/node_modules/
 packages/**/node_modules/
 
