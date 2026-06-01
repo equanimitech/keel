@@ -36,5 +36,5 @@ keeps the extension ID constant across rebuilds).
 - Dev and production builds share the same ID (same `manifest.key`), so stored
   state carries over between `pnpm dev:browser` and the deployed build. Only load
   one at a time.
-- The private signing key (`.keys/equanimi.pem`) is gitignored. It is only needed
+- The private signing key (`.keys/keel.pem`) is gitignored. It is only needed
   to pack a signed CRX later (the no-nag managed-policy upgrade path).
