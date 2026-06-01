@@ -146,6 +146,21 @@ The clock (`W/H/D/R`) is an honest **stand-in** for the real signal. The actual 
 
 ---
 
+## Distribution (end users never hand-install)
+
+The gate ships **in the keel `.dmg`** (the Tauri desktop app). End users do **none** of the manual setup — the app, on install / first-run:
+
+1. places the gate executable in app-support,
+2. **merges the three hook entries into `~/.claude/settings.json`** (the idempotent Settings writer above) + writes the default config,
+3. surfaces the knobs (times, rules, `voice`, `skipBudget`) in the **Preferences pane** (design-system work) — not hand-edited JSON,
+4. **re-asserts** the hooks if removed (hard-to-quit daemon).
+
+**Node dependency gotcha (load-bearing):** the v0 hook runs `node …`, but end users may not have Node. So for the `.dmg` the hook executable becomes a **bundled binary** — a **Rust `keel` binary** the app ships (matches the "Rust = tooling" decision in `keel-strategy.md`), or a Tauri node-sidecar. The hook `command` then points at the bundled binary; no Node on the user's machine. The **pure domain (`core.mjs`)** stays TS and lifts into `@keel/domain`; only the thin hook+CLI shell is reimplemented/bundled.
+
+**Sequence:** the **v0 node script + manual install** (`packages/keel-gate`, `docs/superpowers/plans/2026-06-01-keel-gate-v0.md`) is a **developer bootstrap** that proves the gate. Packaging it (Settings writer + Preferences + bundled binary + daemon) is the desktop slice — not yet built (the Tauri app is dormant, mid-rename to keel).
+
+---
+
 ## Out of scope (named)
 
 - Zenborg intention source (Part IV) — seam only.
