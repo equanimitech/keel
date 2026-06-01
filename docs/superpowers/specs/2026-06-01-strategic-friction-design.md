@@ -65,19 +65,49 @@ The strategy is a fixed mechanism. It does not vary by domain or by person.
    - `manual` — user pins `f = 1` for a duration (today's popup cooldown). *(built)*
    - `detected-compulsion` — `f` bumps when compulsion is inferred. **Slot reserved, empty now** — the architecture leaves room; no detection ships in this slice.
 
-3. **Renderer** — every intervention maps a given `f` onto the **friction ladder**, a shared vocabulary of escalating cost:
+3. **Renderer (a port)** — every intervention is a `FrictionRenderer`: given the current `f`, it paints itself. The interface is pure (`render(f): void` / `clear(): void`); the DOM adapters live in the browser surface, never in the domain. This respects the dependency arrow: the domain defines *what a friction rung means and the renderer contract*; browser infra/UI defines *how to paint it*.
+
+   Each renderer declares its **band** on the **friction ladder**, a shared vocabulary of escalating cost:
 
    ```
    hide  <  dim  <  delay  <  blur  <  block
    ```
 
    - *hide* — remove the cue (recs, promoted posts)
-   - *dim* — reduce salience
-   - *delay* — insert a speed bump / forced wait (chess post-game cooldown is really this)
+   - *dim* — reduce salience (the watch-stain darkening the player is this)
+   - *delay* — insert a speed bump / forced wait (chess post-game cooldown is this)
    - *blur* — require effort to perceive
-   - *block* — pause / lock
+   - *block* — pause / lock (shorts scroll-lock; cooldown overlay)
 
-   An intervention occupies a **band** on this ladder. **Cooldown = `f` pinned to 1 = the top rung of every renderer on the arm at once.** "Turn all dials to max" is not a new mechanism — it is the cooldown we already have, finally named.
+4. **`FrictionBand`** — `{ rung: FrictionRung; engagesAt: Friction }`. The rung is the ladder position the renderer expresses; `engagesAt` is the `f` threshold at which it begins. A **binary shield is the degenerate band** `{ rung, engagesAt: 1 }` — it engages fully only at `f = 1`. A **continuous renderer** (the stain) has a low `engagesAt` and scales with `f` up to its rung. This is why alignment can be *declarative*: every existing shield already has a band — `engagesAt: 1` — without any runtime change.
+
+   **Cooldown = `f` pinned to 1 = every renderer on the arm at its rung at once.** "Turn all dials to max" is not a new mechanism — it is the cooldown we already have, finally named.
+
+### Where the model lives (resolving the definition schism)
+
+There are two parallel models of an intervention today: the canonical `InterventionDefinition` in `packages/domain` (nests `classification`, carries `metadata`) and the browser's flat `ShieldDefinition` / `SignalDefinition` — which never import the canonical type. Adding friction only to the browser side would deepen the split. So:
+
+- `FrictionRung`, `FrictionBand`, `FrictionRenderer`, `Friction`, `frictionCurve` are **canonical in `packages/domain`**.
+- `frictionBand?: FrictionBand` is added to the canonical `InterventionDefinition`.
+- The browser `ShieldDefinition` / `SignalDefinition` become **aliases of `InterventionDefinition`** (one model; the shield/signal distinction lives in `classification.mechanism` — subtractive vs additive — and in the two registries).
+
+The friction ladder is **native to the existing `BehavioralMechanism`**: `hide↔cue-removal`, `delay↔friction`, `block↔access-block`, `dim/blur↔environment`. A band is a range over the subtractive half of a union the domain already has.
+
+### Declarative alignment (this slice)
+
+Every shield and signal is classified onto a band — legible in the model even though only YouTube sets and reads `f` for real this slice:
+
+| Intervention | Rung | engagesAt | Runtime this slice |
+|---|---|---|---|
+| youtube-sidebar-recs, -sponsored, -shorts-homepage, -comments-hide | hide | 1.0 | unchanged (binary) |
+| linkedin-feed-hide, -promoted-posts, -notification-badge | hide | 1.0 | unchanged (binary) |
+| youtube-shorts (scroll-lock) | block | 1.0 | unchanged (binary) |
+| chess-post-game-cooldown | delay | 1.0 | unchanged (binary + timer) |
+| youtube-stain (signal) | dim | ~0 | **upgraded** — reads `domainFriction` |
+| youtube-watch-time (signal) | — (pure indicator) | — | visualizes `f` |
+| **youtube cooldown overlay** | block | 1.0 | **the reference renderer** |
+
+The 8 binary shields gain a *declared* band but keep their current on/off runtime. Upgrading them to multi-rung renderers that read `f` is the next slice, not this one.
 
 ### What the strategy reuses (already in code)
 
@@ -132,8 +162,8 @@ Binary shields and DOM renderers are untouched in this slice. The stain/counter 
 ### Out of scope (named, not built)
 
 - `detected-compulsion` driver and per-arm detection signals.
-- Migrating binary shields to the renderer-band model.
-- Friction for Chess / LinkedIn / Claude arms.
+- **Upgrading the 8 binary shields into multi-rung renderers** that read `f` and progress `dim→blur→block`. This slice gives them a *declared* band only; their runtime stays binary on/off.
+- Friction *drivers* for Chess / LinkedIn / Claude arms (their interventions get declared bands, but no driver sets their `f` yet).
 - Equanimity / focus / diffuse-mode measurement.
 
 ---
