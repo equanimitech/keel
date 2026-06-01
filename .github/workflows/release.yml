@@ -43,7 +43,7 @@ jobs:
       - name: Zip browser extension
         if: steps.changesets.outputs.hasChangesets == 'false'
         run: |
-          cd apps/browser/.output/chrome-mv3
+          cd apps/browser/dist/chrome-mv3
           zip -r ../../../../equanimi-browser.zip .
 
       - name: Get version
