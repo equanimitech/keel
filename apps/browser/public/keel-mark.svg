@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- keel — the integral spine. Family with equanimi.tech. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round">
+  <style>
+    :root { color: #b07a3a; }
+    @media (prefers-color-scheme: dark) { :root { color: #d4944a; } }
+  </style>
+  <path d="M20 5.5 C 13.5 8, 13.5 13, 16.2 16 C 18.9 19, 18.9 24, 12 26.5"/>
+</svg>

@@ -1,6 +1,6 @@
 # @keel/ui
 
-keel's shared **presentation core** — the visual sibling of `@keel/domain` (logic core). Surface-agnostic; consumed by the browser extension, desktop app, and any future surface. Implements the [design-system alignment spec](../../docs/superpowers/specs/2026-06-01-keel-design-system-alignment.md): stone neutrals (from zenborg/secretariat) + **sage ensō** accent, light + dark.
+keel's shared **presentation core** — the visual sibling of `@keel/domain` (logic core). Surface-agnostic; consumed by the browser extension, desktop app, and any future surface. keel follows the **equanimi.tech site** aesthetic: warm **stone** neutrals + a single muted **clay/ochre** accent, **Inter**, soft radius, light + dark. (This supersedes the sage-ensō palette in the [alignment spec](../../docs/superpowers/specs/2026-06-01-keel-design-system-alignment.md) — kept for the architecture, not the colors.)
 
 ## Two independently consumable layers
 
@@ -44,5 +44,5 @@ Tailwind apps also import the theme mapping:
 
 ## Notes
 
-- **Fonts:** **Geist** Sans/Mono (per the alignment spec), self-hosted as variable woff2 via `@keel/ui/fonts.css` (CSP-safe, no external requests). Note: zenborg's *live* layout actually renders Inter + Space Grotesk — the spec's "Geist (zenborg's choice)" was a misread, but Geist was chosen deliberately here.
-- **Sage** ramp is derived from `--color-enso-green` (`#8B9D83`); charcoal (`#2D3436`) and cream (`#E8DCC4`) are ensō signature tints.
+- **Fonts:** **Inter**, self-hosted as variable woff2 via `@keel/ui/fonts.css` (CSP-safe, no external requests) — matches the equanimi.tech site.
+- **Clay** ramp (`oklch(0.62 0.10 60)` ≈ `#b07a3a`, brightening to `#d4944a` in dark) is keel's single accent. Sage/Geist were tried per the spec and rejected — do not reintroduce.

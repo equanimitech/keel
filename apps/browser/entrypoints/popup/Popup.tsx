@@ -326,7 +326,19 @@ export function Popup() {
 
   return (
     <div className="flex flex-col gap-3 p-5">
-      <header className="text-center">
+      <header className="flex flex-col items-center text-center">
+        <span className="text-primary mb-1" aria-hidden="true">
+          <svg
+            viewBox="0 0 32 32"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={3.4}
+            strokeLinecap="round"
+            className="size-7"
+          >
+            <path d="M20 5.5 C 13.5 8, 13.5 13, 16.2 16 C 18.9 19, 18.9 24, 12 26.5" />
+          </svg>
+        </span>
         <h1 className="text-base font-semibold tracking-tight">keel</h1>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Stopping cues for the internet

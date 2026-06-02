@@ -4,6 +4,14 @@
  * unblocks it. Calm, structural, not punitive (strategy Part VI: nudge > block,
  * meta-awareness not guilt).
  */
+import "@keel/ui/tokens.css";
+import "@keel/ui/fonts.css";
+
+// keel-owned theme root (system-aware) so the design tokens resolve.
+document.documentElement.setAttribute(
+  "data-keel-theme",
+  window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light"
+);
 
 const back = document.getElementById("back") as HTMLButtonElement | null;
 const foot = document.getElementById("foot");
