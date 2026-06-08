@@ -34,7 +34,7 @@ ITEMS=(
   "Recall|/recall → Claude|ritual:/recall"
   "Wake-up|/wake-up → Claude|ritual:/wake-up"
   "Intention…|type: keel intention <focus>|ritual:/intention"
-  "Appetite…|type: keel appetite <tiny|small|normal|deep>|ritual:/appetite"
+  "Appetite…|type: keel appetite tiny/small/normal/deep|ritual:/appetite"
   "Sidenote…|type: keel sidenote <thought>|ritual:/sidenote"
   "Vices on|raise the site block till reset|keel:vice on"
   "Vices off|lower the site block|keel:vice off"
