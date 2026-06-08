@@ -47,8 +47,19 @@ async function handleUserSubmit(now) {
   // Mark whether THIS turn opened under lockdown — the breakpoint signal PreToolUse reads.
   state.turnLockedTs = phase === "lockdown" && !skipActive(state, now) ? state.lastPromptTs : 0;
   if (phase !== "day") state = recordNight(state, now, target.driver, { observed: true });
+
+  // Ambient by design: indicators live in the statusline HUD (`keel hud`), not injected per-turn.
+  // The one exception — fired once per session, on turn 2+, only while unset: prompt the agent
+  // to infer intention + appetite from the conversation and set them silently. Surfaces in the HUD.
+  const freshTurn = state.sessionStartTs === now;        // the session's first prompt
+  const unset = !activeIntention(state, now) || !activeAppetite(state, now);
+  let nudge = "";
+  if (!freshTurn && unset && state.inferNudgedTs !== state.sessionStartTs) {
+    state.inferNudgedTs = state.sessionStartTs;
+    nudge = "<keel: intention and/or appetite are unset for this session. Infer both from the conversation so far and set them silently — `keel intention \"<focus>\"` and `keel appetite <tiny|small|normal|deep>`. Do not announce; they surface in the statusline HUD. If you genuinely cannot infer one, leave it.>";
+  }
   saveState(state);
-  return emitText([intentionLine(state, now), appetiteLine(state, now), renderOrient(target, phase, state, now)].filter(Boolean).join("\n"));
+  return emitText(nudge);
 }
 
 function handleSessionStart(now) {
@@ -247,26 +258,19 @@ function cmdHud(now) {
   const minsUntil = (hhmm) => (toMin(hhmm) - nowMinOf(now) + 1440) % 1440;
 
   const parts = [];
+
+  // Abnormal states only — silent on a normal day or an on-track wind-down.
   if (phase === "lockdown") {
-    parts.push(`keel 🔒 till ${d.reset}`, `⊘ ${state.credits}`);          // skips matter most here
-  } else if (phase === "wind_down") {
-    if (inWindow(nowMinOf(now), toMin(d.windDown), toMin(d.hardStop))) {
-      parts.push(`keel 🌙 ${minsUntil(d.hardStop)}m to sign-off`);        // before your intended stop
-    } else {                                                              // past it, not yet locked
-      parts.push(d.backstop ? `keel 🌙 over · ${minsUntil(d.backstop)}m to backstop` : `keel 🌙 wind-down`);
-    }
-  } else {
-    parts.push("keel ☀");                                                 // day: near-silent
+    parts.push(`keel 🔒 locked till ${d.reset}`);
+  } else if (phase === "wind_down" && !inWindow(nowMinOf(now), toMin(d.windDown), toMin(d.hardStop))) {
+    parts.push(d.backstop ? `keel 🌙 past stop · ${minsUntil(d.backstop)}m to backstop` : "keel 🌙 past stop");
   }
 
-  // Context — only when it carries signal (no empty dashes).
+  // Always-on indicators: intention + appetite, when set.
   const inten = activeIntention(state, now);
   const app = activeAppetite(state, now);
-  const sess = sessionCount();
   if (inten) parts.push(`◎ ${inten.length > 24 ? inten.slice(0, 23) + "…" : inten}`);
   if (app) parts.push(`▤ ${app}`);
-  if (viceBlocked()) parts.push("🔒 vices");
-  if (sess >= 3) parts.push(`⧉ ${sess} ⚠`);                               // only when scattered
 
   process.stdout.write(parts.join("  ·  "));
 }

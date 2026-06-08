@@ -15,7 +15,7 @@
 /** @typedef {{ windows: ViceWindow[], reassertEveryMin: number }} Vice */
 /** @typedef {{ driver: Driver, rules: Rule[], orient: Orient, skipBudget: SkipBudget, voice: Voice, vice: Vice }} Target */
 /** @typedef {{ observed?: boolean, skipped?: boolean }} Night */
-/** @typedef {{ credits: number, creditsMonth: string, skipUntilTs: number, parkAtTs: number, viceUntilTs: number, viceSkipUntilTs: number, sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, intention: string, intentionDay: string, appetite: string, appetiteDay: string, nights: Record<string, Night> }} State */
+/** @typedef {{ credits: number, creditsMonth: string, skipUntilTs: number, parkAtTs: number, viceUntilTs: number, viceSkipUntilTs: number, sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, intention: string, intentionDay: string, appetite: string, appetiteDay: string, nights: Record<string, Night> }} State */
 
 /** Clock pressure is capped strictly below the full-lockdown threshold (1.0): the
  * wall-clock ramp escalates wind-down nudges but NEVER hard-locks coding on its own.
@@ -49,7 +49,7 @@ export const DEFAULT_TARGET = {
 /** @returns {State} */
 export const emptyState = () => ({
   credits: 0, creditsMonth: "", skipUntilTs: 0, parkAtTs: 0, viceUntilTs: 0, viceSkipUntilTs: 0,
-  sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, lastRitualNudge: "",
+  sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, lastRitualNudge: "", inferNudgedTs: 0,
   intention: "", intentionDay: "", appetite: "", appetiteDay: "", nights: {},
 });
 
