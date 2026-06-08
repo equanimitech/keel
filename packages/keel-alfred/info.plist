@@ -23,7 +23,7 @@
         <key>argumenttype</key><integer>1</integer>
         <key>type</key><integer>0</integer>
         <key>scriptfile</key><string></string>
-        <key>script</key><string>./menu.sh "$1"</string>
+        <key>script</key><string>./menu.sh "{query}"</string>
         <key>runningsubtext</key><string>…</string>
         <key>alfredfiltersresults</key><false/>
         <key>alfredfiltersresultsmatchmode</key><integer>0</integer>
