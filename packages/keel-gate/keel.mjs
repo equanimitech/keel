@@ -4,22 +4,32 @@
 // Fail-open: any error → exit 0, allow. A hook must never trap the user.
 
 import {
-  frictionAt, phaseOf, nowMinOf, monthKey, skipActive, nextResetTs,
+  phaseOf, nowMinOf, monthKey, skipActive, nextResetTs, frictionNow, toMin, inWindow,
   refillCredits, spendSkip, updateSession, denyingRule, recordNight,
-  denyReason, renderOrient, reflectionLine,
+  denyReason, renderOrient, reflectionLine, ritualNudge, parseParkTarget, parkActive,
+  setIntention, activeIntention, intentionLine,
+  setAppetite, normalizeAppetite, activeAppetite, appetiteLine, APPETITE_LEVELS,
+  viceWindows, viceScheduledAt, viceShouldBlock, setVicePact, spendViceSkip,
+  viceSkipActive, vicePactActive, isAllowedPath,
 } from "./core.mjs";
-import { loadTarget, loadState, saveState, readStdin, TARGET_ID } from "./store.mjs";
+import { loadTarget, loadState, saveState, readStdin, TARGET_ID, KEEL_DIR } from "./store.mjs";
+import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 
 const emit = (obj) => { if (obj) process.stdout.write(JSON.stringify(obj)); process.exit(0); };
 const emitText = (t) => { if (t) process.stdout.write(t); process.exit(0); };
 
 async function handlePreTool(now) {
   const target = loadTarget();
-  const f = frictionAt(nowMinOf(now), target.driver);
   const state = loadState();
+  const f = frictionNow(target, state, now);
   const input = await readStdin();
   const rule = denyingRule(target, f, input?.tool_name, state, now);
   if (!rule) return emit(null); // allow (silent)
+  // Sanctioned exception: never block writes to allow-listed paths (the journal /
+  // ritual artifacts). Closing the day must work even under lockdown.
+  if (isAllowedPath(input?.tool_input?.file_path, rule.allowPaths, homedir())) return emit(null);
   saveState(recordNight(state, now, target.driver, { observed: true }));
   return emit({
     hookSpecificOutput: {
@@ -32,21 +42,23 @@ async function handlePreTool(now) {
 
 async function handleUserSubmit(now) {
   const target = loadTarget();
-  const f = frictionAt(nowMinOf(now), target.driver);
-  const phase = phaseOf(f);
   let state = updateSession(loadState(), now, target.orient);
+  const phase = phaseOf(frictionNow(target, state, now));
   // Mark whether THIS turn opened under lockdown — the breakpoint signal PreToolUse reads.
   state.turnLockedTs = phase === "lockdown" && !skipActive(state, now) ? state.lastPromptTs : 0;
   if (phase !== "day") state = recordNight(state, now, target.driver, { observed: true });
   saveState(state);
-  return emitText(renderOrient(target, phase, state, now));
+  return emitText([intentionLine(state, now), appetiteLine(state, now), renderOrient(target, phase, state, now)].filter(Boolean).join("\n"));
 }
 
 function handleSessionStart(now) {
   const target = loadTarget();
-  const state = refillCredits(loadState(), target, monthKey(now));
+  let state = refillCredits(loadState(), target, monthKey(now));
+  const reflection = reflectionLine(state, target, now);
+  const nudge = ritualNudge(state, now);
+  if (nudge) state = { ...state, lastRitualNudge: nudge.mark };
   saveState(state);
-  return emitText(reflectionLine(state, target, now));
+  return emitText([reflection, nudge?.line, intentionLine(state, now), appetiteLine(state, now)].filter(Boolean).join("\n"));
 }
 
 function cmdSkip(now) {
@@ -63,13 +75,200 @@ function cmdSkip(now) {
 
 function cmdStatus(now) {
   const target = loadTarget();
-  const f = frictionAt(nowMinOf(now), target.driver);
   const state = refillCredits(loadState(), target, monthKey(now));
+  const f = frictionNow(target, state, now);
   const locked = phaseOf(f) === "lockdown" && !skipActive(state, now);
+  const park = state.parkAtTs
+    ? ` park=${new Date(state.parkAtTs).toTimeString().slice(0, 5)}${parkActive(state, now, target.driver) ? "(BITING)" : ""}`
+    : "";
   console.log(
     `keel[${TARGET_ID}]: f=${f.toFixed(2)} phase=${phaseOf(f)}${locked ? " (LOCKED)" : ""} ` +
-    `credits=${state.credits} windDown=${target.driver.windDown} hardStop=${target.driver.hardStop} reset=${target.driver.reset}`,
+    `credits=${state.credits} windDown=${target.driver.windDown} hardStop=${target.driver.hardStop} reset=${target.driver.reset}${park}`,
   );
+}
+
+function cmdPark(now, arg) {
+  const target = loadTarget();
+  const ts = parseParkTarget(arg, now);
+  if (!ts) {
+    console.log("keel: park needs a time. e.g. `keel park 21:00` or `keel park 15m`.");
+    return;
+  }
+  saveState({ ...loadState(), parkAtTs: ts });
+  const at = new Date(ts).toTimeString().slice(0, 5);
+  const mins = Math.round((ts - now) / 60_000);
+  console.log(`keel: parked. Coding stops at ${at} (in ${mins} min), held until ${target.driver.reset}. \`keel unpark\` to cancel.`);
+}
+
+function cmdUnpark() {
+  saveState({ ...loadState(), parkAtTs: 0 });
+  console.log("keel: park cleared.");
+}
+
+function cmdSignoff(now) {
+  const target = loadTarget();
+  // Sovereign close: lock coding AND raise vices for the rest of the night, same lifecycle as park.
+  saveState(setVicePact({ ...loadState(), parkAtTs: now }, now, target.driver));
+  try { viceApply("on"); } catch { /* daemon reconciles within the tick window */ }
+  console.log(`keel: signed off. Coding closed + vices raised, held until ${target.driver.reset}. The day is sealed. \`keel unpark\` reopens coding; \`keel vice skip\` lifts vices (costs a credit).`);
+}
+
+function cmdIntention(now, arg) {
+  const text = String(arg ?? "").trim();
+  if (text === "clear") {
+    saveState(setIntention(loadState(), "", now));
+    console.log("keel: intention cleared.");
+    return;
+  }
+  if (!text) {
+    const cur = activeIntention(loadState(), now);
+    console.log(cur ? `keel: intention — ${cur}` : "keel: no intention set today. `keel intention \"<focus>\"` to set one.");
+    return;
+  }
+  saveState(setIntention(loadState(), text, now));
+  console.log(`keel: intention set — ${text}. Held for today; surfaced each turn. \`keel intention clear\` to release.`);
+}
+
+function cmdAppetite(now, arg) {
+  const raw = String(arg ?? "").trim();
+  if (raw === "clear") {
+    saveState(setAppetite(loadState(), "", now));
+    console.log("keel: appetite cleared.");
+    return;
+  }
+  if (!raw) {
+    const cur = activeAppetite(loadState(), now);
+    console.log(cur ? `keel: appetite — ${cur}: ${APPETITE_LEVELS[cur]}` : "keel: no appetite set today. `keel appetite <tiny|small|normal|deep>`.");
+    return;
+  }
+  const level = normalizeAppetite(raw);
+  if (!level) {
+    console.log(`keel: unknown appetite "${raw}". Choose: tiny | small | normal | deep.`);
+    return;
+  }
+  saveState(setAppetite(loadState(), level, now));
+  console.log(`keel: appetite set — ${level}: ${APPETITE_LEVELS[level]} Held for today; surfaced each turn. \`keel appetite clear\` to release.`);
+}
+
+// ── Vice block (hosts toggle + scheduled Ulysses pact) ────────
+function viceBlocked() {
+  try { return readFileSync("/etc/hosts", "utf8").includes(">>> keel vice-block"); }
+  catch { return false; }
+}
+
+/** Apply the hosts block via the privileged primitive, by the least-friction path
+ * available: direct (root daemon) · passwordless sudo (sudoers.d) · GUI auth (fallback).
+ * @param {"on"|"off"} action */
+function viceApply(action) {
+  const script = `${KEEL_DIR}/vice-block.sh`;
+  if (typeof process.getuid === "function" && process.getuid() === 0)
+    return execFileSync(script, [action], { stdio: "ignore" });
+  try { return execFileSync("sudo", ["-n", script, action], { stdio: "ignore" }); }
+  catch {
+    return execFileSync("osascript",
+      ["-e", `do shell script ${JSON.stringify(`${script} ${action}`)} with administrator privileges`],
+      { stdio: "ignore" });
+  }
+}
+
+const windowsLabel = (target) => viceWindows(target).map((w) => `${w.from}→${w.to}`).join(", ");
+
+function cmdVice(now, sub) {
+  const target = loadTarget();
+  const reset = target.driver.reset;
+  let state = refillCredits(loadState(), target, monthKey(now));
+
+  if (sub === "on" || sub === "panic") {
+    state = setVicePact(state, now, target.driver);
+    saveState(state);
+    try { viceApply("on"); } catch { /* daemon reconciles */ }
+    console.log(`keel: vices raised — held until ${reset}. \`keel vice skip\` lifts early (costs a credit).`);
+    return;
+  }
+  if (sub === "skip") {
+    const { spent, state: s2 } = spendViceSkip(state, nextResetTs(now, target.driver));
+    if (!spent) { console.log(`keel: 0 skip credits left — vices stay up until ${reset}.`); return; }
+    saveState(s2);
+    try { viceApply("off"); } catch { /* daemon reconciles */ }
+    console.log(`keel: skip spent. Vices down until ${reset}. ${s2.credits} credit(s) left this month.`);
+    return;
+  }
+  if (sub === "off") {
+    state = { ...state, viceUntilTs: 0 };          // drop the manual pact
+    saveState(state);
+    if (viceShouldBlock(target, state, now)) {     // a schedule window still bites
+      console.log(`keel: vices scheduled now (${windowsLabel(target)}). \`keel vice skip\` lifts early (costs a credit).`);
+      return;
+    }
+    try { viceApply("off"); } catch { /* daemon reconciles */ }
+    console.log("keel: vices down.");
+    return;
+  }
+  // status (default)
+  const should = viceShouldBlock(target, state, now);
+  const actual = viceBlocked();
+  const sched = viceScheduledAt(nowMinOf(now), target);
+  const pact = vicePactActive(state, now) ? ` · pact→${new Date(state.viceUntilTs).toTimeString().slice(0, 5)}` : "";
+  const skip = viceSkipActive(state, now) ? ` · skip→${new Date(state.viceSkipUntilTs).toTimeString().slice(0, 5)}` : "";
+  console.log(
+    `keel vices: ${actual ? "🔒 up" : "🔓 down"} (want ${should ? "up" : "down"})` +
+    ` · schedule ${windowsLabel(target)}${sched ? " [in window]" : ""}${pact}${skip} · credits=${state.credits}`,
+  );
+}
+
+/** The root daemon's heartbeat: reconcile /etc/hosts to the desired state. Quiet on no-op. */
+function cmdViceTick(now) {
+  const target = loadTarget();
+  const should = viceShouldBlock(target, loadState(), now);
+  if (should === viceBlocked()) return;            // already reconciled
+  const stamp = new Date(now).toISOString();
+  try { viceApply(should ? "on" : "off"); console.log(`[${stamp}] vice-tick: ${should ? "raised" : "lifted"} vices.`); }
+  catch (e) { console.log(`[${stamp}] vice-tick: FAILED (${should ? "raise" : "lift"}) — ${e?.message ?? e}`); }
+}
+
+// ── HUD (for the Claude Code statusLine) ──────────────────────
+function sessionCount() {  // approximate # of concurrent Claude Code sessions
+  try {  // no shell: execFile with an arg array. pgrep exits 1 if none → caught.
+    const out = execFileSync("pgrep", ["-fl", "claude"],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+    const n = out.split("\n").filter((l) =>
+      /\bclaude\b/i.test(l) && !/keel\.mjs|statusline|pgrep|grep|caveman/i.test(l)).length;
+    return n || 1;
+  } catch { return 1; }
+}
+// A calm, phase-adaptive HUD: one useful thing per phase, no empty dashes.
+// DAY near-silent · WIND-DOWN leads with time-to-sign-off · LOCKDOWN leads with
+// the held-until + skips. Context glyphs appear only when they carry signal.
+function cmdHud(now) {
+  const target = loadTarget();
+  const state = refillCredits(loadState(), target, monthKey(now));
+  const d = target.driver;
+  const phase = phaseOf(frictionNow(target, state, now));
+  const minsUntil = (hhmm) => (toMin(hhmm) - nowMinOf(now) + 1440) % 1440;
+
+  const parts = [];
+  if (phase === "lockdown") {
+    parts.push(`keel 🔒 till ${d.reset}`, `⊘ ${state.credits}`);          // skips matter most here
+  } else if (phase === "wind_down") {
+    if (inWindow(nowMinOf(now), toMin(d.windDown), toMin(d.hardStop))) {
+      parts.push(`keel 🌙 ${minsUntil(d.hardStop)}m to sign-off`);        // before your intended stop
+    } else {                                                              // past it, not yet locked
+      parts.push(d.backstop ? `keel 🌙 over · ${minsUntil(d.backstop)}m to backstop` : `keel 🌙 wind-down`);
+    }
+  } else {
+    parts.push("keel ☀");                                                 // day: near-silent
+  }
+
+  // Context — only when it carries signal (no empty dashes).
+  const inten = activeIntention(state, now);
+  const app = activeAppetite(state, now);
+  const sess = sessionCount();
+  if (inten) parts.push(`◎ ${inten.length > 24 ? inten.slice(0, 23) + "…" : inten}`);
+  if (app) parts.push(`▤ ${app}`);
+  if (viceBlocked()) parts.push("🔒 vices");
+  if (sess >= 3) parts.push(`⧉ ${sess} ⚠`);                               // only when scattered
+
+  process.stdout.write(parts.join("  ·  "));
 }
 
 async function main() {
@@ -82,8 +281,16 @@ async function main() {
     return process.exit(0);
   }
   if (cmd === "skip") return cmdSkip(now);
+  if (cmd === "park") return cmdPark(now, sub);
+  if (cmd === "unpark") return cmdUnpark();
+  if (cmd === "signoff") return cmdSignoff(now);
+  if (cmd === "vice" || cmd === "vices") return cmdVice(now, sub);
+  if (cmd === "vice-tick") return cmdViceTick(now);
+  if (cmd === "intention") return cmdIntention(now, process.argv.slice(3).join(" "));
+  if (cmd === "appetite") return cmdAppetite(now, sub);
+  if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
-  console.log("usage: keel <hook pre-tool|user-submit|session-start | skip | status>");
+  console.log("usage: keel <hook pre-tool|user-submit|session-start | skip | park <HH:MM|15m> | unpark | signoff | vice <on|off|skip|status|panic> | intention [\"<focus>\"|clear] | appetite [tiny|small|normal|deep|clear] | status>");
 }
 
 main().catch(() => process.exit(0)); // fail-open

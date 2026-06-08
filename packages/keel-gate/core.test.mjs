@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   toMin, frictionAt, phaseOf, refillCredits, spendSkip, updateSession, unbrokenMin,
   denyingRule, nextResetTs, recordNight, lastNNights, renderOrient, reflectionLine,
-  mergeTarget, emptyState, nightKey,
+  mergeTarget, emptyState, nightKey, parseParkTarget, parkActive, frictionNow,
 } from "./core.mjs";
 
 const driver = { windDown: "23:30", hardStop: "01:00", reset: "05:00" };
@@ -102,6 +102,42 @@ test("reflection counts observed nights, held = no skip (honest label)", () => {
   assert.equal(last.length, 2);
   assert.equal(last.filter((x) => x.held).length, 1);
   assert.match(reflectionLine({ ...s, credits: 2 }, mergeTarget({}), now), /1 of the last 2 late night/);
+});
+
+test("parseParkTarget: wall-clock and durations", () => {
+  const t0 = new Date("2026-06-05T20:45:00").getTime();
+  // future wall-clock today
+  assert.equal(new Date(parseParkTarget("21:00", t0)).getHours(), 21);
+  assert.equal(new Date(parseParkTarget("21:00", t0)).getDate(), 5);
+  // already-passed wall-clock rolls to tomorrow
+  assert.equal(new Date(parseParkTarget("20:00", t0)).getDate(), 6);
+  // durations
+  assert.equal(parseParkTarget("15m", t0), t0 + 15 * 60_000);
+  assert.equal(parseParkTarget("90", t0), t0 + 90 * 60_000);
+  assert.equal(parseParkTarget("1h30m", t0), t0 + 90 * 60_000);
+  // junk
+  assert.equal(parseParkTarget("nope", t0), null);
+  assert.equal(parseParkTarget("25:00", t0), null);
+  assert.equal(parseParkTarget("", t0), null);
+});
+
+test("parkActive bites from parkAtTs until that park's reset", () => {
+  const set = new Date("2026-06-05T20:45:00").getTime();
+  const park = new Date("2026-06-05T21:00:00").getTime();
+  const s = { ...emptyState(), parkAtTs: park };
+  assert.equal(parkActive(s, set, driver), false);                 // before park time
+  assert.equal(parkActive(s, park + 1000, driver), true);          // just after
+  assert.equal(parkActive(s, new Date("2026-06-06T04:59:00").getTime(), driver), true);  // through the night
+  assert.equal(parkActive(s, new Date("2026-06-06T05:01:00").getTime(), driver), false); // past reset → expired
+  assert.equal(parkActive(emptyState(), park + 1000, driver), false);                    // no park set
+});
+
+test("frictionNow raises a calm afternoon to full lockdown under park", () => {
+  const t = mergeTarget({ driver });
+  const noon = new Date("2026-06-05T14:00:00").getTime();
+  assert.equal(frictionNow(t, emptyState(), noon), 0);
+  const parked = { ...emptyState(), parkAtTs: new Date("2026-06-05T13:00:00").getTime() };
+  assert.equal(frictionNow(t, parked, noon), 1);
 });
 
 test("renderOrient: silent by day, voiced otherwise", () => {
