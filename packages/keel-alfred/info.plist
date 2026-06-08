@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>bundleid</key><string>pro.themia.keel</string>
+  <key>name</key><string>keel</string>
+  <key>createdby</key><string>Rafa</string>
+  <key>description</key><string>keel ritual launcher — rituals to Claude, instant keel actions to notifications</string>
+  <key>webaddress</key><string></string>
+  <key>readme</key><string>Type `keel` to open the ritual menu.</string>
+  <key>objects</key>
+  <array>
+    <dict>
+      <key>type</key><string>alfred.workflow.input.scriptfilter</string>
+      <key>uid</key><string>A1111111-1111-1111-1111-111111111111</string>
+      <key>version</key><integer>3</integer>
+      <key>config</key>
+      <dict>
+        <key>keyword</key><string>keel</string>
+        <key>title</key><string>keel</string>
+        <key>subtext</key><string>ritual launcher</string>
+        <key>withspace</key><true/>
+        <key>argumenttype</key><integer>1</integer>
+        <key>type</key><integer>0</integer>
+        <key>scriptfile</key><string></string>
+        <key>script</key><string>./menu.sh "$1"</string>
+        <key>runningsubtext</key><string>…</string>
+        <key>alfredfiltersresults</key><false/>
+        <key>alfredfiltersresultsmatchmode</key><integer>0</integer>
+        <key>queuedelaymode</key><integer>0</integer>
+        <key>queuedelayimmediatelyinitially</key><true/>
+        <key>queuemode</key><integer>1</integer>
+      </dict>
+    </dict>
+    <dict>
+      <key>type</key><string>alfred.workflow.action.script</string>
+      <key>uid</key><string>B2222222-2222-2222-2222-222222222222</string>
+      <key>version</key><integer>2</integer>
+      <key>config</key>
+      <dict>
+        <key>concurrently</key><false/>
+        <key>escaping</key><integer>102</integer>
+        <key>script</key><string>./run.sh "$1"</string>
+        <key>scriptargtype</key><integer>1</integer>
+        <key>scriptfile</key><string></string>
+        <key>type</key><integer>0</integer>
+      </dict>
+    </dict>
+  </array>
+  <key>connections</key>
+  <dict>
+    <key>A1111111-1111-1111-1111-111111111111</key>
+    <array>
+      <dict>
+        <key>destinationuid</key><string>B2222222-2222-2222-2222-222222222222</string>
+        <key>modifiers</key><integer>0</integer>
+        <key>modifiersubtext</key><string></string>
+        <key>vitoclose</key><false/>
+      </dict>
+    </array>
+  </dict>
+  <key>uidata</key>
+  <dict>
+    <key>A1111111-1111-1111-1111-111111111111</key>
+    <dict><key>xpos</key><integer>110</integer><key>ypos</key><integer>110</integer></dict>
+    <key>B2222222-2222-2222-2222-222222222222</key>
+    <dict><key>xpos</key><integer>420</integer><key>ypos</key><integer>110</integer></dict>
+  </dict>
+  <key>version</key><string>1.0</string>
+</dict>
+</plist>
