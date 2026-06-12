@@ -10,7 +10,7 @@ keel/
 │   ├── agent/            # Claude Code surface (@keel/agent) — focus gate + activity-log writer; ships as plugin
 │   ├── browser/          # Chrome extension (WXT) — activity writer + per-domain sensors
 │   ├── desktop/          # macOS app (Tauri + React) — attention compass (frozen; demoted per observability roadmap)
-│   └── tray/             # macOS menubar-only app (Tauri, no windows) — desktop activity-log writer
+│   └── tray/             # macOS menubar-only app (Tauri, no windows) — desktop activity-log writer; ships as "keel desktop"
 ├── packages/
 │   └── domain/           # Shared domain types (@keel/domain)
 └── package.json          # Workspace scripts

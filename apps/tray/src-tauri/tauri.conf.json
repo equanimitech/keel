@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "keel tray",
+  "productName": "keel desktop",
   "version": "0.1.0",
-  "identifier": "tech.equanimi.keel.tray",
+  "identifier": "tech.equanimi.keel.desktop",
   "build": {
     "frontendDist": "../frontend"
   },
