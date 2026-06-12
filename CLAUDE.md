@@ -9,7 +9,8 @@ keel/
 ├── apps/
 │   ├── agent/            # Claude Code surface (@keel/agent) — focus gate + activity-log writer; ships as plugin
 │   ├── browser/          # Chrome extension (WXT) — attention shields
-│   └── desktop/          # macOS app (Tauri + React) — attention compass
+│   ├── desktop/          # macOS app (Tauri + React) — attention compass (frozen; demoted per observability roadmap)
+│   └── tray/             # macOS menubar-only app (Tauri, no windows) — desktop activity-log writer
 ├── packages/
 │   └── domain/           # Shared domain types (@keel/domain)
 └── package.json          # Workspace scripts
@@ -22,8 +23,10 @@ Surfaces are named by the capability × surface grammar (keel agent / keel brows
 ```bash
 pnpm dev:browser          # WXT dev server (browser extension)
 pnpm dev:desktop          # Vite dev server (desktop frontend)
+pnpm dev:tray             # tauri dev (menubar logger)
 pnpm build:browser        # WXT production build
 pnpm build:desktop        # Vite production build
+pnpm build:tray           # tauri build (menubar logger bundle)
 pnpm build                # Build all packages
 pnpm typecheck            # Typecheck all packages
 ```

@@ -140,6 +140,12 @@ importers:
         specifier: ^7.0.4
         version: 7.3.1(@types/node@25.3.0)(jiti@2.6.1)(lightningcss@1.31.1)
 
+  apps/tray:
+    devDependencies:
+      '@tauri-apps/cli':
+        specifier: ^2
+        version: 2.10.0
+
   packages/domain:
     devDependencies:
       typescript:
