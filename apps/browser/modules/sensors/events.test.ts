@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { SENSOR_KINDS, sensorAllowed, validateSensorMessage } from "./events";
+import {
+  SENSOR_KINDS,
+  isArmQuery,
+  isSponsoredLabel,
+  sensorAllowed,
+  validateSensorMessage,
+} from "./events";
 
 describe("validateSensorMessage (hostile-page boundary)", () => {
   it("accepts a known sensor kind with no payload", () => {
@@ -108,6 +114,32 @@ describe("sensorAllowed (observe-tier gate)", () => {
 
   it("denies everything on an empty watchlist", () => {
     expect(sensorAllowed("youtube.com", [])).toBe(false);
+  });
+});
+
+describe("isArmQuery (content script asks: am I observed?)", () => {
+  it("recognizes the arm query", () => {
+    expect(isArmQuery({ type: "keel-sensor-arm" })).toBe(true);
+  });
+
+  it("rejects everything else", () => {
+    expect(isArmQuery({ type: "keel-sensor", kind: "video_ended" })).toBe(false);
+    expect(isArmQuery(null)).toBe(false);
+    expect(isArmQuery("keel-sensor-arm")).toBe(false);
+  });
+});
+
+describe("isSponsoredLabel (generic feed heuristic — industry labels, not company names)", () => {
+  it("matches the standard sponsored markers", () => {
+    expect(isSponsoredLabel("Promoted")).toBe(true);
+    expect(isSponsoredLabel("Sponsored")).toBe(true);
+    expect(isSponsoredLabel("  Promoted  ")).toBe(true);
+  });
+
+  it("rejects ordinary text and embedded mentions", () => {
+    expect(isSponsoredLabel("Promoted to manager!")).toBe(false);
+    expect(isSponsoredLabel("")).toBe(false);
+    expect(isSponsoredLabel("post")).toBe(false);
   });
 });
 

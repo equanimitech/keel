@@ -22,7 +22,11 @@ import {
   shouldLogNavigation,
 } from "./events";
 import { appendEvent, countEvents, deleteOldestEvents } from "./log";
-import { sensorAllowed, validateSensorMessage } from "../sensors/events";
+import {
+  isArmQuery,
+  sensorAllowed,
+  validateSensorMessage,
+} from "../sensors/events";
 import { observeDomains } from "../watchlist/store";
 import type { Runtime } from "wxt/browser";
 
@@ -119,12 +123,21 @@ export function startActivityWriter(): void {
   // capped scalars, domain taken from the browser-attested sender tab,
   // and nothing persists unless the domain is on the observe tier.
   browser.runtime.onMessage.addListener((message: unknown, sender: Runtime.MessageSender) => {
+    const url = sender.tab?.url;
+    const domain = url === undefined ? null : domainFromUrl(url);
+
+    // Arm handshake: a content script asks whether to observe at all.
+    if (isArmQuery(message)) {
+      return observeDomains
+        .getValue()
+        .then((observe) => ({ observed: sensorAllowed(domain, observe) }))
+        .catch(() => ({ observed: false }));
+    }
+
     const validated = validateSensorMessage(message);
     if (validated === null) {
       return;
     }
-    const url = sender.tab?.url;
-    const domain = url === undefined ? null : domainFromUrl(url);
     void observeDomains
       .getValue()
       .then((observe) => {

@@ -71,6 +71,27 @@ export function validateSensorMessage(
   return { kind: m.kind as SensorKind, payload };
 }
 
+/** The arm handshake: a freshly-injected sensor content script asks the
+ * background whether its domain is on the observe tier before wiring
+ * any DOM observation at all. */
+export function isArmQuery(msg: unknown): boolean {
+  return (
+    typeof msg === "object" &&
+    msg !== null &&
+    (msg as Record<string, unknown>).type === "keel-sensor-arm"
+  );
+}
+
+/**
+ * Generic feed heuristic: the industry-standard disclosure labels that
+ * mark a sponsored item, as the FULL text of a small element. Type-level
+ * knowledge (how feeds disclose ads), not company-level.
+ */
+export function isSponsoredLabel(text: string): boolean {
+  const t = text.trim();
+  return t === "Promoted" || t === "Sponsored";
+}
+
 /**
  * The observe-tier gate: sensor events are written only for watchlist
  * domains (exact match or subdomain). `domain` is derived by the
