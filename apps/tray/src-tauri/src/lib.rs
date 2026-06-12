@@ -11,8 +11,7 @@ mod writer;
 
 use std::path::PathBuf;
 use std::process::Command;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -93,61 +92,33 @@ struct Logger {
     dir: PathBuf,
     paused: AtomicBool,
     permission_needed: AtomicBool,
-    count_today: AtomicU64,
-    today_file: Mutex<String>,
 }
 
 impl Logger {
     fn new(dir: PathBuf) -> Self {
-        let today = domain::local_log_file_name(now_ms());
-        let count = writer::count_lines(&dir.join(&today));
         Logger {
             dir,
             paused: AtomicBool::new(false),
             permission_needed: AtomicBool::new(false),
-            count_today: AtomicU64::new(count),
-            today_file: Mutex::new(today),
         }
     }
 
-    /// Roll the today-counter over a local-midnight boundary (reseeds from disk).
-    fn refresh_day(&self) {
-        let wall = domain::local_log_file_name(now_ms());
-        if let Ok(mut today) = self.today_file.lock() {
-            if *today != wall {
-                self.count_today
-                    .store(writer::count_lines(&self.dir.join(&wall)), Ordering::SeqCst);
-                *today = wall;
-            }
-        }
-    }
-
-    /// Build + append one event (fail-open). Returns today's event count.
+    /// Build + append one event (fail-open). The menubar shows STATE,
+    /// never counts — magnitude is cognition for nothing in ambient UI;
+    /// numbers live where you ask for them (`keel log status`, export).
     fn emit(
         &self,
         kind: &str,
         ts: u64,
         payload: serde_json::Value,
         duration_ms: Option<u64>,
-    ) -> u64 {
-        self.refresh_day();
+    ) {
         let file = domain::local_log_file_name(ts);
         let event =
             domain::build_event(uuid::Uuid::new_v4().to_string(), kind, ts, payload, duration_ms);
-        let written = domain::event_line(&event)
-            .map(|line| writer::append_line(&self.dir, &file, &line))
-            .unwrap_or(false);
-        if written {
-            let is_today = self
-                .today_file
-                .lock()
-                .map(|today| *today == file)
-                .unwrap_or(false);
-            if is_today {
-                self.count_today.fetch_add(1, Ordering::SeqCst);
-            }
+        if let Some(line) = domain::event_line(&event) {
+            let _ = writer::append_line(&self.dir, &file, &line);
         }
-        self.count_today.load(Ordering::SeqCst)
     }
 }
 
@@ -160,25 +131,26 @@ struct TrayUi {
     permission: MenuItem<Wry>,
 }
 
-fn status_text(events_today: u64) -> String {
-    format!("keel — {} events today", events_today)
+/// Ambient status carries STATE only — alive or paused, no numbers.
+fn status_text(paused: bool) -> &'static str {
+    if paused { "keel — paused" } else { "keel — observing" }
 }
 
-fn set_status(app: &AppHandle, events_today: u64) {
+fn set_status(app: &AppHandle, paused: bool) {
     let ui = app.state::<TrayUi>();
-    let _ = ui.status.set_text(status_text(events_today));
+    let _ = ui.status.set_text(status_text(paused));
 }
 
 fn toggle_pause(app: &AppHandle) {
     let logger = app.state::<Logger>();
     let ui = app.state::<TrayUi>();
     let was_paused = logger.paused.fetch_xor(true, Ordering::SeqCst);
-    let kind = if was_paused { "logger_resumed" } else { "logger_paused" };
-    let count = logger.emit(kind, now_ms(), json!({}), None);
+    let kind = if was_paused { "writer_resumed" } else { "writer_paused" };
+    logger.emit(kind, now_ms(), json!({}), None);
     let _ = ui
         .toggle
         .set_text(if was_paused { "Pause logging" } else { "Resume logging" });
-    set_status(app, count);
+    set_status(app, !was_paused);
 }
 
 /// x-win failed (most likely missing macOS permission): surface a clickable
@@ -248,8 +220,7 @@ fn spawn_sensors(app: AppHandle) {
                     let window_ms = input_deltas.len() as u64 * POLL_INTERVAL.as_millis() as u64;
                     let bins = domain::fold_into_bins(&input_deltas, INPUT_POLLS_PER_BIN);
                     if let Some(payload) = domain::input_rollup(&bins, INPUT_BIN_MS) {
-                        let count = logger.emit("input_activity", now, payload, Some(window_ms));
-                        set_status(&app, count);
+                        logger.emit("input_activity", now, payload, Some(window_ms));
                     }
                     input_deltas.clear();
                 }
@@ -266,17 +237,15 @@ fn spawn_sensors(app: AppHandle) {
                 idle_since = next;
                 match transition {
                     Some(IdleTransition::Start { ts }) => {
-                        let count = logger.emit(
+                        logger.emit(
                             "idle_start",
                             ts,
                             json!({ "thresholdMs": domain::IDLE_THRESHOLD_MS }),
                             None,
                         );
-                        set_status(&app, count);
                     }
                     Some(IdleTransition::End { ts, duration_ms }) => {
-                        let count = logger.emit("idle_end", ts, json!({}), Some(duration_ms));
-                        set_status(&app, count);
+                        logger.emit("idle_end", ts, json!({}), Some(duration_ms));
                     }
                     None => {}
                 }
@@ -293,7 +262,7 @@ fn spawn_sensors(app: AppHandle) {
                     let app_name = active.info.name.clone();
                     let title = domain::cap_title(&active.title, domain::TITLE_CAP);
                     if domain::focus_changed(last_focus.as_ref(), &app_name, &title) {
-                        let count = logger.emit(
+                        logger.emit(
                             "app_switched",
                             now,
                             domain::app_switch_payload(
@@ -307,7 +276,6 @@ fn spawn_sensors(app: AppHandle) {
                         );
                         last_focus = Some((app_name, title));
                         focus_since = Some(now);
-                        set_status(&app, count);
                     }
                 }
                 Err(_) => {
@@ -334,7 +302,7 @@ pub fn run() {
 
             let logger = Logger::new(writer::log_dir());
             // Writer epoch marker — same kind as the browser surface.
-            let count = logger.emit(
+            logger.emit(
                 "writer_started",
                 now_ms(),
                 json!({ "appVersion": env!("CARGO_PKG_VERSION") }),
@@ -343,7 +311,7 @@ pub fn run() {
             app.manage(logger);
 
             let status =
-                MenuItem::with_id(app, "status", status_text(count), false, None::<&str>)?;
+                MenuItem::with_id(app, "status", status_text(false), false, None::<&str>)?;
             let toggle =
                 MenuItem::with_id(app, "toggle", "Pause logging", true, None::<&str>)?;
             let permission = MenuItem::with_id(

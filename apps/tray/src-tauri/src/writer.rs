@@ -29,10 +29,3 @@ pub fn append_line(dir: &Path, file_name: &str, line: &str) -> bool {
     }
 }
 
-/// Count events (non-empty lines) in one day file. Missing/unreadable → 0.
-pub fn count_lines(path: &Path) -> u64 {
-    match fs::read_to_string(path) {
-        Ok(contents) => contents.lines().filter(|l| !l.trim().is_empty()).count() as u64,
-        Err(_) => 0,
-    }
-}
