@@ -1,0 +1,8 @@
+{
+  "name": "keel-agent",
+  "version": "0.1.0",
+  "description": "keel for Claude Code — keeps your agent facing the right direction. A sovereign focus gate plus a local-first attention log: every session event lands in ~/.keel/log/, owned by you, never leaving your machine.",
+  "author": { "name": "EquanimiTech", "url": "https://equanimi.tech" },
+  "license": "MIT",
+  "keywords": ["attention", "focus", "observability", "calm-technology", "equanimitech"]
+}

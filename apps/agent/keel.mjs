@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @ts-check
-// keel-gate — Claude Code focus hook. Thin orchestration over core (pure) + store (I/O).
+// keel agent — the Claude Code surface: focus gate + activity-log writer. Thin orchestration over core (pure) + store (I/O).
 // Fail-open: any error → exit 0, allow. A hook must never trap the user.
 
 import {
@@ -11,14 +11,61 @@ import {
   setAppetite, normalizeAppetite, activeAppetite, appetiteLine, APPETITE_LEVELS,
   viceWindows, viceScheduledAt, viceShouldBlock, setVicePact, spendViceSkip,
   viceSkipActive, vicePactActive, isAllowedPath,
+  buildEvent, capPayload, summarizeEvents, matchDispatch,
 } from "./core.mjs";
-import { loadTarget, loadState, saveState, readStdin, TARGET_ID, KEEL_DIR } from "./store.mjs";
+import { loadTarget, loadState, saveState, readStdin, TARGET_ID, KEEL_DIR, LOG_DIR, appendEvent, readEvents } from "./store.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { randomUUID } from "node:crypto";
 
 const emit = (obj) => { if (obj) process.stdout.write(JSON.stringify(obj)); process.exit(0); };
 const emitText = (t) => { if (t) process.stdout.write(t); process.exit(0); };
+
+// ── Activity log: every hook event lands in ~/.keel/log, full stdin captured
+// (size-capped per field; the transcript_path we log keeps full fidelity).
+// Fail-open at every layer — observability must never break the gate.
+const KIND_BY_HOOK = {
+  "session-start": "session_start", "user-submit": "prompt",
+  "pre-tool": "tool_dispatched", "post-tool": "tool_completed",
+  "post-tool-failure": "tool_failed", "stop": "turn_stop",
+  "subagent-stop": "subagent_stop", "session-end": "session_end",
+  "notification": "notification", "pre-compact": "pre_compact",
+  "permission-request": "permission_request", "config-change": "config_change",
+  "file-changed": "file_changed",
+};
+
+/** @param {string} kind @param {number} now @param {any} input
+ * @param {{ durationMs?: number, extra?: Record<string, unknown> }} [opts] */
+function logHookEvent(kind, now, input, opts = {}) {
+  try {
+    appendEvent(LOG_DIR, buildEvent({
+      id: randomUUID(), kind, ts: now, sessionId: input?.session_id ?? "",
+      payload: { ...capPayload(input), ...(opts.extra ?? {}) },
+      durationMs: opts.durationMs,
+    }));
+  } catch { /* fail-open */ }
+}
+
+/** Generic full-capture hook: log the event, decide nothing. */
+async function handleObservedHook(sub, now) {
+  const input = await readStdin();
+  const kind = KIND_BY_HOOK[sub] ?? sub;
+  if (kind === "tool_completed" || kind === "tool_failed") {
+    let durationMs;
+    try {
+      const m = matchDispatch(readEvents(LOG_DIR, now), {
+        sessionId: input?.session_id ?? "", ts: now,
+        payload: { tool_name: input?.tool_name, tool_use_id: input?.tool_use_id },
+      });
+      if (m) durationMs = now - m.ts;
+    } catch { /* derive later read-side */ }
+    logHookEvent(kind, now, input, { durationMs });
+  } else {
+    logHookEvent(kind, now, input);
+  }
+  return emit(null);
+}
 
 async function handlePreTool(now) {
   const target = loadTarget();
@@ -26,10 +73,13 @@ async function handlePreTool(now) {
   const f = frictionNow(target, state, now);
   const input = await readStdin();
   const rule = denyingRule(target, f, input?.tool_name, state, now);
-  if (!rule) return emit(null); // allow (silent)
-  // Sanctioned exception: never block writes to allow-listed paths (the journal /
-  // ritual artifacts). Closing the day must work even under lockdown.
-  if (isAllowedPath(input?.tool_input?.file_path, rule.allowPaths, homedir())) return emit(null);
+  const allowed = !rule || isAllowedPath(input?.tool_input?.file_path, rule.allowPaths, homedir());
+  // Rules observability: every gate decision is auditable from the log alone.
+  logHookEvent("tool_dispatched", now, input, { extra: {
+    keel_denied: !allowed, keel_friction: Number(f.toFixed(3)), keel_phase: phaseOf(f),
+    ...(rule?.notch ? { keel_rule_notch: rule.notch } : {}),
+  } });
+  if (allowed) return emit(null); // allow (silent)
   saveState(recordNight(state, now, target.driver, { observed: true }));
   return emit({
     hookSpecificOutput: {
@@ -41,6 +91,8 @@ async function handlePreTool(now) {
 }
 
 async function handleUserSubmit(now) {
+  const input = await readStdin();
+  logHookEvent("prompt", now, input);
   const target = loadTarget();
   let state = updateSession(loadState(), now, target.orient);
   const phase = phaseOf(frictionNow(target, state, now));
@@ -62,7 +114,9 @@ async function handleUserSubmit(now) {
   return emitText(nudge);
 }
 
-function handleSessionStart(now) {
+async function handleSessionStart(now) {
+  const input = await readStdin();
+  logHookEvent("session_start", now, input);
   const target = loadTarget();
   let state = refillCredits(loadState(), target, monthKey(now));
   const reflection = reflectionLine(state, target, now);
@@ -275,6 +329,21 @@ function cmdHud(now) {
   process.stdout.write(parts.join("  ·  "));
 }
 
+/** `keel log status` — today's per-kind counts + session liveness. The P1
+ * data-quality seed: its job is to make silent writer death visible. */
+function cmdLog(now, sub = "status") {
+  if (sub !== "status") { console.log("usage: keel log status"); return; }
+  const events = readEvents(LOG_DIR, now);
+  if (!events.length) {
+    console.log("keel log: no events today yet — is the writer wired? (hooks → ~/.keel/log/)");
+    return;
+  }
+  const s = summarizeEvents(events, now);
+  const kinds = Object.entries(s.byKind).sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => `${k}=${n}`).join(" ");
+  console.log(`keel log: ${events.length} events today · ${s.sessions} session(s), ${s.activeSessions} active · ${kinds}`);
+}
+
 async function main() {
   const [cmd, sub] = process.argv.slice(2);
   const now = Date.now();
@@ -282,8 +351,10 @@ async function main() {
     if (sub === "pre-tool") return handlePreTool(now);
     if (sub === "user-submit") return handleUserSubmit(now);
     if (sub === "session-start") return handleSessionStart(now);
+    if (sub in KIND_BY_HOOK) return handleObservedHook(sub, now);
     return process.exit(0);
   }
+  if (cmd === "log") return cmdLog(now, sub);
   if (cmd === "skip") return cmdSkip(now);
   if (cmd === "park") return cmdPark(now, sub);
   if (cmd === "unpark") return cmdUnpark();

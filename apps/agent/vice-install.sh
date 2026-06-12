@@ -2,7 +2,7 @@
 # keel vice — install the enforcement layer. Run ONCE, as root:
 #   osascript -e 'do shell script "/Users/rafa/.keel/vice-install.sh" with administrator privileges'
 #
-# Source of truth for this script + vice-block.sh is the keel-gate repo; ~/.keel
+# Source of truth for this script + vice-block.sh is the keel agent package; ~/.keel
 # holds symlinks (installers) and a DEPLOYED, root-owned copy of vice-block.sh.
 #
 # Installs:
@@ -16,7 +16,7 @@ set -euo pipefail
 USER_NAME="rafa"
 HOME_DIR="/Users/${USER_NAME}"
 KEEL="${HOME_DIR}/.keel"
-REPO_SRC="${HOME_DIR}/Developer/equanimitech/keel/packages/keel-gate"   # source of truth
+REPO_SRC="${HOME_DIR}/Developer/equanimitech/keel/apps/agent"   # source of truth
 NODE="${HOME_DIR}/Library/pnpm/node"      # stable pnpm shim
 PLIST="/Library/LaunchDaemons/com.keel.vice.plist"
 SUDOERS="/etc/sudoers.d/keel-vice"

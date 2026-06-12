@@ -1,5 +1,5 @@
 // @ts-check
-// keel-gate core — pure domain. No I/O. The piece that later lifts into @keel/domain.
+// keel agent core — pure domain. No I/O. The piece that later lifts into @keel/domain.
 
 /** @typedef {"day"|"wind_down"|"lockdown"} Phase */
 /** @typedef {"hide"|"dim"|"delay"|"blur"|"block"} Notch */
@@ -396,4 +396,97 @@ export function reflectionLine(state, target, now) {
   if (!last.length) return "";
   const held = last.filter((x) => x.held).length;
   return `[keel] wound down on your own ${held} of the last ${last.length} late night(s). ${state.credits} skip credit(s) this month.`;
+}
+
+// ── Activity log (observability substrate — slice A) ────────────
+// Events mirror @keel/domain ActivityEvent. The log is the product; these
+// builders are pure — id generation and file I/O live with the callers.
+
+/** @typedef {{ id: string, surface: "agent", kind: string, ts: number,
+ *   sessionId: string, payload: Record<string, unknown>, durationMs?: number }} ActivityEvent */
+
+/** @param {{ id: string, kind: string, ts: number, sessionId?: string,
+ *   payload?: Record<string, unknown>, durationMs?: number }} a
+ * @returns {ActivityEvent} */
+export function buildEvent({ id, kind, ts, sessionId, payload, durationMs }) {
+  /** @type {ActivityEvent} */
+  const e = { id, surface: "agent", kind, ts, sessionId: sessionId ?? "", payload: payload ?? {} };
+  if (durationMs !== undefined) e.durationMs = durationMs;
+  return e;
+}
+
+/** Cap one payload value by serialized size. Oversized values become
+ * `{ truncated, bytes, value }` — the transcript (whose path we log) keeps
+ * full fidelity; the event keeps a bounded inline copy.
+ * @param {unknown} v @param {number} max */
+export function capValue(v, max) {
+  if (typeof v === "string") {
+    const bytes = Buffer.byteLength(v, "utf8");
+    return bytes <= max ? v : { truncated: true, bytes, value: v.slice(0, max) };
+  }
+  const s = JSON.stringify(v) ?? "";
+  const bytes = Buffer.byteLength(s, "utf8");
+  return bytes <= max ? v : { truncated: true, bytes, value: s.slice(0, max) };
+}
+
+/** Cap every field of a hook stdin payload. Events must stay well under the
+ * single-write atomic-append bound, so concurrent sessions never tear lines.
+ * @param {Record<string, unknown> | null | undefined} obj @param {number} [maxField] */
+export function capPayload(obj, maxField = 2048) {
+  /** @type {Record<string, unknown>} */
+  const out = {};
+  for (const [k, v] of Object.entries(obj ?? {})) out[k] = capValue(v, maxField);
+  return out;
+}
+
+/** @param {ActivityEvent} e */
+export const eventLine = (e) => JSON.stringify(e) + "\n";
+
+/** Local-date daily bucket for the agent surface. @param {number} ts */
+export function logFileName(ts) {
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.agent.jsonl`;
+}
+
+/** Read-side rollup for `keel log status`.
+ * @param {ActivityEvent[]} events @param {number} now @param {number} [activeWindowMs] */
+export function summarizeEvents(events, now, activeWindowMs = 15 * 60_000) {
+  /** @type {Record<string, number>} */
+  const byKind = {};
+  const lastSeen = new Map();
+  for (const e of events) {
+    byKind[e.kind] = (byKind[e.kind] ?? 0) + 1;
+    if (e.sessionId) lastSeen.set(e.sessionId, Math.max(lastSeen.get(e.sessionId) ?? 0, e.ts));
+  }
+  let activeSessions = 0;
+  for (const ts of lastSeen.values()) if (now - ts <= activeWindowMs) activeSessions++;
+  return { byKind, sessions: lastSeen.size, activeSessions };
+}
+
+/** Pair a tool completion with its dispatch: by tool_use_id when both sides
+ * carry one, else latest unconsumed dispatch for the same session + tool
+ * (stack semantics — survives concurrent sessions and repeated tools).
+ * @param {ActivityEvent[]} events
+ * @param {{ sessionId: string, ts: number, payload: Record<string, any> }} completed */
+export function matchDispatch(events, completed) {
+  const p = completed?.payload ?? {};
+  if (p.tool_use_id) {
+    const consumed = new Set(events
+      .filter((e) => e.kind === "tool_completed" && e.payload?.tool_use_id)
+      .map((e) => e.payload.tool_use_id));
+    let found = null;
+    for (const e of events) {
+      if (e.kind === "tool_dispatched" && e.payload?.tool_use_id === p.tool_use_id
+        && !consumed.has(p.tool_use_id)) found = e;
+    }
+    if (found) return found;
+  }
+  const stack = [];
+  for (const e of events) {
+    if (e.sessionId !== completed?.sessionId || e.payload?.tool_name !== p.tool_name) continue;
+    if (e.kind === "tool_dispatched") stack.push(e);
+    else if (e.kind === "tool_completed") stack.pop();
+  }
+  return stack.length ? stack[stack.length - 1] : null;
 }

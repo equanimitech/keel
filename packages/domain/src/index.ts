@@ -11,6 +11,10 @@
  * - No side effects — types and pure functions only
  */
 
+// ── Activity Log (observability substrate) ──────────────────────
+export type { ActivitySurface, ActivityEventKind, ActivityEvent } from "./activity.js";
+export { createActivityEvent } from "./activity.js";
+
 // ── Value Objects ───────────────────────────────────────────────
 export type { Duration, Domain, AppName } from "./value-objects.js";
 export {

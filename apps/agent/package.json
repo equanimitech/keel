@@ -1,11 +1,17 @@
 {
-  "name": "@keel/gate",
+  "name": "@keel/agent",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "bin": { "keel": "./keel.mjs" },
+  "bin": {
+    "keel": "./keel.mjs"
+  },
   "scripts": {
     "test": "node --test",
     "typecheck": "tsc --noEmit --checkJs --allowJs --target es2022 --module nodenext --moduleResolution nodenext core.mjs store.mjs keel.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "typescript": "~5.8.3"
   }
 }

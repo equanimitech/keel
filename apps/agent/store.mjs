@@ -1,10 +1,10 @@
 // @ts-check
-// keel-gate store — the only I/O. Config + state repository over ~/.keel, plus stdin.
+// keel agent store — the only I/O. Config + state repository over ~/.keel, plus stdin.
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { mergeTarget, emptyState } from "./core.mjs";
+import { mergeTarget, emptyState, logFileName, eventLine } from "./core.mjs";
 
 export const KEEL_DIR = join(homedir(), ".keel");
 export const TARGET_ID = "claude-code";
@@ -38,4 +38,29 @@ export function readStdin() {
     process.stdin.on("data", (c) => (d += c));
     process.stdin.on("end", () => { try { res(JSON.parse(d)); } catch { res(null); } });
   });
+}
+
+// ── Activity log (append-only JSONL, one file/day/surface) ──────
+export const LOG_DIR = join(KEEL_DIR, "log");
+
+/** Append one event. Fail-open: logging must never break the gate.
+ * Single-write append of a small line — atomic under concurrent sessions.
+ * @param {string} dir @param {import("./core.mjs").ActivityEvent} e */
+export function appendEvent(dir, e) {
+  try {
+    mkdirSync(dir, { recursive: true });
+    appendFileSync(join(dir, logFileName(e.ts)), eventLine(e));
+    return true;
+  } catch { return false; }
+}
+
+/** Read one day's events; missing/corrupt file → []. Skips torn/foreign lines.
+ * @param {string} dir @param {number} ts
+ * @returns {import("./core.mjs").ActivityEvent[]} */
+export function readEvents(dir, ts) {
+  try {
+    return readFileSync(join(dir, logFileName(ts)), "utf8")
+      .split("\n").filter(Boolean)
+      .flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
+  } catch { return []; }
 }
