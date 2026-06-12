@@ -6,7 +6,14 @@ $signature:
   docHash: sha256:33c7f6f05e466b69192ce3b227fec7dc14b35d1a4e76fdbdf0276c5bc332a745
   signedAt: 2026-06-12T17:25:10.766340Z
   signature: ed25519:VgyZrsgX2Ab6i5JezC5IUPa3k7d7bjvA2lKMPuS4/rWecR2q6VImafFQQ91S7SuXwpVALDeSeFCCiINW+cqiCA==
-type: decision
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:33c7f6f05e466b69192ce3b227fec7dc14b35d1a4e76fdbdf0276c5bc332a745
+  docFilename: 2026-06-12-retire-the-intervention-layer-shields-signals-and-six-domain.md
+  stampedAt: 2026-06-12T17:26:09.228161Z
+  signature: ed25519:VG3YSS02qcit1RqnDbHFDCkZetUJFafl5p7DYAgGVDOqL0VRm8Pbv9/pRv9X7OhNYtOnJ0tmWskz2xVCB949Dg==
 ---
 # Retire the intervention layer — shields, signals, and six domain modules
 
