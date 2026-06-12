@@ -27,6 +27,7 @@ apply() {  # write the block from $LIST (assumes root)
     while IFS= read -r d; do
       d="${d%%#*}"; d="$(echo -n "$d" | tr -d '[:space:]')"; [ -z "$d" ] && continue
       echo "0.0.0.0 $d"; echo "0.0.0.0 www.$d"
+      echo ":: $d"; echo ":: www.$d"
     done < "$LIST";
     echo "$END"; } >> "$HOSTS"
   flush
