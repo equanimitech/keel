@@ -348,11 +348,14 @@ function cmdRules() {
 
 /** `keel log status` — today's per-kind counts + session liveness. The P1
  * data-quality seed: its job is to make silent writer death visible. */
-function cmdLog(now, sub = "status") {
-  if (sub !== "status") { console.log("usage: keel log status"); return; }
-  const events = readEvents(LOG_DIR, now);
+function cmdLog(now, sub = "status", day = "today") {
+  if (sub !== "status") { console.log("usage: keel log status [yesterday]"); return; }
+  const at = day === "yesterday" ? now - 86_400_000 : now;
+  const events = readEvents(LOG_DIR, at);
   if (!events.length) {
-    console.log("keel log: no events today yet — is the writer wired? (hooks → ~/.keel/log/)");
+    console.log(day === "yesterday"
+      ? "keel log: no events yesterday."
+      : "keel log: no events today yet — is the writer wired? (hooks → ~/.keel/log/)");
     return;
   }
   const s = summarizeEvents(events, now);
@@ -371,7 +374,7 @@ async function main() {
     if (sub in KIND_BY_HOOK) return handleObservedHook(sub, now);
     return process.exit(0);
   }
-  if (cmd === "log") return cmdLog(now, sub);
+  if (cmd === "log") return cmdLog(now, sub, process.argv[4]);
   if (cmd === "rules") return cmdRules();
   if (cmd === "skip") return cmdSkip(now);
   if (cmd === "park") return cmdPark(now, sub);

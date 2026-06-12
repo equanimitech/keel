@@ -248,3 +248,16 @@ test("session-start logs rule_changed when the effective rules hash moves", asyn
   assert.notEqual(changes[0].payload.keel_rule_hash, changes[1].payload.keel_rule_hash);
   assert.equal(changes[1].payload.keel_prev_hash, changes[0].payload.keel_rule_hash);
 });
+
+test("keel log status yesterday reads the prior day's file", async () => {
+  const home = mkdtempSync(join(tmpdir(), "keel-home-"));
+  const logDir = join(home, ".keel", "log");
+  const y = Date.now() - 86_400_000;
+  appendEvent(logDir, buildEvent({ id: "y1", kind: "prompt", ts: y, sessionId: "ys" }));
+  const out = execFileSync(process.execPath, [KEEL_MJS, "log", "status", "yesterday"],
+    { env: { ...process.env, HOME: home }, encoding: "utf8" });
+  assert.match(out, /1 events.*prompt=1/s);
+  const today = execFileSync(process.execPath, [KEEL_MJS, "log", "status"],
+    { env: { ...process.env, HOME: home }, encoding: "utf8" });
+  assert.match(today, /no events today/);
+});

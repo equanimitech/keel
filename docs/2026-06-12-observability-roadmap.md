@@ -1,3 +1,13 @@
+---
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:23bbc714c3d54dbb253b2bf75e7d346cc60e8289cb7b5a0d430c93471d890258
+  docFilename: 2026-06-12-observability-roadmap.md
+  stampedAt: 2026-06-12T15:27:52.086029Z
+  signature: ed25519:AfiOMED+kkc2+eyK/FlvqP1NdnFXyv4kl48PkZF1yblSuhB9ZfSE+/cnc7uQO8Q+aR4D5tkqKhJJv9BX4FBvBg==
+---
 # keel roadmap — observability first
 
 **Date:** 2026-06-12 · **Status:** direction, pre-pitch · **Companion:** `docs/references/2026-06-12-attention-observability-literature.md`
