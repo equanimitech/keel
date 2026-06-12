@@ -499,8 +499,10 @@ export function matchDispatch(events, completed) {
 // ── Rules observability (slice A′) ──────────────────────────────
 // The rules are data; these make them inspectable and their changes loggable.
 
-/** Stable hash of the effective target — key-order-insensitive, value-sensitive.
- * Pure FNV-1a over a canonically sorted JSON encoding. @param {Target} target */
+/** Stable hash of any effective-rules value (target, or a composite of
+ * target + watchlist + desktop sensors) — key-order-insensitive,
+ * value-sensitive. Pure FNV-1a over a canonically sorted JSON encoding.
+ * @param {unknown} target */
 export function targetHash(target) {
   const canon = (v) => {
     if (Array.isArray(v)) return v.map(canon);
