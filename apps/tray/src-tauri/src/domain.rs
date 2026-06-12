@@ -76,13 +76,19 @@ pub fn local_log_file_name(ts_ms: u64) -> String {
     log_file_name(date)
 }
 
-/// `app_focus` payload: app names + capped window titles + a flag. Never more.
-pub fn app_focus_payload(app_name: &str, window_title: &str, is_full_screen: bool) -> Value {
+/// `app_switched` payload: app names + capped window titles + a flag. Never more.
+pub fn app_switch_payload(app_name: &str, window_title: &str, is_full_screen: bool) -> Value {
     json!({
         "app_name": app_name,
         "window_title": window_title,
         "is_full_screen": is_full_screen,
     })
+}
+
+/// Duration of the focus span an `app_switched` event closes — `None` for the
+/// first observation after start or pause (no span was open).
+pub fn switch_duration(prev_span_start: Option<u64>, now_ms: u64) -> Option<u64> {
+    prev_span_start.map(|started| now_ms.saturating_sub(started))
 }
 
 /// Cap a window title at `max_chars` characters (char-boundary safe).
@@ -144,9 +150,9 @@ mod tests {
     fn event_json_matches_activity_event_schema() {
         let e = build_event(
             "0d1f1f6e-7d36-4b1a-9f5e-1a2b3c4d5e6f".into(),
-            "app_focus",
+            "app_switched",
             1_718_193_600_000,
-            app_focus_payload("Safari", "keel — docs", false),
+            app_switch_payload("Safari", "keel — docs", false),
             None,
         );
         let line = event_line(&e).unwrap();
@@ -160,7 +166,7 @@ mod tests {
 
         assert_eq!(v["id"], "0d1f1f6e-7d36-4b1a-9f5e-1a2b3c4d5e6f");
         assert_eq!(v["surface"], "desktop");
-        assert_eq!(v["kind"], "app_focus");
+        assert_eq!(v["kind"], "app_switched");
         assert_eq!(v["ts"], 1_718_193_600_000_u64);
         assert_eq!(v["sessionId"], "");
         assert_eq!(v["payload"]["app_name"], "Safari");
@@ -215,6 +221,19 @@ mod tests {
         assert!(focus_changed(Some(&prev), "Terminal", "keel — docs"));
         assert!(focus_changed(Some(&prev), "Safari", "other tab"));
         assert!(focus_changed(None, "Safari", "keel — docs"));
+    }
+
+    // ── switch closes the previous focus span ───────────────────
+
+    #[test]
+    fn switch_duration_closes_the_previous_span() {
+        assert_eq!(switch_duration(Some(1_000), 5_500), Some(4_500));
+    }
+
+    #[test]
+    fn switch_duration_is_none_for_the_first_observation() {
+        // First sample after start or pause — no span to close.
+        assert_eq!(switch_duration(None, 5_500), None);
     }
 
     // ── title capping ───────────────────────────────────────────

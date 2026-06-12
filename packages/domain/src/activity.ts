@@ -19,10 +19,31 @@ export type ActivitySurface = "agent" | "desktop" | "browser";
 /**
  * Event kinds are an open set — each surface contributes its own vocabulary
  * (agent: session_start, prompt, tool_dispatched, tool_completed, turn_stop…;
- * desktop: app_focus, idle_start…; browser: tab_activated, navigation…).
- * Kinds accrete; they are not centrally enumerated.
+ * desktop: app_switched, idle_start…; browser: tab_activated, navigation…).
+ * Kinds accrete; they are not centrally enumerated. They DO conform to one
+ * grammar — spans, switches, completions — defined in
+ * `packages/domain/docs/event-taxonomy.md` (the writers' contract).
  */
 export type ActivityEventKind = string;
+
+/**
+ * Read-side alias map for events logged before the 2026-06-12 taxonomy
+ * unification. Raw files are never rewritten; consumers normalize through
+ * `canonicalKind` instead. Values are always canonical (no chains).
+ */
+export const LEGACY_KIND_ALIASES: Readonly<Record<string, string>> = {
+  browser_idle: "idle_start",
+  browser_active: "idle_end",
+  window_focus: "focus_start",
+  window_blur: "focus_end",
+  browser_session_start: "writer_started",
+  app_focus: "app_switched",
+};
+
+/** Normalize a (possibly pre-taxonomy) event kind to its canonical name. */
+export function canonicalKind(kind: string): string {
+  return LEGACY_KIND_ALIASES[kind] ?? kind;
+}
 
 /** A single raw observation. Immutable once written. */
 export interface ActivityEvent {

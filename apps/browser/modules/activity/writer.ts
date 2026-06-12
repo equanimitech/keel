@@ -7,7 +7,9 @@
  * extension-local IndexedDB (see `log.ts`) until the desktop relay exists.
  *
  * sessionId rotates with the service-worker lifetime: each cold start of
- * the worker generates a fresh uuid and logs "browser_session_start".
+ * the worker generates a fresh uuid and logs "writer_started". That id is
+ * a writer epoch — mechanical provenance, not a behavioral session
+ * (bouts are derived read-side; see packages/domain/docs/event-taxonomy.md).
  */
 
 import {
@@ -16,14 +18,15 @@ import {
   domainFromUrl,
   excessEventCount,
   focusTransition,
-  idleKind,
+  idleTransition,
   shouldLogNavigation,
 } from "./events";
 import { appendEvent, countEvents, deleteOldestEvents } from "./log";
 
 type WriteFn = (
   kind: string,
-  payload?: Readonly<Record<string, unknown>>
+  payload?: Readonly<Record<string, unknown>>,
+  durationMs?: number
 ) => void;
 
 /**
@@ -33,9 +36,9 @@ type WriteFn = (
 export function startActivityWriter(): void {
   const sessionId = crypto.randomUUID();
 
-  const write: WriteFn = (kind, payload) => {
+  const write: WriteFn = (kind, payload, durationMs) => {
     // Fail-open: appendEvent swallows storage errors; a dropped event
-    // must never break the shields.
+    // must never break the browsing session.
     void appendEvent(
       buildBrowserEvent({
         id: crypto.randomUUID(),
@@ -43,12 +46,14 @@ export function startActivityWriter(): void {
         ts: Date.now(),
         sessionId,
         payload,
+        durationMs,
       })
     );
   };
 
-  // New service-worker lifetime → new browser session.
-  write("browser_session_start");
+  // New service-worker lifetime → new writer epoch (sessionId groups it).
+  // Mechanical, not behavioral — bouts are derived read-side.
+  write("writer_started");
 
   // Retention guard: cap the store at MAX_LOG_EVENTS on startup.
   void runRetentionGuard(write);
@@ -92,22 +97,32 @@ export function startActivityWriter(): void {
     lastDomainByTab.delete(tabId);
   });
 
-  // ── Window focus (blur = left the browser entirely) ───────────
-  let browserFocused = true;
+  // ── Focus span (browser holds OS focus) ───────────────────────
+  // The worker wakes because of activity, so assume focused-since-now;
+  // the first span is conservative, never inflated.
+  let focusSince: number | null = Date.now();
 
   browser.windows.onFocusChanged.addListener((windowId) => {
     const isFocused = windowId !== browser.windows.WINDOW_ID_NONE;
-    const kind = focusTransition(browserFocused, isFocused);
-    browserFocused = isFocused;
-    if (kind !== null) {
-      write(kind);
+    const t = focusTransition(focusSince, isFocused, Date.now());
+    focusSince = t.spanStart;
+    if (t.kind !== null) {
+      write(t.kind, undefined, t.durationMs);
     }
   });
 
-  // ── Idle state ─────────────────────────────────────────────────
+  // ── Idle span (AFK bracketing) ─────────────────────────────────
+  let idleSince: number | null = null;
+
   browser.idle.setDetectionInterval(IDLE_DETECTION_SECONDS);
   browser.idle.onStateChanged.addListener((state) => {
-    write(idleKind(state), { state });
+    const t = idleTransition(idleSince, state, Date.now());
+    idleSince = t.spanStart;
+    if (t.kind === "idle_start") {
+      write(t.kind, { state, thresholdMs: IDLE_DETECTION_SECONDS * 1000 });
+    } else if (t.kind !== null) {
+      write(t.kind, undefined, t.durationMs);
+    }
   });
 }
 

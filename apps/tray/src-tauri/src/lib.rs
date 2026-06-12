@@ -154,6 +154,7 @@ fn clear_permission_needed(app: &AppHandle) {
 fn spawn_sensors(app: AppHandle) {
     thread::spawn(move || {
         let mut last_focus: Option<(String, String)> = None;
+        let mut focus_since: Option<u64> = None;
         let mut idle_since: Option<u64> = None;
 
         loop {
@@ -161,8 +162,9 @@ fn spawn_sensors(app: AppHandle) {
             let logger = app.state::<Logger>();
             if logger.paused.load(Ordering::SeqCst) {
                 // Drop sensor state so resuming re-emits the current focus
-                // and never closes an idle span it didn't observe.
+                // and never closes a span (focus or idle) it didn't observe.
                 last_focus = None;
+                focus_since = None;
                 idle_since = None;
                 continue;
             }
@@ -200,16 +202,19 @@ fn spawn_sensors(app: AppHandle) {
                     let title = domain::cap_title(&active.title, domain::TITLE_CAP);
                     if domain::focus_changed(last_focus.as_ref(), &app_name, &title) {
                         let count = logger.emit(
-                            "app_focus",
+                            "app_switched",
                             now,
-                            domain::app_focus_payload(
+                            domain::app_switch_payload(
                                 &app_name,
                                 &title,
                                 active.position.is_full_screen,
                             ),
-                            None,
+                            // durationMs closes the previous focus span —
+                            // absent on the first sample after start/pause.
+                            domain::switch_duration(focus_since, now),
                         );
                         last_focus = Some((app_name, title));
+                        focus_since = Some(now);
                         set_status(&app, count);
                     }
                 }

@@ -13,7 +13,7 @@
 
 // ── Activity Log (observability substrate) ──────────────────────
 export type { ActivitySurface, ActivityEventKind, ActivityEvent } from "./activity.js";
-export { createActivityEvent } from "./activity.js";
+export { createActivityEvent, LEGACY_KIND_ALIASES, canonicalKind } from "./activity.js";
 
 // ── Value Objects ───────────────────────────────────────────────
 export type { Duration, Domain, AppName } from "./value-objects.js";

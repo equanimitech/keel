@@ -6,7 +6,7 @@ import {
   excessEventCount,
   exportFileName,
   focusTransition,
-  idleKind,
+  idleTransition,
   shouldLogNavigation,
   toJsonl,
 } from "./events";
@@ -100,7 +100,7 @@ describe("buildBrowserEvent", () => {
   it("defaults payload to an empty object", () => {
     const event = buildBrowserEvent({
       id: "a",
-      kind: "browser_session_start",
+      kind: "writer_started",
       ts: 1,
       sessionId: "s",
     });
@@ -110,7 +110,7 @@ describe("buildBrowserEvent", () => {
   it("carries durationMs only when provided", () => {
     const event = buildBrowserEvent({
       id: "a",
-      kind: "window_blur",
+      kind: "focus_end",
       ts: 1,
       sessionId: "s",
       durationMs: 500,
@@ -119,29 +119,72 @@ describe("buildBrowserEvent", () => {
   });
 });
 
-describe("focusTransition", () => {
-  it("emits window_blur when leaving the browser", () => {
-    expect(focusTransition(true, false)).toBe("window_blur");
+describe("focusTransition (focus span — browser holds OS focus)", () => {
+  it("opens a span with focus_start when the browser gains focus", () => {
+    expect(focusTransition(null, true, 1_000)).toEqual({
+      kind: "focus_start",
+      spanStart: 1_000,
+    });
   });
 
-  it("emits window_focus when returning", () => {
-    expect(focusTransition(false, true)).toBe("window_focus");
+  it("closes the span with focus_end + durationMs on blur", () => {
+    expect(focusTransition(5_000, false, 12_000)).toEqual({
+      kind: "focus_end",
+      durationMs: 7_000,
+      spanStart: null,
+    });
   });
 
-  it("dedupes repeated states (window-to-window focus hops)", () => {
-    expect(focusTransition(true, true)).toBeNull();
-    expect(focusTransition(false, false)).toBeNull();
+  it("dedupes window-to-window focus hops — span stays open", () => {
+    expect(focusTransition(5_000, true, 9_000)).toEqual({
+      kind: null,
+      spanStart: 5_000,
+    });
+  });
+
+  it("ignores blur when no span is open", () => {
+    expect(focusTransition(null, false, 9_000)).toEqual({
+      kind: null,
+      spanStart: null,
+    });
   });
 });
 
-describe("idleKind", () => {
-  it("maps active to browser_active", () => {
-    expect(idleKind("active")).toBe("browser_active");
+describe("idleTransition (idle span — AFK bracketing)", () => {
+  it("opens a span with idle_start when input stops", () => {
+    expect(idleTransition(null, "idle", 2_000)).toEqual({
+      kind: "idle_start",
+      spanStart: 2_000,
+    });
   });
 
-  it("maps idle and locked to browser_idle", () => {
-    expect(idleKind("idle")).toBe("browser_idle");
-    expect(idleKind("locked")).toBe("browser_idle");
+  it("locked counts as idle", () => {
+    expect(idleTransition(null, "locked", 2_000)).toEqual({
+      kind: "idle_start",
+      spanStart: 2_000,
+    });
+  });
+
+  it("idle → locked stays inside the open span", () => {
+    expect(idleTransition(2_000, "locked", 3_000)).toEqual({
+      kind: null,
+      spanStart: 2_000,
+    });
+  });
+
+  it("closes the span with idle_end + durationMs on return", () => {
+    expect(idleTransition(2_000, "active", 10_000)).toEqual({
+      kind: "idle_end",
+      durationMs: 8_000,
+      spanStart: null,
+    });
+  });
+
+  it("emits idle_end without durationMs when the span start was never observed (worker restarted mid-idle)", () => {
+    expect(idleTransition(null, "active", 10_000)).toEqual({
+      kind: "idle_end",
+      spanStart: null,
+    });
   });
 });
 
@@ -165,7 +208,7 @@ describe("excessEventCount (prune decision)", () => {
 describe("toJsonl", () => {
   it("renders one JSON object per line with a trailing newline", () => {
     const events = [
-      buildBrowserEvent({ id: "1", kind: "window_blur", ts: 1, sessionId: "s" }),
+      buildBrowserEvent({ id: "1", kind: "focus_end", ts: 1, sessionId: "s" }),
       buildBrowserEvent({
         id: "2",
         kind: "tab_activated",

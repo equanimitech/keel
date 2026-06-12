@@ -74,27 +74,59 @@ export function shouldLogNavigation(
   return nextDomain !== null && nextDomain !== previousDomain;
 }
 
-export type FocusEventKind = "window_focus" | "window_blur";
-
 /**
- * Translate a focus-state change into an event kind, deduping repeats
- * (e.g. focus hopping between two browser windows stays "focused").
+ * Outcome of feeding one observation into a span (start/end + durationMs
+ * pattern — see packages/domain/docs/event-taxonomy.md).
+ *
+ * `kind` is the event to emit (null = nothing to log); `durationMs` is set
+ * only on an end event whose start was observed; `spanStart` is the state
+ * the caller carries to the next observation.
  */
-export function focusTransition(
-  wasFocused: boolean,
-  isFocused: boolean
-): FocusEventKind | null {
-  if (wasFocused === isFocused) {
-    return null;
-  }
-  return isFocused ? "window_focus" : "window_blur";
+export interface SpanTransition {
+  readonly kind: string | null;
+  readonly durationMs?: number;
+  readonly spanStart: number | null;
 }
 
-export type IdleEventKind = "browser_idle" | "browser_active";
+/**
+ * Focus span — the browser holds OS focus (`focus_start`/`focus_end`).
+ * Window-to-window hops inside the browser dedupe; the span stays open.
+ */
+export function focusTransition(
+  spanStart: number | null,
+  isFocused: boolean,
+  now: number
+): SpanTransition {
+  if (isFocused) {
+    return spanStart === null
+      ? { kind: "focus_start", spanStart: now }
+      : { kind: null, spanStart };
+  }
+  return spanStart === null
+    ? { kind: null, spanStart: null }
+    : { kind: "focus_end", durationMs: now - spanStart, spanStart: null };
+}
 
-/** Map a chrome.idle state ("active" | "idle" | "locked") to an event kind. */
-export function idleKind(state: string): IdleEventKind {
-  return state === "active" ? "browser_active" : "browser_idle";
+/**
+ * Idle span — AFK bracketing over chrome.idle states
+ * ("active" | "idle" | "locked"; locked counts as idle).
+ *
+ * "active" with no open span means the service worker restarted mid-idle:
+ * the boundary is real, so `idle_end` is emitted without a duration.
+ */
+export function idleTransition(
+  spanStart: number | null,
+  state: string,
+  now: number
+): SpanTransition {
+  if (state !== "active") {
+    return spanStart === null
+      ? { kind: "idle_start", spanStart: now }
+      : { kind: null, spanStart };
+  }
+  return spanStart === null
+    ? { kind: "idle_end", spanStart: null }
+    : { kind: "idle_end", durationMs: now - spanStart, spanStart: null };
 }
 
 // ── Retention ─────────────────────────────────────────────────────
