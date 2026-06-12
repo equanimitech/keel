@@ -3,28 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>keel — Manage Interventions</title>
+    <title>keel — manage</title>
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
     <div class="manage-page">
       <header>
         <h1>keel</h1>
-        <p class="subtitle">All interventions across every domain</p>
+        <p class="subtitle">Observability — your log, your watchlist, your machine</p>
       </header>
 
       <nav class="tab-nav">
-        <button class="tab-btn active" data-tab="interventions">Interventions</button>
-        <button class="tab-btn" data-tab="budgets">Budgets</button>
+        <button class="tab-btn active" data-tab="watchlist">Watchlist</button>
         <button class="tab-btn" data-tab="blocklist">Blocklist</button>
       </nav>
 
-      <div id="tab-interventions" class="tab-content active">
-        <div id="domain-list"></div>
-      </div>
-
-      <div id="tab-budgets" class="tab-content">
-        <div id="budgets-list"></div>
+      <div id="tab-watchlist" class="tab-content active">
+        <div id="watchlist-panel"></div>
       </div>
 
       <div id="tab-blocklist" class="tab-content">

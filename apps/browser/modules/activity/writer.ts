@@ -22,6 +22,9 @@ import {
   shouldLogNavigation,
 } from "./events";
 import { appendEvent, countEvents, deleteOldestEvents } from "./log";
+import { sensorAllowed, validateSensorMessage } from "../sensors/events";
+import { observeDomains } from "../watchlist/store";
+import type { Runtime } from "wxt/browser";
 
 type WriteFn = (
   kind: string,
@@ -109,6 +112,29 @@ export function startActivityWriter(): void {
     if (t.kind !== null) {
       write(t.kind, undefined, t.durationMs);
     }
+  });
+
+  // ── Sensor channel (key-action completions, observe tier) ─────
+  // The hostile-page boundary: kind allowlisted, payload reduced to
+  // capped scalars, domain taken from the browser-attested sender tab,
+  // and nothing persists unless the domain is on the observe tier.
+  browser.runtime.onMessage.addListener((message: unknown, sender: Runtime.MessageSender) => {
+    const validated = validateSensorMessage(message);
+    if (validated === null) {
+      return;
+    }
+    const url = sender.tab?.url;
+    const domain = url === undefined ? null : domainFromUrl(url);
+    void observeDomains
+      .getValue()
+      .then((observe) => {
+        if (sensorAllowed(domain, observe)) {
+          write(validated.kind, { domain, ...validated.payload });
+        }
+      })
+      .catch(() => {
+        // Storage unavailable — drop, fail-open.
+      });
   });
 
   // ── Idle span (AFK bracketing) ─────────────────────────────────
