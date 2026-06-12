@@ -96,9 +96,15 @@ pub fn cap_title(title: &str, max_chars: usize) -> String {
     title.chars().take(max_chars).collect()
 }
 
-/// Dedupe decision: emit `app_focus` only when the app name OR the (capped)
-/// window title actually changed. `None` previous state always emits.
+/// Emit decision for `app_switched`: the app name OR the (capped) window
+/// title actually changed, and the sample is resolvable. An empty
+/// `app_name` means the OS couldn't name the owning app (overlays,
+/// screenshot UI, permission dialogs) — never a switch; the previous
+/// app's span simply continues. `None` previous state always emits.
 pub fn focus_changed(prev: Option<&(String, String)>, app_name: &str, window_title: &str) -> bool {
+    if app_name.is_empty() {
+        return false;
+    }
     match prev {
         None => true,
         Some((prev_app, prev_title)) => prev_app != app_name || prev_title != window_title,
@@ -276,6 +282,17 @@ mod tests {
         assert!(focus_changed(Some(&prev), "Terminal", "keel — docs"));
         assert!(focus_changed(Some(&prev), "Safari", "other tab"));
         assert!(focus_changed(None, "Safari", "keel — docs"));
+    }
+
+    #[test]
+    fn focus_changed_never_fires_for_an_unresolvable_app() {
+        // Empty app_name = the OS couldn't resolve the owning app
+        // (overlays, screenshot UI, permission dialogs) — not a switch.
+        // Emitting it would fabricate phantom switches around the real
+        // app and poison switch-rate baselines.
+        let prev = ("Brave Browser".to_string(), "".to_string());
+        assert!(!focus_changed(Some(&prev), "", ""));
+        assert!(!focus_changed(None, "", "anything"));
     }
 
     // ── switch closes the previous focus span ───────────────────
