@@ -1,3 +1,13 @@
+---
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:c0402086b8a6f140093623a53cb975b0d55641debb7cbc3af7a52ac2325341aa
+  docFilename: attention-research-basis.md
+  stampedAt: 2026-06-12T14:13:49.017096Z
+  signature: ed25519:aL9kx2/gobQSa0qaG45Ptw3fCY/kWKGhhE4mpQ/iDRlwj870Gam78L1LO9K2CdJtQGEBtd4S5LWr2x86nfzJAg==
+---
 # Attention Research — design basis for keel
 
 **Date:** 2026-06-01

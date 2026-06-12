@@ -7,12 +7,15 @@ A pnpm monorepo with two surfaces (browser extension + desktop app) sharing a pu
 ```
 keel/
 ├── apps/
+│   ├── agent/            # Claude Code surface (@keel/agent) — focus gate + activity-log writer; ships as plugin
 │   ├── browser/          # Chrome extension (WXT) — attention shields
 │   └── desktop/          # macOS app (Tauri + React) — attention compass
 ├── packages/
 │   └── domain/           # Shared domain types (@keel/domain)
 └── package.json          # Workspace scripts
 ```
+
+Surfaces are named by the capability × surface grammar (keel agent / keel browser / keel desktop — see `docs/decisions/2026-06-12-keel-productization.md`). The agent surface is plain `// @ts-check` JS (no TS imports — it deploys standalone); its dev-mode deploy is symlinks from `~/.keel/`, its distribution is a Claude Code plugin (`apps/agent/.claude-plugin/`).
 
 ## Commands
 
