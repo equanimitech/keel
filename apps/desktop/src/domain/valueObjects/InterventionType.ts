@@ -1,7 +1,8 @@
 /**
  * InterventionType Value Object
  *
- * Re-exported from @keel/domain's UIPresentation type.
+ * Desktop-local since the 2026-06-12 intervention-layer retirement
+ * (was @keel/domain's UIPresentation; this frozen surface absorbed it).
  * Defines how desktop interventions present themselves to the user.
  *
  * - "notification": System notification (BCT 7.1: Prompts/cues)
@@ -9,6 +10,4 @@
  * - "stain": Visual overlay (BCT 14.2: Punishment) - disabled by default
  * - "dialog": Interactive dialog (BCT 1.8: Behavioral contract)
  */
-import type { UIPresentation } from "@keel/domain";
-
-export type InterventionType = UIPresentation;
+export type InterventionType = "notification" | "compass" | "stain" | "dialog";

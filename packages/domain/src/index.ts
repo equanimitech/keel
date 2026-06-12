@@ -1,8 +1,11 @@
 /**
  * @keel/domain — Shared domain types for the keel platform.
  *
- * Pure types. No runtime dependencies. No framework coupling.
- * Both surfaces (desktop + browser) import from this package.
+ * The log is the product: one append-only ActivityEvent stream per
+ * surface, one event grammar (docs/event-taxonomy.md), read-side
+ * derivations later (slice E). The intervention layer was retired on
+ * 2026-06-12 (docs/decisions/2026-06-12-retire-the-intervention-layer-…)
+ * — it returns as a separate module (P5) built on personal baselines.
  *
  * Design rules:
  * - Vanilla TypeScript only (no fp-ts, no React, no Tauri, no Chrome APIs)
@@ -24,51 +27,3 @@ export {
   createDomain,
   createAppName,
 } from "./value-objects.js";
-
-// ── Behavioral Science ──────────────────────────────────────────
-export type {
-  BehavioralMechanism,
-  UIPresentation,
-  BCTReference,
-  PDPReference,
-  InterventionMetadata,
-} from "./behavior.js";
-
-// ── Intervention ────────────────────────────────────────────────
-export type {
-  InterventionClassification,
-  InterventionDefinition,
-  InterventionRegistry,
-} from "./intervention.js";
-
-// ── Trigger ─────────────────────────────────────────────────────
-export type { TriggerCondition } from "./trigger.js";
-export {
-  createImmediateTrigger,
-  createDelayedTrigger,
-  createThresholdTrigger,
-  createBudgetTrigger,
-} from "./trigger.js";
-
-// ── Budget ──────────────────────────────────────────────────────
-export type {
-  SessionUnit,
-  BudgetDimension,
-  BudgetDefinition,
-  DimensionConsumption,
-  BudgetConsumption,
-} from "./budget.js";
-export {
-  createBudgetDefinition,
-  computeOverallProgress,
-} from "./budget.js";
-
-// ── Session ─────────────────────────────────────────────────────
-export type {
-  SessionType,
-  SessionStatus,
-  SessionContext,
-} from "./session.js";
-
-// ── Drift ───────────────────────────────────────────────────────
-export type { DriftAction, DriftSignal } from "./drift.js";

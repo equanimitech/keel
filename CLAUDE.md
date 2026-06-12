@@ -8,7 +8,7 @@ A pnpm monorepo with two surfaces (browser extension + desktop app) sharing a pu
 keel/
 ├── apps/
 │   ├── agent/            # Claude Code surface (@keel/agent) — focus gate + activity-log writer; ships as plugin
-│   ├── browser/          # Chrome extension (WXT) — attention shields
+│   ├── browser/          # Chrome extension (WXT) — activity writer + per-domain sensors
 │   ├── desktop/          # macOS app (Tauri + React) — attention compass (frozen; demoted per observability roadmap)
 │   └── tray/             # macOS menubar-only app (Tauri, no windows) — desktop activity-log writer
 ├── packages/
@@ -58,6 +58,6 @@ Rules:
 
 Dependencies flow inward: Domain -> Application -> Infrastructure -> UI.
 
-- **`packages/domain`**: canonical shared types (value objects, behavioral science, interventions, triggers, budgets, sessions, drift)
-- **`apps/browser`**: browser-specific shield/signal runtime built on shared types
-- **`apps/desktop`**: full DDD architecture (aggregates, entities, services, repositories) extending shared types with fp-ts
+- **`packages/domain`**: the ActivityEvent log substrate + value objects + the event-taxonomy contract (`packages/domain/docs/event-taxonomy.md`). The intervention layer was retired 2026-06-12 (see `docs/decisions/`) — it returns as a separate module (P5) built on personal baselines.
+- **`apps/browser`**: activity writer (coarse events) + watchlist-gated per-domain sensors (key-action completions) + the blocklist drogue (commitment device — the retirement's lone survivor)
+- **`apps/desktop`**: full DDD architecture (frozen; absorbed its intervention value objects locally on retirement)

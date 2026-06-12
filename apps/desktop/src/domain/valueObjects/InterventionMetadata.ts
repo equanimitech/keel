@@ -1,30 +1,46 @@
 import { InterventionType } from "./InterventionType";
-import type {
-  BCTReference,
-  PDPReference,
-  InterventionMetadata,
-} from "@keel/domain";
 
 /**
  * InterventionMetadata Value Object
  *
- * Types imported from @keel/domain. The INTERVENTION_METADATA registry
- * is desktop-specific — it maps each desktop InterventionType to its
- * BCT/PDP specification.
+ * Desktop-local since the 2026-06-12 intervention-layer retirement
+ * (BCT/PDP types were @keel/domain's behavior.ts; this frozen surface
+ * absorbed them). The INTERVENTION_METADATA registry is desktop-specific
+ * — it maps each desktop InterventionType to its BCT/PDP specification.
  *
  * NOTE: This metadata is for internal documentation only, not exposed in UI.
  * It serves as a reference for developers and enables future features
  * (e.g., "explain why this works" tooltips).
  */
 
-// Re-export shared types for consumers that import from this file
-export type { BCTReference, PDPReference };
+/** Reference to a specific Behavior Change Technique (BCT Taxonomy v1,
+ * Michie et al. 2013). */
+export interface BCTReference {
+  /** Taxonomy code, e.g., "7.1" */
+  readonly code: string;
+  /** Technique name, e.g., "Prompts/cues" */
+  readonly name: string;
+  /** Grouping category, e.g., "Associations" */
+  readonly grouping: string;
+}
 
-/**
- * Desktop-specific alias for InterventionMetadata.
- * Consumers in this app reference this as InterventionSpec.
- */
-export type InterventionSpec = InterventionMetadata;
+/** Reference to a Persuasive Design Principle (Oinas-Kukkonen & Harjumaa). */
+export interface PDPReference {
+  readonly name: string;
+  readonly category:
+    | "Primary Task"
+    | "Dialogue"
+    | "System Credibility"
+    | "Social Support";
+}
+
+/** Scientific metadata for an intervention — why it works, as a BCT. */
+export interface InterventionSpec {
+  readonly bcts: readonly BCTReference[];
+  readonly pdps: readonly PDPReference[];
+  readonly mechanismsOfAction: readonly string[];
+  readonly description: string;
+}
 
 /**
  * Intervention metadata registry

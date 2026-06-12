@@ -75,6 +75,10 @@ derived by inactivity timeout over the merged log. Writers never claim bouts.
 ## Reserved kinds (named now, emitted later)
 
 - ESM channel: `probe_shown`, `probe_answered` (~2/h max, one 5-point item).
+- Self-report panic: `panic_pressed` — a user-initiated "I'm spiraling"
+  tap (the old self-invoked cooldowns, reborn as pure observation). The
+  strongest vulnerability label the log can carry: self-anchored, in the
+  moment, no inference needed.
 - Intervention outcomes (P5): `intervention_shown`, `intervention_dismissed`,
   `intervention_clicked_through`, `intervention_effective`.
 - Desktop input sensor: `input_activity` (counts + interval aggregates per

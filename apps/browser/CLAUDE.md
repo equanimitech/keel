@@ -1,14 +1,13 @@
 # keel Browser - Development Guide
 
-**A Chrome extension providing attention shields using WXT (WebExtension Toolkit)**
+**A Chrome extension (WXT) that observes — activity writer + per-domain sensors + the blocklist drogue.**
 
 Part of the [keel monorepo](../../CLAUDE.md). Run from root with `pnpm dev:browser` or locally with `pnpm dev`.
 
----
-
-## Shared Domain
-
-Types from `@keel/domain` provide canonical intervention classification, behavioral mechanisms, budget dimensions, and trigger conditions. Browser-specific runtime logic (shield definitions, signal definitions, content script behavior) stays in this app.
+The shield/signal/budget intervention layer was retired on 2026-06-12
+(`docs/decisions/2026-06-12-retire-the-intervention-layer-….md`). This surface
+is pure observability until interventions return as a separate module (P5),
+measured against the baselines this writer accumulates.
 
 ---
 
@@ -16,78 +15,54 @@ Types from `@keel/domain` provide canonical intervention classification, behavio
 
 ```
 apps/browser/
-├── entrypoints/                    # WXT entrypoints (content scripts + UI)
-│   ├── background.ts               # Service worker — badge state, messaging
-│   ├── popup/                       # Extension popup UI
-│   ├── manage/                      # Full-page settings UI
-│   ├── youtube-shorts.content/      # Content script per shield
-│   ├── youtube-cooldown.content/
-│   └── ...
-├── modules/                         # Domain logic registries
-│   ├── shields/                     # Shield definitions + registry
-│   │   ├── types.ts                 # ShieldDefinition interface
-│   │   ├── registry.ts              # All shields exported
-│   │   └── <name>/definition.ts     # Individual shield config
-│   ├── signals/                     # Signal definitions
-│   │   ├── types.ts                 # SignalDefinition interface
-│   │   ├── registry.ts
-│   │   └── <name>/definition.ts
-│   └── budgets/                     # Budget types (re-exported from @keel/domain)
-│       └── types.ts
-├── utils/                           # Shared utilities (storage helpers)
-└── public/                          # Static assets (icons, manifest)
+├── entrypoints/
+│   ├── background.ts                # SW — activity writer + drogue DNR sync
+│   ├── popup/                       # Status only (event count, watchlist size)
+│   ├── manage/                      # Watchlist + drogue blocklist + log export
+│   ├── block/                       # Drogue block page
+│   ├── youtube-sensor.content/      # video_started / video_ended
+│   ├── chess-sensor.content/        # game_finished {result}
+│   └── linkedin-sensor.content/     # post_seen {promoted}
+├── modules/
+│   ├── activity/                    # Writer: events.ts (pure) + writer.ts (chrome.*) + log.ts (IndexedDB)
+│   ├── sensors/                     # events.ts (pure validation/gate) + send.ts (content-script channel)
+│   ├── watchlist/                   # observe-tier mirror (chrome.storage)
+│   └── drogues/blocklist/           # Commitment device (seed + user, DNR) — the survivor
 ```
 
-Each shield has two parts:
-1. **Definition** in `modules/shields/<name>/definition.ts` — metadata, toggle key, default state
-2. **Content script** in `entrypoints/<name>.content/` — runtime behavior injected into pages
+Event vocabulary and grammar: `packages/domain/docs/event-taxonomy.md`. The
+writer emits coarse events for every domain (tab switches, navigations,
+focus/idle spans); sensors add key-action completions only for domains on the
+watchlist's observe tier.
 
----
+## The hostile-page boundary
 
-## Adding a New Shield
+Sensor content scripts are untrusted. The background:
+- accepts only allowlisted kinds (`modules/sensors/events.ts` SENSOR_KINDS),
+- reduces payloads to capped scalars,
+- derives `domain` from the browser-attested `sender.tab.url` — never the message,
+- writes nothing unless `sensorAllowed(domain, observe)`.
 
-1. Create `modules/shields/<name>/definition.ts` exporting a `ShieldDefinition`
-2. Register it in `modules/shields/registry.ts`
-3. Create `entrypoints/<name>.content/index.ts` with the content script logic
-4. Add `entrypoints/<name>.content/style.css` for injected styles
-5. The content script reads its enabled state from `chrome.storage` via the definition's storage key
+## Adding a sensor
 
----
+1. Add the key-action kind to `SENSOR_KINDS` (completion grammar: past tense).
+2. Create `entrypoints/<domain>-sensor.content/index.ts` — detect the page
+   state change, `sendSensorEvent(kind, payload)`. Fail-open; never break the page.
+3. Domains opt in via the watchlist (manage page) — sensors never self-enable.
 
-## Adding a New Signal
+## Privacy posture (load-bearing)
 
-1. Create `modules/signals/<name>/definition.ts` exporting a `SignalDefinition`
-2. Register it in `modules/signals/registry.ts`
-3. Create a corresponding content script entrypoint if the signal needs page injection
-
----
+- Payloads carry **domains only** — never full URLs, never page titles.
+- Counts and timings, never content.
+- Everything stays in extension-local IndexedDB until the manual JSONL export.
 
 ## Commands
 
 ```bash
-# Development (from monorepo root)
-pnpm dev:browser
-
-# Development (from apps/browser/)
-pnpm dev
-
-# Production build
-pnpm build
-
-# Type check (from monorepo root)
-pnpm typecheck
+pnpm dev          # WXT dev server (run from apps/browser)
+pnpm build        # production build
+pnpm test         # vitest (pure modules)
+pnpm typecheck    # tsc --noEmit
 ```
 
----
-
-## Key Conventions
-
-- Storage keys follow pattern: `shield:<name>:enabled`, `signal:<name>:enabled`
-- Content scripts use `defineContentScript()` from WXT
-- Each content script targets specific URL patterns via `matches`
-- Shields modify the DOM; signals observe and report
-- All module types reference `BehavioralMechanism` from `@keel/domain`
-
----
-
-- Never run the development. I'll run it myself.
+- Never run the dev server. The user runs it manually.
