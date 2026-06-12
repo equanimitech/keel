@@ -323,6 +323,9 @@ fn spawn_sensors(app: AppHandle) {
 
 pub fn run() {
     tauri::Builder::default()
+        // One writer per machine: a second launch exits immediately
+        // instead of duplicating every event in the log.
+        .plugin(tauri_plugin_single_instance::init(|_app, _args, _cwd| {}))
         .setup(|app| {
             // Menubar-only: no dock icon (LSUIElement covers the bundle;
             // this covers `tauri dev`).
