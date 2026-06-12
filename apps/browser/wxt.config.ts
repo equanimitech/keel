@@ -36,7 +36,9 @@ export default defineConfig({
     //     request contents, URLs-as-data, or page bodies.
     //   • storage is local (chrome.storage.local) — no sync, no server.
     // Only egress anywhere in keel is the user's own BYOK authoring call.
-    permissions: ["storage", "tabs", "activeTab", "declarativeNetRequest"],
+    // "idle" powers the activity writer's browser_idle/browser_active
+    // events (120s detection interval) — still no host permissions.
+    permissions: ["storage", "tabs", "activeTab", "declarativeNetRequest", "idle"],
     // Single shared instance in incognito so the porn Drogue's block holds
     // there too (where porn is most often browsed). The user must still flip
     // "Allow in incognito" once — see README. Shared storage = one source of

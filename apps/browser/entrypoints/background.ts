@@ -3,6 +3,7 @@ import { signals } from "@/modules/signals/registry";
 import { shieldEnabled, signalEnabled, domainCooldown } from "@/utils/storage";
 import { userBlockedDomains } from "@/modules/drogues/blocklist/store";
 import { syncBlocklistRules } from "@/modules/drogues/blocklist/sync";
+import { startActivityWriter } from "@/modules/activity/writer";
 
 /**
  * Background service worker.
@@ -47,6 +48,10 @@ const cooldownStores = allDomains.map((d) => ({
 }));
 
 export default defineBackground(() => {
+  // ── Activity writer: persist browser attention events (slice C) ──
+  // Registered synchronously so MV3 event wakeups re-attach listeners.
+  startActivityWriter();
+
   // ── Blocklist Drogue: keep DNR dynamic rules in sync with the store ──
   // chrome.storage.local is the source of truth; project it onto dynamic
   // rules on startup and on every change (add/remove from the manage page).

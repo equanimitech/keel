@@ -1,0 +1,123 @@
+/**
+ * Activity writer — chrome.* wiring for the browser surface.
+ *
+ * Runs in the background SERVICE WORKER only. No event data ever
+ * originates from page-context content scripts (hostile-page boundary),
+ * and nothing here makes a network call — events are persisted to
+ * extension-local IndexedDB (see `log.ts`) until the desktop relay exists.
+ *
+ * sessionId rotates with the service-worker lifetime: each cold start of
+ * the worker generates a fresh uuid and logs "browser_session_start".
+ */
+
+import {
+  IDLE_DETECTION_SECONDS,
+  buildBrowserEvent,
+  domainFromUrl,
+  excessEventCount,
+  focusTransition,
+  idleKind,
+  shouldLogNavigation,
+} from "./events";
+import { appendEvent, countEvents, deleteOldestEvents } from "./log";
+
+type WriteFn = (
+  kind: string,
+  payload?: Readonly<Record<string, unknown>>
+) => void;
+
+/**
+ * Register all attention-event listeners. Must be called synchronously
+ * from the background entrypoint so MV3 event-driven wakeups re-attach.
+ */
+export function startActivityWriter(): void {
+  const sessionId = crypto.randomUUID();
+
+  const write: WriteFn = (kind, payload) => {
+    // Fail-open: appendEvent swallows storage errors; a dropped event
+    // must never break the shields.
+    void appendEvent(
+      buildBrowserEvent({
+        id: crypto.randomUUID(),
+        kind,
+        ts: Date.now(),
+        sessionId,
+        payload,
+      })
+    );
+  };
+
+  // New service-worker lifetime → new browser session.
+  write("browser_session_start");
+
+  // Retention guard: cap the store at MAX_LOG_EVENTS on startup.
+  void runRetentionGuard(write);
+
+  // ── Tab activation ────────────────────────────────────────────
+  const lastDomainByTab = new Map<number, string>();
+
+  browser.tabs.onActivated.addListener(({ tabId }) => {
+    browser.tabs
+      .get(tabId)
+      .then((tab) => {
+        const domain = tab.url === undefined ? null : domainFromUrl(tab.url);
+        if (domain !== null) {
+          write("tab_activated", { domain });
+          lastDomainByTab.set(tabId, domain);
+        }
+      })
+      .catch(() => {
+        // Tab vanished between event and lookup — drop, fail-open.
+      });
+  });
+
+  // ── Navigation (domain changes only, never per-SPA-path) ──────
+  browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+    if (changeInfo.url === undefined) {
+      return;
+    }
+    const nextDomain = domainFromUrl(changeInfo.url);
+    const previousDomain = lastDomainByTab.get(tabId) ?? null;
+    if (shouldLogNavigation(previousDomain, nextDomain)) {
+      write("navigation_committed", { domain: nextDomain });
+    }
+    if (nextDomain === null) {
+      lastDomainByTab.delete(tabId);
+    } else {
+      lastDomainByTab.set(tabId, nextDomain);
+    }
+  });
+
+  browser.tabs.onRemoved.addListener((tabId) => {
+    lastDomainByTab.delete(tabId);
+  });
+
+  // ── Window focus (blur = left the browser entirely) ───────────
+  let browserFocused = true;
+
+  browser.windows.onFocusChanged.addListener((windowId) => {
+    const isFocused = windowId !== browser.windows.WINDOW_ID_NONE;
+    const kind = focusTransition(browserFocused, isFocused);
+    browserFocused = isFocused;
+    if (kind !== null) {
+      write(kind);
+    }
+  });
+
+  // ── Idle state ─────────────────────────────────────────────────
+  browser.idle.setDetectionInterval(IDLE_DETECTION_SECONDS);
+  browser.idle.onStateChanged.addListener((state) => {
+    write(idleKind(state), { state });
+  });
+}
+
+async function runRetentionGuard(write: WriteFn): Promise<void> {
+  const total = await countEvents();
+  const excess = excessEventCount(total);
+  if (excess > 0) {
+    const deleted = await deleteOldestEvents(excess);
+    if (deleted > 0) {
+      write("log_pruned", { count: deleted });
+    }
+  }
+}
