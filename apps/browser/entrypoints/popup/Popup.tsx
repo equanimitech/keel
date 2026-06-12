@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, CardContent } from "@keel/ui";
-import { countEvents } from "@/modules/activity/log";
+import { buildBrowserEvent } from "@/modules/activity/events";
+import { appendEvent, countEvents } from "@/modules/activity/log";
 import { observeDomains } from "@/modules/watchlist/store";
 
 /**
@@ -13,6 +14,21 @@ import { observeDomains } from "@/modules/watchlist/store";
 export function Popup() {
   const [eventCount, setEventCount] = useState<number | null>(null);
   const [observed, setObserved] = useState<number | null>(null);
+  const [panicLogged, setPanicLogged] = useState(false);
+
+  // The old self-invoked cooldowns, reborn as pure observation: a
+  // panic press is a self-anchored vulnerability label (the strongest
+  // ground truth the log can carry). It logs; it blocks nothing.
+  const logPanic = (): void => {
+    void appendEvent(
+      buildBrowserEvent({
+        id: crypto.randomUUID(),
+        kind: "panic_pressed",
+        ts: Date.now(),
+        sessionId: "",
+      })
+    ).then(() => setPanicLogged(true));
+  };
 
   useEffect(() => {
     countEvents()
@@ -51,6 +67,10 @@ export function Popup() {
       <p className="popup-note">
         Everything stays on this machine. Raw events, domains only.
       </p>
+
+      <Button variant="secondary" onClick={logPanic} disabled={panicLogged}>
+        {panicLogged ? "noted — it's in the log" : "step back (log this moment)"}
+      </Button>
 
       <Button
         onClick={() => {
