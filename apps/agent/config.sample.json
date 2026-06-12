@@ -1,20 +1,49 @@
 {
   "targets": {
     "claude-code": {
-      "driver": { "kind": "wind-down", "windDown": "22:30", "hardStop": "00:00", "reset": "05:00", "backstop": "03:00" },
+      "driver": {
+        "kind": "wind-down",
+        "windDown": "22:30",
+        "hardStop": "00:00",
+        "reset": "05:00",
+        "backstop": "03:00"
+      },
       "rules": [
         {
           "notch": "block",
-          "engagesAt": 1.0,
+          "engagesAt": 1,
           "arming": "breakpoint",
           "maxGraceMin": 10,
-          "tools": ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"],
-          "allowPaths": ["~/journals", "~/.keel"]
+          "tools": [
+            "Edit",
+            "Write",
+            "MultiEdit",
+            "NotebookEdit",
+            "Bash"
+          ],
+          "allowPaths": [
+            "~/journals",
+            "~/.keel"
+          ]
         }
       ],
-      "orient": { "bellAfterMin": 120, "sessionGapMin": 30 },
-      "skipBudget": { "perMonth": 2, "cap": 3 },
-      "vice": { "windows": [{ "from": "23:00", "to": "05:00" }], "reassertEveryMin": 5 },
+      "orient": {
+        "bellAfterMin": 120,
+        "sessionGapMin": 30
+      },
+      "skipBudget": {
+        "perMonth": 2,
+        "cap": 3
+      },
+      "vice": {
+        "windows": [
+          {
+            "from": "23:00",
+            "to": "05:00"
+          }
+        ],
+        "reassertEveryMin": 5
+      },
       "voice": {
         "windDownNudge": "Winding down — favor landing open work over starting something big.",
         "lockdown": "Coding's parked until {reset}. Conversation's fine; spend a skip if it's truly worth it: `node ~/.keel/keel.mjs skip` ({credits} left).",
@@ -27,5 +56,9 @@
         }
       }
     }
+  },
+  "watchlist": {
+    "observe": [],
+    "windowed": []
   }
 }

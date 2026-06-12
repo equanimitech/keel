@@ -543,6 +543,37 @@ export function renderRules(t, configured = {}) {
   return lines.join("\n");
 }
 
+// ── Watchlist — the config spine (2026-06-12) ───────────────────
+// One self-authored list of domains replaces shield configs, the hosts
+// blocklist file, and per-domain sensor choices. Tiers:
+//   observe  → deep sensors on the browser surface (key actions)
+//   windowed → the vice-block schedule (hosts mechanism)
+// Neutral default: empty — keel never ships entries (the drogue's seed
+// blocklist is the lone, explicitly-consented exception).
+
+/** @typedef {{ observe: string[], windowed: string[] }} Watchlist */
+
+/** @param {any} [w] @returns {Watchlist} */
+export function mergeWatchlist(w = {}) {
+  return {
+    observe: Array.isArray(w?.observe) ? w.observe : [],
+    windowed: Array.isArray(w?.windowed) ? w.windowed : [],
+  };
+}
+
+/** Render the watchlist for `keel rules`. Observe domains print in full;
+ * windowed prints a COUNT only (those domains are sensitive — the list
+ * itself lives in the config file the user owns).
+ * @param {Watchlist} w @returns {string[]} */
+export function watchlistLines(w) {
+  if (w.observe.length === 0 && w.windowed.length === 0) {
+    return ["watchlist: empty — self-authored; add domains in ~/.keel/config.json (tiers: observe, windowed)"];
+  }
+  const observe = w.observe.length ? w.observe.join(", ") : "(none)";
+  const windowed = `${w.windowed.length} domain(s) under vice windows`;
+  return [`watchlist: observe: ${observe} · windowed: ${windowed}`];
+}
+
 /** The first-run contract, shown once at the first SessionStart. */
 export function consentLines() {
   return [

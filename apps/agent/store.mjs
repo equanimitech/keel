@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { mergeTarget, emptyState, logFileName, eventLine } from "./core.mjs";
+import { mergeTarget, mergeWatchlist, emptyState, logFileName, eventLine } from "./core.mjs";
 
 export const KEEL_DIR = join(homedir(), ".keel");
 export const TARGET_ID = "claude-code";
@@ -23,6 +23,13 @@ export function loadTarget(id = TARGET_ID) {
 export function loadRawTarget(id = TARGET_ID) {
   try { return JSON.parse(readFileSync(CONFIG_PATH, "utf8"))?.targets?.[id] ?? {}; }
   catch { return {}; }
+}
+
+/** The watchlist (config spine) — top-level in config.json, cross-target.
+ * @returns {import("./core.mjs").Watchlist} */
+export function loadWatchlist() {
+  try { return mergeWatchlist(JSON.parse(readFileSync(CONFIG_PATH, "utf8"))?.watchlist); }
+  catch { return mergeWatchlist(); }
 }
 
 /** @returns {import("./core.mjs").State} */

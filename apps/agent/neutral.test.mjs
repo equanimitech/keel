@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   toMin, frictionAt, mergeTarget, emptyState, DEFAULT_TARGET,
   reflectionLine, ritualNudge, targetHash, renderRules, consentLines,
+  mergeWatchlist, watchlistLines,
 } from "./core.mjs";
 
 const driver = { windDown: "23:30", hardStop: "01:00", reset: "05:00" };
@@ -105,4 +106,32 @@ test("consentLines state the contract: local log, never leaves, how to stop", ()
   assert.match(lines, /~\/.keel\/log/);
   assert.match(lines, /never leaves|stays on/i);
   assert.match(lines, /pause|remove|disable/i);
+});
+
+// ── watchlist (the config spine, 2026-06-12) ──────────────────
+
+test("mergeWatchlist defaults to empty tiers — keel never ships a list", () => {
+  assert.deepEqual(mergeWatchlist(), { observe: [], windowed: [] });
+  assert.deepEqual(mergeWatchlist({}), { observe: [], windowed: [] });
+  assert.deepEqual(
+    mergeWatchlist({ observe: ["youtube.com"] }),
+    { observe: ["youtube.com"], windowed: [] }
+  );
+});
+
+test("watchlistLines prints observe domains but only a COUNT for windowed (privacy)", () => {
+  const lines = watchlistLines({
+    observe: ["youtube.com", "chess.com"],
+    windowed: ["a.example", "b.example", "c.example"],
+  }).join("\n");
+  assert.match(lines, /youtube\.com/);
+  assert.match(lines, /chess\.com/);
+  assert.match(lines, /windowed.*3 domain/s);
+  assert.doesNotMatch(lines, /a\.example/);
+});
+
+test("watchlistLines says so when the list is empty", () => {
+  const lines = watchlistLines({ observe: [], windowed: [] }).join("\n");
+  assert.match(lines, /watchlist/);
+  assert.match(lines, /empty|none/i);
 });
