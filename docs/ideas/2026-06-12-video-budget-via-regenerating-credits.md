@@ -6,7 +6,14 @@ $signature:
   docHash: sha256:298eed1ff84c8b2c5b80aa6ed915428e8ad3d30097299e2d6f8f99104df255b0
   signedAt: 2026-06-12T18:05:09.841924Z
   signature: ed25519:HPNpetw6vd0SfgXL9Bz3ltdVnKhgDT/m9eWBKeXuLa2dE3m4jZweWnLZAFR/SIfqqKD1V/oYMf9dLxkkJfUnDw==
-type: idea
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:298eed1ff84c8b2c5b80aa6ed915428e8ad3d30097299e2d6f8f99104df255b0
+  docFilename: 2026-06-12-video-budget-via-regenerating-credits.md
+  stampedAt: 2026-06-12T18:13:45.452063Z
+  signature: ed25519:rWfBsZLR6YotiEJQYDafBRUY/FC+Skcc3JqUOcBs5PHgnBy2xRJmjxBFNyDX9+RbIQa4uCFlZ5gOi4njVPNcAw==
 ---
 # Video budget via regenerating credits
 
