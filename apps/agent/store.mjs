@@ -18,6 +18,13 @@ export function loadTarget(id = TARGET_ID) {
   return mergeTarget(cfg?.targets?.[id]);
 }
 
+/** The raw (unmerged) user config for one target — provenance for `keel rules`.
+ * @returns {any} */
+export function loadRawTarget(id = TARGET_ID) {
+  try { return JSON.parse(readFileSync(CONFIG_PATH, "utf8"))?.targets?.[id] ?? {}; }
+  catch { return {}; }
+}
+
 /** @returns {import("./core.mjs").State} */
 export function loadState() {
   try { return { ...emptyState(), ...JSON.parse(readFileSync(STATE_PATH, "utf8")) }; }

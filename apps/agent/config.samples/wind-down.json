@@ -1,0 +1,14 @@
+{
+  "targets": {
+    "claude-code": {
+      "driver": { "kind": "wind-down", "windDown": "23:00", "hardStop": "01:00", "reset": "05:00", "backstop": "03:00" },
+      "skipBudget": { "perMonth": 2, "cap": 3 },
+      "vice": { "windows": [{ "from": "23:00", "to": "05:00" }], "reassertEveryMin": 5 },
+      "voice": {
+        "windDownNudge": "Wind-down window — a good moment to land open work.",
+        "lockdown": "Coding tools are paused until {reset} — your own schedule. Spend a skip if it matters: `keel skip` ({credits} left).",
+        "reflection": "[keel] {held} of the last {n} session night(s) closed on schedule. {credits} skip credit(s) this month."
+      }
+    }
+  }
+}

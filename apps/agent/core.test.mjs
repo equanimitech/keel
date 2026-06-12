@@ -101,7 +101,7 @@ test("reflection counts observed nights, held = no skip (honest label)", () => {
   const last = lastNNights(s, driver, now, 7);
   assert.equal(last.length, 2);
   assert.equal(last.filter((x) => x.held).length, 1);
-  assert.match(reflectionLine({ ...s, credits: 2 }, mergeTarget({}), now), /1 of the last 2 late night/);
+  assert.match(reflectionLine({ ...s, credits: 2 }, mergeTarget({}), now), /1 of the last 2 session night/);
 });
 
 test("parseParkTarget: wall-clock and durations", () => {
@@ -144,10 +144,9 @@ test("renderOrient: silent by day, voiced otherwise", () => {
   const t = mergeTarget({});
   assert.equal(renderOrient(t, "day", emptyState(), now), "");
   const wd = renderOrient(t, "wind_down", { ...emptyState(), lastPromptTs: now, sessionStartTs: now }, now);
-  assert.match(wd, /\[keel\].*winding down|landing/i);
+  assert.match(wd, /\[keel\].*wind-down|land(ing)? open work/i);
   assert.match(wd, /high-level/); // wind-down granularity nudge
   const locked = renderOrient(t, "lockdown", { ...emptyState(), skipUntilTs: 0, lastPromptTs: now }, now);
-  assert.match(locked, /parked until 05:00/);
-  assert.match(locked, /Instead:/); // substitution included
+  assert.match(locked, /paused until 05:00/);
   assert.match(locked, /Coarsest only/); // lockdown granularity nudge
 });

@@ -11,9 +11,9 @@ import {
   setAppetite, normalizeAppetite, activeAppetite, appetiteLine, APPETITE_LEVELS,
   viceWindows, viceScheduledAt, viceShouldBlock, setVicePact, spendViceSkip,
   viceSkipActive, vicePactActive, isAllowedPath,
-  buildEvent, capPayload, summarizeEvents, matchDispatch,
+  buildEvent, capPayload, summarizeEvents, matchDispatch, targetHash, renderRules, consentLines,
 } from "./core.mjs";
-import { loadTarget, loadState, saveState, readStdin, TARGET_ID, KEEL_DIR, LOG_DIR, appendEvent, readEvents } from "./store.mjs";
+import { loadTarget, loadRawTarget, loadState, saveState, readStdin, TARGET_ID, KEEL_DIR, LOG_DIR, appendEvent, readEvents } from "./store.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -119,11 +119,23 @@ async function handleSessionStart(now) {
   logHookEvent("session_start", now, input);
   const target = loadTarget();
   let state = refillCredits(loadState(), target, monthKey(now));
+  // Rules observability: any change to the effective rules becomes a logged event.
+  const hash = targetHash(target);
+  if (state.lastRuleHash !== hash) {
+    logHookEvent("rule_changed", now, input, { extra: { keel_rule_hash: hash, keel_prev_hash: state.lastRuleHash || "" } });
+    state = { ...state, lastRuleHash: hash };
+  }
+  // First-run contract: shown exactly once, before anything else.
+  let consent = [];
+  if (!state.consentShownTs) {
+    consent = consentLines();
+    state = { ...state, consentShownTs: now };
+  }
   const reflection = reflectionLine(state, target, now);
-  const nudge = ritualNudge(state, now);
+  const nudge = ritualNudge(state, now, target.voice);
   if (nudge) state = { ...state, lastRitualNudge: nudge.mark };
   saveState(state);
-  return emitText([reflection, nudge?.line, intentionLine(state, now), appetiteLine(state, now)].filter(Boolean).join("\n"));
+  return emitText([...consent, reflection, nudge?.line, intentionLine(state, now), appetiteLine(state, now)].filter(Boolean).join("\n"));
 }
 
 function cmdSkip(now) {
@@ -329,6 +341,11 @@ function cmdHud(now) {
   process.stdout.write(parts.join("  ·  "));
 }
 
+/** `keel rules` — the effective rules, with provenance per section. */
+function cmdRules() {
+  console.log(renderRules(loadTarget(), loadRawTarget()));
+}
+
 /** `keel log status` — today's per-kind counts + session liveness. The P1
  * data-quality seed: its job is to make silent writer death visible. */
 function cmdLog(now, sub = "status") {
@@ -355,6 +372,7 @@ async function main() {
     return process.exit(0);
   }
   if (cmd === "log") return cmdLog(now, sub);
+  if (cmd === "rules") return cmdRules();
   if (cmd === "skip") return cmdSkip(now);
   if (cmd === "park") return cmdPark(now, sub);
   if (cmd === "unpark") return cmdUnpark();
@@ -365,7 +383,7 @@ async function main() {
   if (cmd === "appetite") return cmdAppetite(now, sub);
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
-  console.log("usage: keel <hook pre-tool|user-submit|session-start | skip | park <HH:MM|15m> | unpark | signoff | vice <on|off|skip|status|panic> | intention [\"<focus>\"|clear] | appetite [tiny|small|normal|deep|clear] | status>");
+  console.log("usage: keel <hook pre-tool|user-submit|session-start | skip | park <HH:MM|15m> | unpark | signoff | vice <on|off|skip|status|panic> | intention [\"<focus>\"|clear] | appetite [tiny|small|normal|deep|clear] | rules | log status | status>");
 }
 
 main().catch(() => process.exit(0)); // fail-open

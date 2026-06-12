@@ -223,3 +223,28 @@ test("oversized stdin fields are capped in the logged payload", async () => {
   assert.equal(prompt.payload.prompt.bytes, 40_000);
   assert.ok(eventLine(prompt).length < 8192); // stays under the atomic-append bound
 });
+
+// ── first-run consent + rule_changed (slices 1–3 wiring) ──────
+
+test("first session-start shows the consent contract once, then never again", async () => {
+  const home = mkdtempSync(join(tmpdir(), "keel-home-"));
+  const first = runHook(home, "session-start", { session_id: "s-c1" });
+  assert.match(first, /First run — the contract/);
+  assert.match(first, /Nothing is sent anywhere/);
+  const second = runHook(home, "session-start", { session_id: "s-c2" });
+  assert.equal(/First run — the contract/.test(second), false);
+});
+
+test("session-start logs rule_changed when the effective rules hash moves", async () => {
+  const home = mkdtempSync(join(tmpdir(), "keel-home-"));
+  runHook(home, "session-start", { session_id: "s-r1" });
+  const cfgPath = join(home, ".keel", "config.json");
+  writeFileSync(cfgPath, JSON.stringify({ targets: { "claude-code": { driver: { windDown: "21:00" } } } }));
+  runHook(home, "session-start", { session_id: "s-r2" });
+  const file = join(home, ".keel", "log", logFileName(Date.now()));
+  const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  const changes = events.filter((e) => e.kind === "rule_changed");
+  assert.equal(changes.length, 2); // baseline snapshot + the edit
+  assert.notEqual(changes[0].payload.keel_rule_hash, changes[1].payload.keel_rule_hash);
+  assert.equal(changes[1].payload.keel_prev_hash, changes[0].payload.keel_rule_hash);
+});

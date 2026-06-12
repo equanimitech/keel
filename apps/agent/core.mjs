@@ -10,12 +10,12 @@
 /** @typedef {{ perMonth: number, cap: number }} SkipBudget */
 /** @typedef {{ bellAfterMin: number, sessionGapMin: number }} Orient */
 /** @typedef {{ windDown: string, lockdown: string }} Granularity */
-/** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, granularity: Granularity }} Voice */
+/** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, reflection: string, morningNudge: string, weeklyNudge: string, granularity: Granularity }} Voice */
 /** @typedef {{ from: string, to: string }} ViceWindow */
 /** @typedef {{ windows: ViceWindow[], reassertEveryMin: number }} Vice */
 /** @typedef {{ driver: Driver, rules: Rule[], orient: Orient, skipBudget: SkipBudget, voice: Voice, vice: Vice }} Target */
 /** @typedef {{ observed?: boolean, skipped?: boolean }} Night */
-/** @typedef {{ credits: number, creditsMonth: string, skipUntilTs: number, parkAtTs: number, viceUntilTs: number, viceSkipUntilTs: number, sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, intention: string, intentionDay: string, appetite: string, appetiteDay: string, nights: Record<string, Night> }} State */
+/** @typedef {{ credits: number, creditsMonth: string, skipUntilTs: number, parkAtTs: number, viceUntilTs: number, viceSkipUntilTs: number, sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, intention: string, intentionDay: string, appetite: string, appetiteDay: string, lastRuleHash: string, consentShownTs: number, nights: Record<string, Night> }} State */
 
 /** Clock pressure is capped strictly below the full-lockdown threshold (1.0): the
  * wall-clock ramp escalates wind-down nudges but NEVER hard-locks coding on its own.
@@ -29,14 +29,17 @@ export const DEFAULT_TARGET = {
             tools: ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"],
             allowPaths: ["~/journals", "~/.keel"] }],
   orient: { bellAfterMin: 120, sessionGapMin: 30 },
-  skipBudget: { perMonth: 2, cap: 3 },
+  skipBudget: { perMonth: 4, cap: 6 },
   voice: {
-    windDownNudge: "Winding down — favor landing open work over starting something big.",
-    lockdown: "Coding's parked until {reset}. Conversation's fine; spend a skip if it's truly worth it: `node ~/.keel/keel.mjs skip` ({credits} left).",
-    substitution: "Instead: jot tomorrow's first task, then sleep.",
+    windDownNudge: "Wind-down window — a good moment to land open work.",
+    lockdown: "Coding tools are paused until {reset} — your own schedule. Spend a skip if it matters: `keel skip` ({credits} left).",
+    substitution: "",
     consequence: "",
     identity: "",
-    signoffNudge: "At a checkpoint, close your open loops and seal the day — `/sign-off`.",
+    signoffNudge: "",
+    reflection: "[keel] {held} of the last {n} session night(s) closed on schedule. {credits} skip credit(s) this month.",
+    morningNudge: "",
+    weeklyNudge: "",
     granularity: {
       windDown: "Keep it high-level — summaries and next steps, not deep multi-file dives.",
       lockdown: "Coarsest only — one-line status + tomorrow's first step; no detail.",
@@ -50,7 +53,7 @@ export const DEFAULT_TARGET = {
 export const emptyState = () => ({
   credits: 0, creditsMonth: "", skipUntilTs: 0, parkAtTs: 0, viceUntilTs: 0, viceSkipUntilTs: 0,
   sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, lastRitualNudge: "", inferNudgedTs: 0,
-  intention: "", intentionDay: "", appetite: "", appetiteDay: "", nights: {},
+  intention: "", intentionDay: "", appetite: "", appetiteDay: "", lastRuleHash: "", consentShownTs: 0, nights: {},
 });
 
 /** Merge a partial target config over the defaults. @param {any} t @returns {Target} */
@@ -324,14 +327,13 @@ export const dayKey = (now) => {
  * at most one per day, only between 04:00 and 14:00 local. Returns { line, mark }
  * to emit (mark = the dayKey to persist as lastRitualNudge) or null to stay silent.
  * Pure — caller persists the mark. @param {State} state @param {number} now */
-export function ritualNudge(state, now) {
+export function ritualNudge(state, now, voice) {
   const dk = dayKey(now);
   if (state.lastRitualNudge === dk) return null;           // already nudged today
   const h = new Date(now).getHours();
   if (h < 4 || h >= 14) return null;                        // morning-ish window only
-  const line = new Date(now).getDay() === 1
-    ? "[keel] 🗓️ Monday — open the week with `/weekly-review` (areas · 7d/30d habits · tasks · repos)."
-    : "[keel] ☀️ Good morning. Start with `/morning` when you're ready.";
+  const line = new Date(now).getDay() === 1 ? (voice?.weeklyNudge || "") : (voice?.morningNudge || "");
+  if (!line) return null;                                   // silent unless the user configured rituals
   return { line, mark: dk };
 }
 
@@ -392,10 +394,13 @@ export function appetiteLine(state, now) {
 /** The SessionStart reflection (empty until there are observed nights).
  * @param {State} state @param {Target} target @param {number} now @returns {string} */
 export function reflectionLine(state, target, now) {
+  const tpl = target.voice.reflection;
+  if (!tpl) return "";
   const last = lastNNights(state, target.driver, now, 7);
   if (!last.length) return "";
   const held = last.filter((x) => x.held).length;
-  return `[keel] wound down on your own ${held} of the last ${last.length} late night(s). ${state.credits} skip credit(s) this month.`;
+  return fill(tpl, target, state)
+    .replaceAll("{held}", String(held)).replaceAll("{n}", String(last.length));
 }
 
 // ── Activity log (observability substrate — slice A) ────────────
@@ -489,4 +494,62 @@ export function matchDispatch(events, completed) {
     else if (e.kind === "tool_completed") stack.pop();
   }
   return stack.length ? stack[stack.length - 1] : null;
+}
+
+// ── Rules observability (slice A′) ──────────────────────────────
+// The rules are data; these make them inspectable and their changes loggable.
+
+/** Stable hash of the effective target — key-order-insensitive, value-sensitive.
+ * Pure FNV-1a over a canonically sorted JSON encoding. @param {Target} target */
+export function targetHash(target) {
+  const canon = (v) => {
+    if (Array.isArray(v)) return v.map(canon);
+    if (v && typeof v === "object") {
+      /** @type {Record<string, unknown>} */
+      const o = {};
+      for (const k of Object.keys(v).sort()) o[k] = canon(/** @type {any} */ (v)[k]);
+      return o;
+    }
+    return v;
+  };
+  const s = JSON.stringify(canon(target));
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(16).padStart(8, "0");
+}
+
+/** Render the effective rules with provenance: each section marked (custom)
+ * when the user's config touches it, (default) otherwise. The discoverability
+ * half of modifiability — a rule you don't know you can change is hardcoded.
+ * @param {Target} t @param {any} configured raw (unmerged) user config for provenance */
+export function renderRules(t, configured = {}) {
+  const src = (k) => (configured && configured[k] !== undefined ? "custom" : "default");
+  const lines = [
+    `keel rules — effective target (hash ${targetHash(t)})`,
+    `driver (${src("driver")}): kind=${t.driver.kind ?? "wind-down"} windDown=${t.driver.windDown} hardStop=${t.driver.hardStop} reset=${t.driver.reset}${t.driver.backstop ? ` backstop=${t.driver.backstop}` : ""}`,
+  ];
+  for (const r of t.rules) {
+    lines.push(`rule (${src("rules")}): ${r.notch} at f≥${r.engagesAt} · ${r.arming ?? "immediate"}${r.maxGraceMin ? ` (grace ${r.maxGraceMin}m)` : ""} · tools: ${r.tools.join(", ")}${r.allowPaths?.length ? ` · always-allowed paths: ${r.allowPaths.join(", ")}` : ""}`);
+  }
+  lines.push(`skipBudget (${src("skipBudget")}): ${t.skipBudget.perMonth}/month, cap ${t.skipBudget.cap}`);
+  lines.push(`orient (${src("orient")}): bell after ${t.orient.bellAfterMin}m · session gap ${t.orient.sessionGapMin}m`);
+  lines.push(`vice (${src("vice")}): ${t.vice.windows.length ? t.vice.windows.map((w) => `${w.from}→${w.to}`).join(", ") : "derived from driver night"}`);
+  const setVoice = Object.entries(t.voice).filter(([, v]) => typeof v === "string" && v).map(([k]) => k);
+  lines.push(`voice (${src("voice")}): ${setVoice.join(", ") || "(all silent)"}`);
+  lines.push(`edit: ~/.keel/config.json — changes apply at the next hook fire, no reload.`);
+  return lines.join("\n");
+}
+
+/** The first-run contract, shown once at the first SessionStart. */
+export function consentLines() {
+  return [
+    "[keel] First run — the contract:",
+    "[keel] · keel logs your Claude Code session events (prompts, tool calls, timings) to ~/.keel/log/ — plain JSONL you own.",
+    "[keel] · Everything stays on this machine. Nothing is sent anywhere, ever.",
+    "[keel] · Pause or remove anytime: disable the plugin (or delete the hooks block); your data stays yours.",
+    "[keel] · See your rules: `keel rules` · see your data: `keel log status`.",
+  ];
 }
