@@ -6,13 +6,14 @@ $signature:
   docHash: sha256:3b0e006f2ebbbab69be84d7ecbb783a9f6486fc29ece86abf5d12e1b92aa01d4
   signedAt: 2026-06-12T17:07:15.215803Z
   signature: ed25519:ICHxAU6UQv8G2YYAKn0FzZGZwE6chJmBGf1LJuwfl45eAKE1Ju4BSxirhIlsgbEMNf5LAjEwkqRPoxhErS4+Bw==
-appetite: medium
-hard_dependency: taxonomy pitch — sensor events are born grammar-conforming
-slice_id: sensors-restart
-source: docs/ideas/2026-06-12-shields-to-sensors-restart.md + 2026-06-12-unified-vice-list.md + retirement manifest (2026-06-12 alignment session)
-status: draft
-tag: pitch
-type: pitch
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:3b0e006f2ebbbab69be84d7ecbb783a9f6486fc29ece86abf5d12e1b92aa01d4
+  docFilename: 2026-06-12-sensors-restart-shields-out-watchlist-in-domain-purged.md
+  stampedAt: 2026-06-12T17:16:47.401946Z
+  signature: ed25519:1OJZqxkPnUGB4qv5yPM3hRFCKfBHiLuwof/33+PMA7vB9I70UJu4sQ9LnC72vySl45A/IbWNZmJLUms8TVqvCQ==
 ---
 
 # Pitch — Sensors restart: shields out, watchlist in, domain purged

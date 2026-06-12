@@ -6,13 +6,14 @@ $signature:
   docHash: sha256:5f963559037ca0f8031ec960251ecf39d03d35be09b955e618847334337983f0
   signedAt: 2026-06-12T17:07:32.910285Z
   signature: ed25519:QPgfusLmNTqT7hnAw4nk+41J1TmIy3A6LwhUnXunlRGEwDXUx/LoaQhBsGi/W+keyJvEVrFpuMdX6rZ17Z0oAQ==
-appetite: small
-hard_dependency: taxonomy pitch — input_activity conforms to the grammar
-slice_id: input-sensor
-source: docs/references/2026-06-12-attention-observability-literature.md §3.1 (Fogarty "Easy to Build" set; Züger CHI 2018) — academic-imports session
-status: draft
-tag: pitch
-type: pitch
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:5f963559037ca0f8031ec960251ecf39d03d35be09b955e618847334337983f0
+  docFilename: 2026-06-12-input-activity-sensor-counts-only-default-off.md
+  stampedAt: 2026-06-12T17:18:19.952192Z
+  signature: ed25519:fuc6ske/idErqyCftt6RqT0DN+imnXK9OrvQgnBHo/8Xj6gUBfKztP2Puj9kXDZxfB6EcNpnUs6FEmY1gJbABg==
 ---
 
 # Pitch — Input-activity sensor: counts only, default-off
