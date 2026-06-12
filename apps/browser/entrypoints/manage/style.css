@@ -501,3 +501,36 @@ input:checked + .slider::before {
   border-color: #dc2626;
   color: #dc2626;
 }
+
+/* ── Activity log export ─────────────────────────────────────────── */
+
+.log-export {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 28px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.log-export-btn {
+  appearance: none;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.log-export-btn:hover {
+  border-color: #a855f7;
+  color: #a855f7;
+}
+
+.log-export-status {
+  font-size: 12px;
+  opacity: 0.65;
+}

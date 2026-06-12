@@ -19,6 +19,8 @@ import {
   addDomain,
   removeDomain,
 } from "@/modules/drogues/blocklist/store";
+import { toJsonl, exportFileName } from "@/modules/activity/events";
+import { readAllEvents } from "@/modules/activity/log";
 import "./style.css";
 
 // ── Unified intervention type ─────────────────────────────────────
@@ -782,6 +784,41 @@ async function renderBlocklist(): Promise<void> {
 
   blocklistPanel.appendChild(list);
 }
+
+// ── Activity log export (transport stopgap until the desktop relay) ──
+// Local download only: a Blob URL on this extension page — no network.
+
+const exportBtn = document.getElementById(
+  "export-log-btn"
+) as HTMLButtonElement | null;
+const exportStatus = document.getElementById("export-log-status");
+
+async function exportLog(): Promise<void> {
+  if (!exportBtn || !exportStatus) {
+    return;
+  }
+  exportBtn.disabled = true;
+  exportStatus.textContent = "reading log…";
+  try {
+    const events = await readAllEvents();
+    const blob = new Blob([toJsonl(events)], {
+      type: "application/x-ndjson",
+    });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = exportFileName(Date.now());
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    exportStatus.textContent = `${events.length} events exported`;
+  } catch {
+    exportStatus.textContent = "export failed";
+  } finally {
+    exportBtn.disabled = false;
+  }
+}
+
+exportBtn?.addEventListener("click", () => void exportLog());
 
 // ── Init ──────────────────────────────────────────────────────────
 render();
