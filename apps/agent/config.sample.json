@@ -60,5 +60,8 @@
   "watchlist": {
     "observe": [],
     "windowed": []
+  },
+  "desktop": {
+    "inputActivity": false
   }
 }

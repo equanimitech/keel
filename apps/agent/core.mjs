@@ -574,6 +574,23 @@ export function watchlistLines(w) {
   return [`watchlist: observe: ${observe} · windowed: ${windowed}`];
 }
 
+// ── Desktop sensors (tray) — config-gated, default off ──────────
+
+/** @typedef {{ inputActivity: boolean }} DesktopSensors */
+
+/** @param {any} [d] @returns {DesktopSensors} */
+export function mergeDesktopSensors(d = {}) {
+  return { inputActivity: d?.inputActivity === true };
+}
+
+/** Render the desktop sensor toggles for `keel rules`.
+ * @param {DesktopSensors} d @returns {string[]} */
+export function desktopSensorLines(d) {
+  return [
+    `desktop sensors: inputActivity=${d.inputActivity ? "ON (counts per 3s bin, never content)" : "off (default)"}`,
+  ];
+}
+
 /** The first-run contract, shown once at the first SessionStart. */
 export function consentLines() {
   return [

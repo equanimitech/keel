@@ -33,7 +33,11 @@ Rules:
 - **desktop** (`apps/tray` — the body; the surface is keel desktop):
   `app_switched` (payload `app_name`, `window_title`, `is_full_screen`;
   `durationMs` = previous app's focus span), `idle_start` (payload
-  `thresholdMs`, ts backdated to last input), `idle_end` (+`durationMs`).
+  `thresholdMs`, ts backdated to last input), `idle_end` (+`durationMs`),
+  and — opt-in via `desktop.inputActivity` (default off) —
+  `input_activity` (one 30s rollup carrying per-3s-bin counts:
+  `keyDowns`/`mouseDowns`/`scrolls`/`mouseMoves`; counts only, never
+  keycodes or content; fully-idle windows are skipped, ≤2.9k events/day).
 - **browser** (`apps/browser`): `writer_started`, `tab_activated` (payload
   `domain`), `navigation_committed` (payload `domain`), `focus_start`/
   `focus_end` (browser holds OS focus), `idle_start`/`idle_end`
@@ -79,8 +83,6 @@ derived by inactivity timeout over the merged log. Writers never claim bouts.
 - ESM channel: `probe_shown`, `probe_answered` (~2/h max, one 5-point item).
 - Intervention outcomes (P5): `intervention_shown`, `intervention_dismissed`,
   `intervention_clicked_through`, `intervention_effective`.
-- Desktop input sensor: `input_activity` (counts + interval aggregates per
-  bin — never keycodes, never content; default-off).
 
 ## Legacy alias map (read-side; raw files are never rewritten)
 

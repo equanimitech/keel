@@ -27,6 +27,50 @@ use domain::IdleTransition;
 /// Sensor poll cadence (~1–2s, like the desktop app's window tracking).
 const POLL_INTERVAL: Duration = Duration::from_millis(1500);
 
+/// Input-activity sensor: 2 polls per 3s bin, 20 polls per 30s rollup.
+const INPUT_POLLS_PER_BIN: usize = 2;
+const INPUT_POLLS_PER_ROLLUP: usize = 20;
+const INPUT_BIN_MS: u64 = 3_000;
+
+// ── CoreGraphics HID event counters (counts only — the API cannot
+// expose keycodes or content; verified to read without the Input
+// Monitoring permission, macOS 15, 2026-06-12 spike) ────────────────
+#[link(name = "CoreGraphics", kind = "framework")]
+extern "C" {
+    fn CGEventSourceCounterForEventType(state_id: u32, event_type: u32) -> u32;
+}
+
+const HID_SYSTEM_STATE: u32 = 1; // kCGEventSourceStateHIDSystemState
+const ET_LEFT_MOUSE_DOWN: u32 = 1; // kCGEventLeftMouseDown
+const ET_MOUSE_MOVED: u32 = 5; // kCGEventMouseMoved
+const ET_KEY_DOWN: u32 = 10; // kCGEventKeyDown
+const ET_SCROLL_WHEEL: u32 = 22; // kCGEventScrollWheel
+
+/// `[keyDown, mouseDown, scroll, mouseMoved]` counters since boot.
+fn read_input_counters() -> [u32; 4] {
+    unsafe {
+        [
+            CGEventSourceCounterForEventType(HID_SYSTEM_STATE, ET_KEY_DOWN),
+            CGEventSourceCounterForEventType(HID_SYSTEM_STATE, ET_LEFT_MOUSE_DOWN),
+            CGEventSourceCounterForEventType(HID_SYSTEM_STATE, ET_SCROLL_WHEEL),
+            CGEventSourceCounterForEventType(HID_SYSTEM_STATE, ET_MOUSE_MOVED),
+        ]
+    }
+}
+
+/// Explicit opt-in, re-read once per rollup so a config flip applies
+/// without restarting the tray. Missing file/key = off.
+fn input_sensor_opted_in() -> bool {
+    let path = dirs_home().join(".keel").join("config.json");
+    std::fs::read_to_string(path)
+        .map(|s| domain::input_sensor_enabled(&s))
+        .unwrap_or(false)
+}
+
+fn dirs_home() -> PathBuf {
+    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default()
+}
+
 const MACOS_PRIVACY_SETTINGS_URL: &str =
     "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture";
 
@@ -156,19 +200,57 @@ fn spawn_sensors(app: AppHandle) {
         let mut last_focus: Option<(String, String)> = None;
         let mut focus_since: Option<u64> = None;
         let mut idle_since: Option<u64> = None;
+        let mut input_enabled = input_sensor_opted_in();
+        let mut input_prev: Option<[u32; 4]> = None;
+        let mut input_deltas: Vec<[u64; 4]> = Vec::new();
+        let mut ticks: usize = 0;
 
         loop {
             thread::sleep(POLL_INTERVAL);
             let logger = app.state::<Logger>();
             if logger.paused.load(Ordering::SeqCst) {
                 // Drop sensor state so resuming re-emits the current focus
-                // and never closes a span (focus or idle) it didn't observe.
+                // and never closes a span (focus or idle) it didn't observe;
+                // input bins are discarded, never emitted across a pause.
                 last_focus = None;
                 focus_since = None;
                 idle_since = None;
+                input_prev = None;
+                input_deltas.clear();
                 continue;
             }
             let now = now_ms();
+            ticks = ticks.wrapping_add(1);
+
+            // Input activity (counts only, default-off). The opt-in is
+            // re-read once per rollup so config flips apply live.
+            if ticks % INPUT_POLLS_PER_ROLLUP == 0 {
+                input_enabled = input_sensor_opted_in();
+            }
+            if input_enabled {
+                let counters = read_input_counters();
+                if let Some(prev) = input_prev {
+                    input_deltas.push([
+                        domain::counter_delta(prev[0], counters[0]),
+                        domain::counter_delta(prev[1], counters[1]),
+                        domain::counter_delta(prev[2], counters[2]),
+                        domain::counter_delta(prev[3], counters[3]),
+                    ]);
+                }
+                input_prev = Some(counters);
+                if input_deltas.len() >= INPUT_POLLS_PER_ROLLUP {
+                    let window_ms = input_deltas.len() as u64 * POLL_INTERVAL.as_millis() as u64;
+                    let bins = domain::fold_into_bins(&input_deltas, INPUT_POLLS_PER_BIN);
+                    if let Some(payload) = domain::input_rollup(&bins, INPUT_BIN_MS) {
+                        let count = logger.emit("input_activity", now, payload, Some(window_ms));
+                        set_status(&app, count);
+                    }
+                    input_deltas.clear();
+                }
+            } else {
+                input_prev = None;
+                input_deltas.clear();
+            }
 
             // Idle (IOKit HIDIdleTime via user-idle).
             if let Ok(idle) = UserIdle::get_time() {

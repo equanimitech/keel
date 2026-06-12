@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { mergeTarget, mergeWatchlist, emptyState, logFileName, eventLine } from "./core.mjs";
+import { mergeTarget, mergeWatchlist, mergeDesktopSensors, emptyState, logFileName, eventLine } from "./core.mjs";
 
 export const KEEL_DIR = join(homedir(), ".keel");
 export const TARGET_ID = "claude-code";
@@ -30,6 +30,13 @@ export function loadRawTarget(id = TARGET_ID) {
 export function loadWatchlist() {
   try { return mergeWatchlist(JSON.parse(readFileSync(CONFIG_PATH, "utf8"))?.watchlist); }
   catch { return mergeWatchlist(); }
+}
+
+/** Desktop (tray) sensor toggles — top-level in config.json.
+ * @returns {import("./core.mjs").DesktopSensors} */
+export function loadDesktopSensors() {
+  try { return mergeDesktopSensors(JSON.parse(readFileSync(CONFIG_PATH, "utf8"))?.desktop); }
+  catch { return mergeDesktopSensors(); }
 }
 
 /** @returns {import("./core.mjs").State} */

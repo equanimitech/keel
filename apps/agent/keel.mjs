@@ -12,9 +12,9 @@ import {
   viceWindows, viceScheduledAt, viceShouldBlock, setVicePact, spendViceSkip,
   viceSkipActive, vicePactActive, isAllowedPath,
   buildEvent, capPayload, summarizeEvents, matchDispatch, targetHash, renderRules, consentLines,
-  watchlistLines,
+  watchlistLines, desktopSensorLines,
 } from "./core.mjs";
-import { loadTarget, loadRawTarget, loadWatchlist, loadState, saveState, readStdin, TARGET_ID, KEEL_DIR, LOG_DIR, appendEvent, readEvents } from "./store.mjs";
+import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, readStdin, TARGET_ID, KEEL_DIR, LOG_DIR, appendEvent, readEvents } from "./store.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -122,7 +122,7 @@ async function handleSessionStart(now) {
   let state = refillCredits(loadState(), target, monthKey(now));
   // Rules observability: any change to the effective rules — including the
   // watchlist (config spine) — becomes a logged event.
-  const hash = targetHash({ target, watchlist: loadWatchlist() });
+  const hash = targetHash({ target, watchlist: loadWatchlist(), desktop: loadDesktopSensors() });
   if (state.lastRuleHash !== hash) {
     logHookEvent("rule_changed", now, input, { extra: { keel_rule_hash: hash, keel_prev_hash: state.lastRuleHash || "" } });
     state = { ...state, lastRuleHash: hash };
@@ -347,6 +347,7 @@ function cmdHud(now) {
 function cmdRules() {
   console.log(renderRules(loadTarget(), loadRawTarget()));
   console.log(watchlistLines(loadWatchlist()).join("\n"));
+  console.log(desktopSensorLines(loadDesktopSensors()).join("\n"));
 }
 
 /** `keel log status` — today's per-kind counts + session liveness. The P1

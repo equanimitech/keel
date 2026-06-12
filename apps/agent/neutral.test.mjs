@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   toMin, frictionAt, mergeTarget, emptyState, DEFAULT_TARGET,
   reflectionLine, ritualNudge, targetHash, renderRules, consentLines,
-  mergeWatchlist, watchlistLines,
+  mergeWatchlist, watchlistLines, mergeDesktopSensors, desktopSensorLines,
 } from "./core.mjs";
 
 const driver = { windDown: "23:30", hardStop: "01:00", reset: "05:00" };
@@ -134,4 +134,15 @@ test("watchlistLines says so when the list is empty", () => {
   const lines = watchlistLines({ observe: [], windowed: [] }).join("\n");
   assert.match(lines, /watchlist/);
   assert.match(lines, /empty|none/i);
+});
+
+test("desktopSensorLines shows the input sensor toggle (default off)", () => {
+  assert.match(desktopSensorLines({ inputActivity: false }).join("\n"), /inputActivity.*off/);
+  assert.match(desktopSensorLines({ inputActivity: true }).join("\n"), /inputActivity.*ON/);
+});
+
+test("mergeDesktopSensors defaults everything off", () => {
+  assert.deepEqual(mergeDesktopSensors(), { inputActivity: false });
+  assert.deepEqual(mergeDesktopSensors({ inputActivity: true }), { inputActivity: true });
+  assert.deepEqual(mergeDesktopSensors({ inputActivity: "yes" }), { inputActivity: false });
 });

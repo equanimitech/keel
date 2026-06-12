@@ -105,6 +105,61 @@ pub fn focus_changed(prev: Option<&(String, String)>, app_name: &str, window_tit
     }
 }
 
+// ── Input-activity sensor (counts only, default-off) ────────────
+// Fogarty's "Easy to Build" set: keyboard/mouse/scroll event COUNTS per
+// bin — never keycodes, never content (the counter API cannot expose
+// them). Ships off; the user opts in via `desktop.inputActivity` in
+// ~/.keel/config.json. See packages/domain/docs/event-taxonomy.md
+// (`input_activity`).
+
+/// Explicit opt-in gate. Anything but a literal `true` — missing key,
+/// malformed JSON, empty file — means OFF (neutral default).
+pub fn input_sensor_enabled(config_json: &str) -> bool {
+    serde_json::from_str::<Value>(config_json)
+        .ok()
+        .and_then(|c| c.get("desktop")?.get("inputActivity")?.as_bool())
+        .unwrap_or(false)
+}
+
+/// Events since the previous poll. The system counter is a u32 since
+/// boot; wrapping subtraction survives the rollover.
+pub fn counter_delta(prev: u32, now: u32) -> u64 {
+    now.wrapping_sub(prev) as u64
+}
+
+/// Fold per-poll deltas `[keyDown, mouseDown, scroll, mouseMoved]` into
+/// bins of `per_bin` polls (1.5s polls × 2 = 3s bins).
+pub fn fold_into_bins(deltas: &[[u64; 4]], per_bin: usize) -> Vec<[u64; 4]> {
+    let mut bins = Vec::new();
+    for chunk in deltas.chunks(per_bin) {
+        let mut bin = [0u64; 4];
+        for d in chunk {
+            for i in 0..4 {
+                bin[i] += d[i];
+            }
+        }
+        bins.push(bin);
+    }
+    bins
+}
+
+/// The `input_activity` payload for one rollup window, or `None` when
+/// the window was fully idle (idle spans already bracket those).
+/// Counts per bin only — exactly five keys, nothing content-capable.
+pub fn input_rollup(bins: &[[u64; 4]], bin_ms: u64) -> Option<Value> {
+    if bins.iter().all(|b| b.iter().all(|&c| c == 0)) {
+        return None;
+    }
+    let series = |i: usize| bins.iter().map(|b| b[i]).collect::<Vec<_>>();
+    Some(json!({
+        "binMs": bin_ms,
+        "keyDowns": series(0),
+        "mouseDowns": series(1),
+        "scrolls": series(2),
+        "mouseMoves": series(3),
+    }))
+}
+
 /// An idle-state transition the sensor loop should log.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdleTransition {
@@ -253,6 +308,58 @@ mod tests {
         let capped = cap_title(&multibyte, TITLE_CAP);
         assert_eq!(capped.chars().count(), 256);
         assert!(capped.chars().all(|c| c == 'é'));
+    }
+
+    // ── input-activity sensor (counts only, default-off) ────────
+
+    #[test]
+    fn input_sensor_disabled_by_default_and_on_malformed_config() {
+        assert!(!input_sensor_enabled(""));
+        assert!(!input_sensor_enabled("{}"));
+        assert!(!input_sensor_enabled("not json"));
+        assert!(!input_sensor_enabled(r#"{"desktop":{}}"#));
+        assert!(!input_sensor_enabled(r#"{"desktop":{"inputActivity":false}}"#));
+    }
+
+    #[test]
+    fn input_sensor_enabled_by_explicit_opt_in() {
+        assert!(input_sensor_enabled(r#"{"desktop":{"inputActivity":true}}"#));
+    }
+
+    #[test]
+    fn counter_delta_handles_monotonic_and_wraparound() {
+        assert_eq!(counter_delta(100, 130), 30);
+        assert_eq!(counter_delta(100, 100), 0);
+        // u32 wraparound (counter is u32 since boot)
+        assert_eq!(counter_delta(u32::MAX - 1, 3), 5);
+    }
+
+    #[test]
+    fn fold_into_bins_pairs_poll_deltas() {
+        let deltas = vec![[1, 0, 2, 5], [3, 1, 0, 5], [0, 0, 0, 0], [2, 0, 1, 1]];
+        let bins = fold_into_bins(&deltas, 2);
+        assert_eq!(bins, vec![[4, 1, 2, 10], [2, 0, 1, 1]]);
+    }
+
+    #[test]
+    fn input_rollup_skips_fully_idle_windows() {
+        let bins = vec![[0, 0, 0, 0], [0, 0, 0, 0]];
+        assert!(input_rollup(&bins, 3_000).is_none());
+    }
+
+    #[test]
+    fn input_rollup_payload_carries_per_bin_counts_never_content() {
+        let bins = vec![[4, 1, 2, 10], [0, 0, 0, 3]];
+        let v = input_rollup(&bins, 3_000).unwrap();
+        assert_eq!(v["binMs"], 3_000);
+        assert_eq!(v["keyDowns"], serde_json::json!([4, 0]));
+        assert_eq!(v["mouseDowns"], serde_json::json!([1, 0]));
+        assert_eq!(v["scrolls"], serde_json::json!([2, 0]));
+        assert_eq!(v["mouseMoves"], serde_json::json!([10, 3]));
+        // counts only — exactly these five keys
+        let mut keys: Vec<&str> = v.as_object().unwrap().keys().map(|k| k.as_str()).collect();
+        keys.sort_unstable();
+        assert_eq!(keys, vec!["binMs", "keyDowns", "mouseDowns", "mouseMoves", "scrolls"]);
     }
 
     // ── idle start/end pairing ──────────────────────────────────
