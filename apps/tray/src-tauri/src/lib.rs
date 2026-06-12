@@ -38,6 +38,12 @@ const INPUT_BIN_MS: u64 = 3_000;
 #[link(name = "CoreGraphics", kind = "framework")]
 extern "C" {
     fn CGEventSourceCounterForEventType(state_id: u32, event_type: u32) -> u32;
+    // Screen Recording: CGWindowList degrades SILENTLY (empty window
+    // titles) without the grant — x-win still returns Ok. Preflight is
+    // the only honest check; request is what registers the app in the
+    // Settings list and shows the one-time system prompt.
+    fn CGPreflightScreenCaptureAccess() -> bool;
+    fn CGRequestScreenCaptureAccess() -> bool;
 }
 
 const HID_SYSTEM_STATE: u32 = 1; // kCGEventSourceStateHIDSystemState
@@ -279,7 +285,11 @@ fn spawn_sensors(app: AppHandle) {
             // Frontmost app (x-win, same approach as apps/desktop).
             match get_active_window() {
                 Ok(active) => {
-                    clear_permission_needed(&app);
+                    // Ok(...) alone doesn't prove the grant (titles fail
+                    // silently) — only clear on a passing preflight.
+                    if unsafe { CGPreflightScreenCaptureAccess() } {
+                        clear_permission_needed(&app);
+                    }
                     let app_name = active.info.name.clone();
                     let title = domain::cap_title(&active.title, domain::TITLE_CAP);
                     if domain::focus_changed(last_focus.as_ref(), &app_name, &title) {
@@ -320,8 +330,9 @@ pub fn run() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
             let logger = Logger::new(writer::log_dir());
+            // Writer epoch marker — same kind as the browser surface.
             let count = logger.emit(
-                "logger_started",
+                "writer_started",
                 now_ms(),
                 json!({ "appVersion": env!("CARGO_PKG_VERSION") }),
                 None,
@@ -362,6 +373,13 @@ pub fn run() {
             });
 
             app.manage(TrayUi { menu, status, toggle, permission });
+
+            // Without Screen Recording, titles log as "" forever and no
+            // prompt ever appears (the API never errors). Ask explicitly.
+            if !unsafe { CGPreflightScreenCaptureAccess() } {
+                unsafe { CGRequestScreenCaptureAccess() };
+                flag_permission_needed(app.handle());
+            }
 
             spawn_sensors(app.handle().clone());
             Ok(())

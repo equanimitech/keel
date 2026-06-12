@@ -31,6 +31,7 @@ Rules:
   `subagent_stop`, `notification`, `pre_compact`, `permission_request`,
   `config_change`, `file_changed`, `rule_changed`.
 - **desktop** (`apps/tray` — the body; the surface is keel desktop):
+  `writer_started` (writer epoch, payload `appVersion`),
   `app_switched` (payload `app_name`, `window_title`, `is_full_screen`;
   `durationMs` = previous app's focus span), `idle_start` (payload
   `thresholdMs`, ts backdated to last input), `idle_end` (+`durationMs`),
@@ -93,6 +94,7 @@ derived by inactivity timeout over the merged log. Writers never claim bouts.
 | `window_focus` | `focus_start` |
 | `window_blur` | `focus_end` |
 | `browser_session_start` | `writer_started` |
+| `logger_started` | `writer_started` |
 | `app_focus` | `app_switched` |
 
 In code: `canonicalKind()` / `LEGACY_KIND_ALIASES` in `src/activity.ts`.

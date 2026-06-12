@@ -37,6 +37,7 @@ export const LEGACY_KIND_ALIASES: Readonly<Record<string, string>> = {
   window_focus: "focus_start",
   window_blur: "focus_end",
   browser_session_start: "writer_started",
+  logger_started: "writer_started",
   app_focus: "app_switched",
 };
 

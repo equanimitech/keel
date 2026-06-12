@@ -16,6 +16,10 @@ describe("canonicalKind (read-side alias map for pre-taxonomy logs)", () => {
     expect(canonicalKind("browser_session_start")).toBe("writer_started");
   });
 
+  it("maps the tray's logger_started to the writer-epoch kind", () => {
+    expect(canonicalKind("logger_started")).toBe("writer_started");
+  });
+
   it("maps the desktop focus dialect to the switch pattern", () => {
     expect(canonicalKind("app_focus")).toBe("app_switched");
   });
