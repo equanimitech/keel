@@ -65,6 +65,23 @@ test("rejects out-of-range timestamps", () => {
   assert.deepEqual(out.events.map((e) => e.id), ["ok"]);
 });
 
+test("decodeMessages drops a malformed frame but keeps a following valid one", () => {
+  const bad = Buffer.from("not json{{");
+  const badHeader = Buffer.alloc(4); badHeader.writeUInt32LE(bad.length, 0);
+  const good = encodeMessage({ type: "request_observe" });
+  const { messages, rest } = decodeMessages(Buffer.concat([badHeader, bad, good]));
+  assert.deepEqual(messages, [{ type: "request_observe" }]);
+  assert.equal(rest.length, 0);
+});
+
+test("rejects empty sessionId", () => {
+  const out = validateInbound({ type: "events", events: [
+    { ...validEvent, id: "empty", sessionId: "" },
+    { ...validEvent, id: "ok" },
+  ]});
+  assert.deepEqual(out.events.map((e) => e.id), ["ok"]);
+});
+
 import { browserLogFileName } from "./core.mjs";
 
 test("browserLogFileName buckets by local date with .browser surface", () => {

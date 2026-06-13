@@ -3,7 +3,7 @@
 // Install the native-messaging manifest so Brave can spawn `keel native-host`.
 // Run: node apps/agent/native-host-install.mjs <extension-id>
 
-import { writeFileSync, mkdirSync, chmodSync } from "node:fs";
+import { writeFileSync, mkdirSync, chmodSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -21,10 +21,15 @@ if (!extId || !/^[a-p]{32}$/.test(extId)) {
 }
 
 // A tiny launcher so the manifest's "path" is a single executable.
-const launcher = join(homedir(), ".keel", "native-host.sh");
+const keelDir = join(homedir(), ".keel");
+const launcher = join(keelDir, "native-host.sh");
 const keelMjs = resolve(import.meta.dirname, "keel.mjs");
-mkdirSync(join(homedir(), ".keel"), { recursive: true });
-writeFileSync(launcher, `#!/bin/sh\nexec node "${keelMjs}" native-host\n`);
+mkdirSync(keelDir, { recursive: true });
+if ((statSync(keelDir).mode & 0o002) !== 0) {
+  console.error(`refusing to install: ${keelDir} is world-writable`);
+  process.exit(1);
+}
+writeFileSync(launcher, `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} "${keelMjs}" native-host\n`);
 chmodSync(launcher, 0o755);
 
 const manifest = {

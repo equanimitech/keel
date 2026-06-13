@@ -1,7 +1,7 @@
 // @ts-check
 // keel agent store — the only I/O. Config + state repository over ~/.keel, plus stdin.
 
-import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, renameSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mergeTarget, mergeWatchlist, mergeDesktopSensors, emptyState, logFileName, browserLogFileName, eventLine } from "./core.mjs";
@@ -94,14 +94,21 @@ export function readEvents(dir, ts) {
   } catch { return []; }
 }
 
+const MAX_BROWSER_LOG_BYTES = 64 * 1024 * 1024;
+
 /** Append validated browser events to per-day .browser.jsonl files.
- * Atomic per-line appendFileSync. Returns the ids written. */
-export function appendBrowserEvents(events) {
+ * Atomic per-line appendFileSync. Skips a day-file already at the retention
+ * cap (disk guard). Returns the ids written. */
+export function appendBrowserEvents(events, maxBytes = MAX_BROWSER_LOG_BYTES) {
   mkdirSync(LOG_DIR, { recursive: true });
   const written = [];
   for (const e of events) {
     try {
-      appendFileSync(join(LOG_DIR, browserLogFileName(e.ts)), JSON.stringify(e) + "\n");
+      const file = join(LOG_DIR, browserLogFileName(e.ts));
+      let size = 0;
+      try { size = statSync(file).size; } catch { /* missing → 0 */ }
+      if (size >= maxBytes) continue; // retention guard: day-file full
+      appendFileSync(file, JSON.stringify(e) + "\n");
       written.push(e.id);
     } catch { /* fail-open: skip this event */ }
   }

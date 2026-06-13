@@ -40,7 +40,7 @@ function isValidEvent(e) {
   if (e.surface !== "browser") return false;
   if (typeof e.kind !== "string" || !ALLOWED_KINDS.has(e.kind)) return false;
   if (typeof e.ts !== "number" || !Number.isFinite(e.ts) || e.ts < MIN_TS || e.ts > MAX_TS) return false;
-  if (typeof e.sessionId !== "string" || e.sessionId.length > 128) return false;
+  if (typeof e.sessionId !== "string" || e.sessionId.length === 0 || e.sessionId.length > 128) return false;
   if (typeof e.payload !== "object" || e.payload === null) return false;
   for (const v of Object.values(e.payload)) {
     if (!isScalar(v)) return false;
@@ -74,7 +74,11 @@ export function decodeMessages(buf) {
     if (len > MAX_MESSAGE_BYTES) throw new Error("native message too large");
     if (buf.length - offset - 4 < len) break;
     const json = buf.subarray(offset + 4, offset + 4 + len).toString("utf8");
-    messages.push(JSON.parse(json));
+    try {
+      messages.push(JSON.parse(json));
+    } catch {
+      // malformed JSON in a well-framed message — drop this frame only
+    }
     offset += 4 + len;
   }
   return { messages, rest: buf.subarray(offset) };
