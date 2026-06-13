@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "keel shared presentation core — design tokens + shadcn/ui components (stone + sage ensō).",
+  "description": "keel shared presentation core — design tokens + shadcn/ui components (stone + CLAY accent).",
   "exports": {
     ".": "./src/index.ts",
     "./tokens.css": "./src/tokens.css",

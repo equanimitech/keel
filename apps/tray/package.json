@@ -1,5 +1,6 @@
 {
   "name": "@keel/tray",
+  "description": "keel tray — macOS menubar activity-log writer (Tauri, no windows).",
   "private": true,
   "version": "0.1.0",
   "type": "module",

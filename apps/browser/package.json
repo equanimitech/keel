@@ -1,6 +1,6 @@
 {
   "name": "@keel/browser",
-  "description": "Stopping cues for the internet. A modular attention intervention platform.",
+  "description": "keel browser — Chrome extension (WXT): activity writer + watchlist-gated per-domain sensors + the blocklist drogue. Observe-first.",
   "private": true,
   "version": "0.2.0",
   "type": "module",

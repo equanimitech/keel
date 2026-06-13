@@ -1,5 +1,6 @@
 {
   "name": "@keel/desktop",
+  "description": "keel desktop — macOS attention compass (Tauri + React). Frozen under the observability-first roadmap.",
   "private": true,
   "version": "0.1.0",
   "type": "module",
