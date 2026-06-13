@@ -1,7 +1,7 @@
 // @ts-check
 // keel agent store — the only I/O. Config + state repository over ~/.keel, plus stdin.
 
-import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mergeTarget, mergeWatchlist, mergeDesktopSensors, emptyState, logFileName, eventLine } from "./core.mjs";
@@ -45,10 +45,18 @@ export function loadState() {
   catch { return emptyState(); }
 }
 
+/** Atomic JSON write: temp file in the same dir, then rename. Avoids torn
+ * reads when a second reader (native host / agent) reads concurrently. */
+export function writeJsonAtomic(path, obj) {
+  const tmp = `${path}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(obj, null, 2));
+  renameSync(tmp, path);
+}
+
 /** @param {import("./core.mjs").State} s */
 export function saveState(s) {
   if (!existsSync(KEEL_DIR)) mkdirSync(KEEL_DIR, { recursive: true });
-  writeFileSync(STATE_PATH, JSON.stringify(s, null, 2));
+  writeJsonAtomic(STATE_PATH, s);
 }
 
 /** @returns {Promise<any>} parsed stdin JSON, or null */
