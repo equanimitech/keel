@@ -114,6 +114,33 @@ export async function deleteOldestEvents(count: number): Promise<number> {
   }
 }
 
+/** Delete events whose value.id is in `ids` (ack-prune). Fail-open: 0 on error. */
+export async function deleteEventsByIds(ids: readonly string[]): Promise<number> {
+  if (ids.length === 0) return 0;
+  const idSet = new Set(ids);
+  try {
+    const db = await getDb();
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    let deleted = 0;
+    const cursorRequest = store.openCursor();
+    cursorRequest.onsuccess = () => {
+      const cursor = cursorRequest.result;
+      if (cursor === null) return;
+      const value = cursor.value as { id?: string };
+      if (value.id !== undefined && idSet.has(value.id)) {
+        cursor.delete();
+        deleted += 1;
+      }
+      cursor.continue();
+    };
+    await awaitTransaction(tx);
+    return deleted;
+  } catch {
+    return 0;
+  }
+}
+
 /** All events in chronological (ts index) order — the export read path.
  * Fail-open: [] on error. */
 export async function readAllEvents(): Promise<ActivityEvent[]> {

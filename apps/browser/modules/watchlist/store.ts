@@ -40,3 +40,10 @@ export async function removeObserveDomain(domain: string): Promise<void> {
     await observeDomains.setValue(current.filter((d) => d !== domain));
   }
 }
+
+/** Replace the whole observe list from the relay (config.json is source of
+ * truth). Normalizes + dedupes; ignores malformed entries. */
+export async function replaceObserveDomains(domains: readonly string[]): Promise<void> {
+  const clean = [...new Set(domains.map((d) => normalizeDomain(d)).filter((d): d is string => !!d))];
+  await observeDomains.setValue(clean);
+}
