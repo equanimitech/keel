@@ -7,10 +7,15 @@ and emits a ranked candidate slate as JSON on stdout. The Node command adjudicat
 
 See docs/2026-06-13-watchlist-seeding-from-history-design.md.
 """
+import argparse
+import json
 import os
 import shutil
 import sqlite3
 import statistics
+import sys
+import tempfile
+import time
 from contextlib import closing
 from urllib.parse import urlsplit
 
@@ -196,3 +201,41 @@ def build_slate(keys, now, snapshot, min_visits=12):
     for c in candidates:
         del c["_composite"]
     return {"candidates": candidates, "window_hint": None}
+
+
+DEFAULT_BRAVE = os.path.join(os.path.expanduser("~"),
+    "Library/Application Support/BraveSoftware/Brave-Browser/Default/History")
+
+def main():
+    ap = argparse.ArgumentParser(description="keel watchlist scan — emit candidate slate JSON")
+    ap.add_argument("--history", default=DEFAULT_BRAVE, help="path to Brave History DB")
+    ap.add_argument("--ledger", default="", help="path to watchlist-ledger.json (verdicts to subtract)")
+    ap.add_argument("--snapshot", default="", help="path to watchlist-snapshot.json (for is_new)")
+    args = ap.parse_args()
+
+    ledger = {}
+    if args.ledger and os.path.exists(args.ledger):
+        try: ledger = json.load(open(args.ledger))
+        except Exception: ledger = {}
+    snapshot = {}
+    if args.snapshot and os.path.exists(args.snapshot):
+        try: snapshot = json.load(open(args.snapshot))
+        except Exception: snapshot = {}
+
+    if not os.path.exists(args.history):
+        json.dump({"error": "history not found", "path": args.history}, sys.stdout)
+        return
+    with tempfile.TemporaryDirectory() as tmp:
+        try:
+            db = copy_history(args.history, tmp)
+        except Exception as e:
+            json.dump({"error": "copy failed", "detail": str(e)}, sys.stdout)
+            return
+        keys = aggregate_keys(db, now=int(time.time()), ledger=ledger)
+    slate = build_slate(keys, now=int(time.time()), snapshot=snapshot)
+    # snapshot for next run: per-key visit counts
+    slate["_snapshot"] = {k: r["visits"] for k, r in keys.items()}
+    json.dump(slate, sys.stdout)
+
+if __name__ == "__main__":
+    main()
