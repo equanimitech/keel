@@ -24,6 +24,9 @@ export function armGameSense(adapter: SiteAdapter): void {
     }
   };
 
+  // Catch a modal already in the DOM at arm time (the sense may arm after
+  // the game finished), then watch for future ones.
+  check();
   new MutationObserver(check).observe(document.body, {
     childList: true,
     subtree: true,

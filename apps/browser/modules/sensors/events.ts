@@ -83,6 +83,36 @@ export function isArmQuery(msg: unknown): boolean {
 }
 
 /**
+ * Reduce a media time (seconds — possibly NaN before metadata loads, or
+ * negative/Infinity on a detached element) to a finite, non-negative
+ * integer. The hostile-page boundary drops non-finite numbers, so a raw
+ * `video.duration`/`currentTime` read could silently vanish from the
+ * payload; this guarantees a present, sane value.
+ */
+export function finiteSeconds(value: number): number {
+  return Number.isFinite(value) && value > 0 ? Math.round(value) : 0;
+}
+
+/**
+ * Completion heuristic for the video grammar: playback has reached a
+ * threshold fraction of its duration. The native `ended` event is
+ * unreliable on platform players (YouTube swaps the <video> for
+ * autoplay-next; Shorts loop by resetting currentTime), so ≥90% watched
+ * is the industry-standard proxy for "the user finished this video".
+ * A non-positive / non-finite duration is never complete.
+ */
+export function videoCompleted(
+  currentTime: number,
+  duration: number,
+  threshold = 0.9
+): boolean {
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return false;
+  }
+  return currentTime / duration >= threshold;
+}
+
+/**
  * Generic feed heuristic: the industry-standard disclosure labels that
  * mark a sponsored item, as the FULL text of a small element. Type-level
  * knowledge (how feeds disclose ads), not company-level.

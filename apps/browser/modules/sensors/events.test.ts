@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   SENSOR_KINDS,
+  finiteSeconds,
   isArmQuery,
   isSponsoredLabel,
   sensorAllowed,
   validateSensorMessage,
+  videoCompleted,
 } from "./events";
 
 describe("validateSensorMessage (hostile-page boundary)", () => {
@@ -151,5 +153,43 @@ describe("SENSOR_KINDS", () => {
       "video_ended",
       "video_started",
     ]);
+  });
+});
+
+describe("finiteSeconds (payload guard against NaN media times)", () => {
+  it("rounds a finite positive time", () => {
+    expect(finiteSeconds(60.4)).toBe(60);
+    expect(finiteSeconds(0.6)).toBe(1);
+  });
+
+  it("collapses NaN / Infinity / negative / zero to 0", () => {
+    expect(finiteSeconds(NaN)).toBe(0); // duration before metadata loads
+    expect(finiteSeconds(Infinity)).toBe(0); // live stream
+    expect(finiteSeconds(-5)).toBe(0);
+    expect(finiteSeconds(0)).toBe(0);
+  });
+});
+
+describe("videoCompleted (≥90% watched heuristic)", () => {
+  it("is true at or past the threshold", () => {
+    expect(videoCompleted(90, 100)).toBe(true);
+    expect(videoCompleted(100, 100)).toBe(true);
+    expect(videoCompleted(1000, 1107)).toBe(true); // ~90% of an 18-min video
+  });
+
+  it("is false below the threshold", () => {
+    expect(videoCompleted(50, 100)).toBe(false);
+    expect(videoCompleted(0, 100)).toBe(false);
+  });
+
+  it("is never complete for a non-positive or non-finite duration", () => {
+    expect(videoCompleted(10, 0)).toBe(false);
+    expect(videoCompleted(10, NaN)).toBe(false); // metadata not yet loaded
+    expect(videoCompleted(10, Infinity)).toBe(false); // live stream
+  });
+
+  it("honors a custom threshold", () => {
+    expect(videoCompleted(80, 100, 0.75)).toBe(true);
+    expect(videoCompleted(70, 100, 0.75)).toBe(false);
   });
 });
