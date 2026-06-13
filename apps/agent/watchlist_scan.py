@@ -11,6 +11,7 @@ import os
 import shutil
 import sqlite3
 import statistics
+from contextlib import closing
 from urllib.parse import urlsplit
 
 # MUST mirror packages/domain/src/route.ts ROUTE_REGISTRY (test pins the entries).
@@ -133,10 +134,9 @@ def copy_history(src, dest_dir):
 def aggregate_keys(db_path, now, ledger):
     """Read genuine residual navigations, bucket per host+route. ledger keys (benign/work)
     are subtracted. Returns { key: {host, route, visits, dwell, timestamps, first_seen} }."""
-    con = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
-    rows = con.execute("SELECT v.visit_time, v.visit_duration, v.transition, u.url "
-                       "FROM visits v JOIN urls u ON u.id = v.url").fetchall()
-    con.close()
+    with closing(sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)) as con:
+        rows = con.execute("SELECT v.visit_time, v.visit_duration, v.transition, u.url "
+                           "FROM visits v JOIN urls u ON u.id = v.url").fetchall()
     keys = {}
     suppressed = {k for k, v in ledger.items() if v in ("benign", "work")}
     for vt, dur, tr, url in rows:
