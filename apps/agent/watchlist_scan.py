@@ -7,6 +7,9 @@ and emits a ranked candidate slate as JSON on stdout. The Node command adjudicat
 
 See docs/2026-06-13-watchlist-seeding-from-history-design.md.
 """
+import os
+import shutil
+import sqlite3
 import statistics
 from urllib.parse import urlsplit
 
@@ -113,3 +116,45 @@ def drift_ratio(timestamps, now, window_days=14):
     ratio = (recent_per_day / prior_per_day) if prior_per_day > 0 else float("inf")
     return {"recent_per_day": recent_per_day, "prior_per_day": prior_per_day,
             "ratio": ratio, "is_new": len(prior) == 0, "recent": len(recent)}
+
+
+CHROME_EPOCH = 11644473600
+def _to_unix(us): return us / 1_000_000 - CHROME_EPOCH
+
+def copy_history(src, dest_dir):
+    """Copy the (possibly locked) live DB + WAL/SHM into dest_dir; return the copy path."""
+    dest = os.path.join(dest_dir, "History.db")
+    shutil.copy(src, dest)
+    for ext in ("-wal", "-shm"):
+        if os.path.exists(src + ext):
+            shutil.copy(src + ext, dest + ext)
+    return dest
+
+def aggregate_keys(db_path, now, ledger):
+    """Read genuine residual navigations, bucket per host+route. ledger keys (benign/work)
+    are subtracted. Returns { key: {host, route, visits, dwell, timestamps, first_seen} }."""
+    con = sqlite3.connect(f"file:{db_path}?mode=ro&immutable=1", uri=True)
+    rows = con.execute("SELECT v.visit_time, v.visit_duration, v.transition, u.url "
+                       "FROM visits v JOIN urls u ON u.id = v.url").fetchall()
+    con.close()
+    keys = {}
+    suppressed = {k for k, v in ledger.items() if v in ("benign", "work")}
+    for vt, dur, tr, url in rows:
+        if not genuine_nav(tr):
+            continue
+        host = normalize_host(url)
+        if host is None or classify_host(host) != "residual":
+            continue
+        path = urlsplit(url).path
+        route = normalize_route(host, path)
+        key = host + route if route else host
+        if key in suppressed:
+            continue
+        rec = keys.setdefault(key, {"host": host, "route": route, "visits": 0,
+                                    "dwell": 0.0, "timestamps": [], "first_seen": None})
+        rec["visits"] += 1
+        rec["dwell"] += (dur or 0) / 1_000_000
+        rec["timestamps"].append(_to_unix(vt))
+    for rec in keys.values():
+        rec["first_seen"] = min(rec["timestamps"]) if rec["timestamps"] else None
+    return keys

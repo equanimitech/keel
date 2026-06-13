@@ -1,6 +1,24 @@
 import unittest
+import sqlite3, tempfile, os
 from watchlist_scan import genuine_nav, normalize_host, classify_host, normalize_route, ROUTE_REGISTRY
 from watchlist_scan import quick_return_rate, binge_runs, drift_ratio
+from watchlist_scan import aggregate_keys
+
+EPOCH = 11644473600
+def _chrome_us(unix): return int((unix + EPOCH) * 1_000_000)
+
+def _make_db(path, rows):
+    """rows: list of (url, unix_ts, duration_us, transition)."""
+    con = sqlite3.connect(path)
+    con.execute("CREATE TABLE urls(id INTEGER PRIMARY KEY, url TEXT)")
+    con.execute("CREATE TABLE visits(id INTEGER PRIMARY KEY, url INTEGER, visit_time INTEGER, "
+                "from_visit INTEGER, visit_duration INTEGER, transition INTEGER)")
+    url_ids = {}
+    for i, (url, ts, dur, tr) in enumerate(rows, 1):
+        uid = url_ids.setdefault(url, len(url_ids) + 1)
+        con.execute("INSERT OR IGNORE INTO urls VALUES (?,?)", (uid, url))
+        con.execute("INSERT INTO visits VALUES (?,?,?,?,?,?)", (i, uid, _chrome_us(ts), 0, dur, tr))
+    con.commit(); con.close()
 
 class TestHelpers(unittest.TestCase):
     def test_genuine_nav_drops_reload_subframe_redirect(self):
@@ -57,6 +75,27 @@ class TestLenses(unittest.TestCase):
         self.assertGreater(r["recent_per_day"], 0)
         self.assertFalse(r["is_new"])
         self.assertTrue(drift_ratio([cut + 1, cut + 2], now)["is_new"])  # no prior → NEW
+
+
+class TestReader(unittest.TestCase):
+    def test_aggregate_keys_filters_and_buckets(self):
+        d = tempfile.mkdtemp()
+        db = os.path.join(d, "History.db")
+        _make_db(db, [
+            ("https://youtube.com/shorts/a", 1000, 30_000_000, 0),   # genuine, residual, /shorts
+            ("https://youtube.com/shorts/b", 1100, 30_000_000, 0),   # genuine
+            ("https://youtube.com/shorts/c", 9000, 30_000_000, 8),   # RELOAD → dropped
+            ("https://github.com/x", 1200, 60_000_000, 0),           # work → excluded from residual
+            ("https://clerk.themia.pro/x", 1300, 1_000_000, 0),      # infra → excluded
+        ])
+        keys = aggregate_keys(db, now=20000, ledger={})
+        self.assertIn("youtube.com/shorts", keys)
+        rec = keys["youtube.com/shorts"]
+        self.assertEqual(rec["visits"], 2)            # reload dropped
+        self.assertEqual(rec["host"], "youtube.com")
+        self.assertEqual(rec["route"], "/shorts")
+        self.assertNotIn("github.com", keys)          # work excluded
+        self.assertFalse(any(k.startswith("clerk") for k in keys))
 
 
 if __name__ == "__main__":
