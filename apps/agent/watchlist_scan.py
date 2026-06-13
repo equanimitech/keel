@@ -161,10 +161,12 @@ def aggregate_keys(db_path, now, ledger):
 
 
 def _percentiles(values_by_key):
-    """Map each key's value to its rank-percentile in [0,1]."""
+    """Map each key's value to its rank-percentile in [0,1] (top → 1.0, bottom → 0.0)."""
     order = sorted(values_by_key.items(), key=lambda kv: kv[1])
-    n = len(order) or 1
-    return {k: i / n for i, (k, _) in enumerate(order)}
+    n = len(order)
+    if n <= 1:
+        return {k: 1.0 for k, _ in order}  # a single candidate is trivially top-ranked
+    return {k: i / (n - 1) for i, (k, _) in enumerate(order)}
 
 def build_slate(keys, now, snapshot, min_visits=12):
     ranked = {k: r for k, r in keys.items() if r["visits"] >= min_visits}
