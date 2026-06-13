@@ -552,6 +552,30 @@ export function renderRules(t, configured = {}) {
   return lines.join("\n");
 }
 
+// ── Watchlist seeding — verdict merge helpers (2026-06-13) ─────
+// Pure functions: no I/O. Callers in store.mjs handle persistence.
+
+/** Apply adjudication verdicts → the new observe list. Only `observe` verdicts
+ * enter the list; benign/work do not. Existing entries are preserved; deduped.
+ * @param {string[]} currentObserve
+ * @param {Record<string, string>} verdicts
+ * @returns {string[]} */
+export function applyObserveVerdicts(currentObserve, verdicts) {
+  const set = new Set(currentObserve);
+  for (const [key, verdict] of Object.entries(verdicts)) {
+    if (verdict === "observe") set.add(key);
+  }
+  return [...set];
+}
+
+/** Merge new verdicts into the ledger (append/overwrite by key).
+ * @param {Record<string, string>} ledger
+ * @param {Record<string, string>} verdicts
+ * @returns {Record<string, string>} */
+export function mergeLedger(ledger, verdicts) {
+  return { ...ledger, ...verdicts };
+}
+
 // ── Watchlist — the config spine (2026-06-12) ───────────────────
 // One self-authored list of domains replaces shield configs, the hosts
 // blocklist file, and per-domain sensor choices. Tiers:

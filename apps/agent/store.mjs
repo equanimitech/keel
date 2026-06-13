@@ -59,6 +59,44 @@ export function saveState(s) {
   writeJsonAtomic(STATE_PATH, s);
 }
 
+// ── Watchlist ledger + snapshot (watchlist-seeding bootstrap) ───
+export const LEDGER_PATH = join(KEEL_DIR, "watchlist-ledger.json");
+export const SNAPSHOT_PATH = join(KEEL_DIR, "watchlist-snapshot.json");
+
+/** @returns {Record<string, string>} */
+export function loadLedger() {
+  try { return JSON.parse(readFileSync(LEDGER_PATH, "utf8")); } catch { return {}; }
+}
+
+/** @param {Record<string, string>} led */
+export function saveLedger(led) {
+  if (!existsSync(KEEL_DIR)) mkdirSync(KEEL_DIR, { recursive: true });
+  writeJsonAtomic(LEDGER_PATH, led);
+}
+
+/** @returns {Record<string, unknown>} */
+export function loadSnapshot() {
+  try { return JSON.parse(readFileSync(SNAPSHOT_PATH, "utf8")); } catch { return {}; }
+}
+
+/** @param {Record<string, unknown>} snap */
+export function saveSnapshot(snap) {
+  if (!existsSync(KEEL_DIR)) mkdirSync(KEEL_DIR, { recursive: true });
+  writeJsonAtomic(SNAPSHOT_PATH, snap);
+}
+
+/** Atomically set watchlist.observe in config.json, preserving everything else.
+ * @param {string[]} observe */
+export function writeObserveList(observe) {
+  /** @type {any} */
+  let cfg = {};
+  try { cfg = JSON.parse(readFileSync(CONFIG_PATH, "utf8")); } catch { cfg = {}; }
+  cfg.watchlist = cfg.watchlist || {};
+  cfg.watchlist.observe = observe;
+  if (!existsSync(KEEL_DIR)) mkdirSync(KEEL_DIR, { recursive: true });
+  writeJsonAtomic(CONFIG_PATH, cfg);
+}
+
 /** @returns {Promise<any>} parsed stdin JSON, or null */
 export function readStdin() {
   return new Promise((res) => {
