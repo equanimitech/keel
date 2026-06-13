@@ -13,6 +13,10 @@ packages/**/node_modules/
 # Tauri build artifacts
 **/src-tauri/target/
 
+# Python bytecode (agent watchlist scanner test runs)
+__pycache__/
+*.pyc
+
 # Logs
 logs
 *.log
