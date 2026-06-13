@@ -5,9 +5,7 @@
     { "repo": "Thopiax/equanimi" }
   ],
   "commit": false,
-  "fixed": [
-    ["@equanimi/browser", "@equanimi/desktop", "@equanimi/domain"]
-  ],
+  "fixed": [],
   "linked": [],
   "access": "restricted",
   "baseBranch": "main",
