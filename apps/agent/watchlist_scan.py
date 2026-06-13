@@ -158,3 +158,39 @@ def aggregate_keys(db_path, now, ledger):
     for rec in keys.values():
         rec["first_seen"] = min(rec["timestamps"]) if rec["timestamps"] else None
     return keys
+
+
+def _percentiles(values_by_key):
+    """Map each key's value to its rank-percentile in [0,1]."""
+    order = sorted(values_by_key.items(), key=lambda kv: kv[1])
+    n = len(order) or 1
+    return {k: i / n for i, (k, _) in enumerate(order)}
+
+def build_slate(keys, now, snapshot, min_visits=12):
+    ranked = {k: r for k, r in keys.items() if r["visits"] >= min_visits}
+    if not ranked:
+        return {"candidates": [], "window_hint": None}
+    p_time = _percentiles({k: r["dwell"] for k, r in ranked.items()})
+    p_comp = _percentiles({k: quick_return_rate(r["timestamps"]) for k, r in ranked.items()})
+    p_binge = _percentiles({k: binge_runs(r["timestamps"])["pct_in_runs_5plus"] for k, r in ranked.items()})
+    p_drift = _percentiles({k: drift_ratio(r["timestamps"], now)["recent"] for k, r in ranked.items()})
+    candidates = []
+    for k, r in ranked.items():
+        binge = binge_runs(r["timestamps"])
+        drift = drift_ratio(r["timestamps"], now)
+        scores = {"time": round(p_time[k], 2), "compulsion": round(p_comp[k], 2),
+                  "binge": round(p_binge[k], 2), "drift": round(p_drift[k], 2)}
+        composite = 0.40 * scores["time"] + 0.25 * scores["compulsion"] + 0.25 * scores["binge"] + 0.10 * scores["drift"]
+        candidates.append({
+            "key": k, "host": r["host"], "route": r["route"], "_composite": composite,
+            "scores": scores,
+            "evidence": {"dwell_hours": round(r["dwell"] / 3600, 1), "visits": r["visits"],
+                         "return_pct": round(quick_return_rate(r["timestamps"]) * 100),
+                         "binge": binge, "drift_ratio": (None if drift["ratio"] == float("inf") else round(drift["ratio"], 1)),
+                         "first_seen": None, "is_new": k not in snapshot},
+            "suggested_tier": "observe",
+        })
+    candidates.sort(key=lambda c: -c["_composite"])
+    for c in candidates:
+        del c["_composite"]
+    return {"candidates": candidates, "window_hint": None}

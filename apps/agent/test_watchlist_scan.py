@@ -3,6 +3,7 @@ import sqlite3, tempfile, os
 from watchlist_scan import genuine_nav, normalize_host, classify_host, normalize_route, ROUTE_REGISTRY
 from watchlist_scan import quick_return_rate, binge_runs, drift_ratio
 from watchlist_scan import aggregate_keys
+from watchlist_scan import build_slate
 
 EPOCH = 11644473600
 def _chrome_us(unix): return int((unix + EPOCH) * 1_000_000)
@@ -96,6 +97,26 @@ class TestReader(unittest.TestCase):
         self.assertEqual(rec["route"], "/shorts")
         self.assertNotIn("github.com", keys)          # work excluded
         self.assertFalse(any(k.startswith("clerk") for k in keys))
+
+
+class TestSlate(unittest.TestCase):
+    def test_build_slate_ranks_and_shapes(self):
+        keys = {
+            "youtube.com/shorts": {"host": "youtube.com", "route": "/shorts", "visits": 800,
+                "dwell": 26.3 * 3600, "timestamps": [i * 60 for i in range(800)], "first_seen": 0},
+            "youtube.com/watch": {"host": "youtube.com", "route": "/watch", "visits": 1000,
+                "dwell": 546 * 3600, "timestamps": [i * 4000 for i in range(1000)], "first_seen": 0},
+        }
+        slate = build_slate(keys, now=800 * 60, snapshot={})
+        self.assertIn("candidates", slate)
+        c0 = slate["candidates"][0]
+        for f in ("key", "host", "route", "scores", "evidence", "suggested_tier"):
+            self.assertIn(f, c0)
+        # /shorts must outrank /watch on binge despite far less dwell
+        shorts = next(c for c in slate["candidates"] if c["key"] == "youtube.com/shorts")
+        watch = next(c for c in slate["candidates"] if c["key"] == "youtube.com/watch")
+        self.assertGreater(shorts["scores"]["binge"], watch["scores"]["binge"])
+        self.assertEqual(c0["suggested_tier"], "observe")
 
 
 if __name__ == "__main__":
