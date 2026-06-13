@@ -9,7 +9,7 @@
  * payloads carry DOMAINS only — never full URLs, never page titles.
  */
 
-import { createActivityEvent, createDomain } from "@keel/domain";
+import { createActivityEvent, createDomain, normalizeRoute } from "@keel/domain";
 import type { ActivityEvent } from "@keel/domain";
 
 /** Retention ceiling — on startup the writer prunes oldest events beyond this. */
@@ -43,6 +43,41 @@ export function domainFromUrl(url: string): string | null {
     return null;
   }
   return createDomain(parsed.hostname);
+}
+
+// ── Route helpers ─────────────────────────────────────────────────
+
+/** Extract { domain, route } from a url. route is null off-registry or non-web. */
+export function routeFor(url: string): { domain: string | null; route: string | null } {
+  const domain = domainFromUrl(url);
+  if (domain === null) {
+    return { domain: null, route: null };
+  }
+  let pathname = "";
+  try {
+    pathname = new URL(url).pathname;
+  } catch {
+    return { domain, route: null };
+  }
+  return { domain, route: normalizeRoute(domain, pathname) };
+}
+
+/** Log a route only for observe-tier domains with logDetail on. */
+export function shouldLogRoute(
+  domain: string | null,
+  observe: readonly string[],
+  logDetail: boolean
+): domain is string {
+  return logDetail && domain !== null && observe.includes(domain);
+}
+
+/** A route_changed event fires only when the route value actually changes
+ * to a non-null route. */
+export function routeChanged(
+  previousRoute: string | null,
+  nextRoute: string | null
+): nextRoute is string {
+  return nextRoute !== null && nextRoute !== previousRoute;
 }
 
 // ── Event building ────────────────────────────────────────────────

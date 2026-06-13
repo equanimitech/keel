@@ -10,6 +10,7 @@ import {
   shouldLogNavigation,
   toJsonl,
 } from "./events";
+import { routeFor, shouldLogRoute, routeChanged } from "./events";
 
 describe("domainFromUrl", () => {
   it("strips to a bare lowercase domain — never a full URL", () => {
@@ -238,5 +239,35 @@ describe("exportFileName", () => {
   it("zero-pads month and day", () => {
     const ts = new Date(2026, 0, 5).getTime();
     expect(exportFileName(ts)).toBe("2026-01-05-browser-export.jsonl");
+  });
+});
+
+describe("route helpers", () => {
+  it("routeFor extracts a normalized route from a url", () => {
+    expect(routeFor("https://www.youtube.com/shorts/abc?x=1")).toEqual({
+      domain: "youtube.com",
+      route: "/shorts",
+    });
+  });
+  it("routeFor returns null route for an unregistered host", () => {
+    expect(routeFor("https://github.com/rafa/keel")).toEqual({
+      domain: "github.com",
+      route: null,
+    });
+  });
+  it("routeFor returns null domain for a non-web url", () => {
+    expect(routeFor("chrome://extensions")).toEqual({ domain: null, route: null });
+  });
+  it("shouldLogRoute is true only for observe-tier + logDetail", () => {
+    expect(shouldLogRoute("youtube.com", ["youtube.com"], true)).toBe(true);
+    expect(shouldLogRoute("youtube.com", ["youtube.com"], false)).toBe(false);
+    expect(shouldLogRoute("youtube.com", [], true)).toBe(false);
+    expect(shouldLogRoute(null, ["youtube.com"], true)).toBe(false);
+  });
+  it("routeChanged is true only when the route actually changes", () => {
+    expect(routeChanged("/shorts", "/watch")).toBe(true);
+    expect(routeChanged("/shorts", "/shorts")).toBe(false);
+    expect(routeChanged(null, "/shorts")).toBe(true);
+    expect(routeChanged("/shorts", null)).toBe(false);
   });
 });
