@@ -1,16 +1,14 @@
 {
   "name": "keel",
-  "description": "keel — attentive technology platform (observe-first). pnpm monorepo of capability × surface apps over one shared domain.",
+  "description": "keel — see where your attention goes and steer it from compulsion toward flourishing. Private, on-device. A capability × surface pnpm monorepo.",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.7.0",
   "scripts": {
     "dev:browser": "pnpm --filter @keel/browser dev",
-    "dev:desktop": "pnpm --filter @keel/desktop dev",
     "dev:tray": "pnpm --filter @keel/tray dev",
     "build:browser": "pnpm --filter @keel/browser build",
     "deploy:browser": "pnpm --filter @keel/browser run deploy",
-    "build:desktop": "pnpm --filter @keel/desktop build",
     "build:tray": "pnpm --filter @keel/tray bundle",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",

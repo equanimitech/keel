@@ -1,6 +1,6 @@
 # keel - Attentive Technology Platform
 
-A pnpm monorepo with two surfaces (browser extension + desktop app) sharing a pure domain types package.
+A pnpm monorepo of capability × surface apps (Claude Code agent, browser extension, macOS tray) sharing a pure domain types package.
 
 ## Structure
 
@@ -9,23 +9,20 @@ keel/
 ├── apps/
 │   ├── agent/            # Claude Code surface (@keel/agent) — focus gate + activity-log writer; ships as plugin
 │   ├── browser/          # Chrome extension (WXT) — activity writer + per-domain sensors
-│   ├── desktop/          # macOS app (Tauri + React) — attention compass (frozen; demoted per observability roadmap)
 │   └── tray/             # macOS menubar-only app (Tauri, no windows) — desktop activity-log writer; ships as "keel"
 ├── packages/
 │   └── domain/           # Shared domain types (@keel/domain)
 └── package.json          # Workspace scripts
 ```
 
-Surfaces are named by the capability × surface grammar (keel agent / keel browser / keel desktop — see `docs/decisions/2026-06-12-keel-productization.md`). The agent surface is plain `// @ts-check` JS (no TS imports — it deploys standalone); its dev-mode deploy is symlinks from `~/.keel/`, its distribution is a Claude Code plugin (`apps/agent/.claude-plugin/`).
+Surfaces are named by the capability × surface grammar (keel agent / keel browser / keel tray — see `docs/decisions/2026-06-12-keel-productization.md`). The agent surface is plain `// @ts-check` JS (no TS imports — it deploys standalone); its dev-mode deploy is symlinks from `~/.keel/`, its distribution is a Claude Code plugin (`apps/agent/.claude-plugin/`).
 
 ## Commands
 
 ```bash
 pnpm dev:browser          # WXT dev server (browser extension)
-pnpm dev:desktop          # Vite dev server (desktop frontend)
 pnpm dev:tray             # tauri dev (menubar logger)
 pnpm build:browser        # WXT production build
-pnpm build:desktop        # Vite production build
 pnpm build:tray           # tauri build (menubar logger bundle)
 pnpm build                # Build all packages
 pnpm typecheck            # Typecheck all packages
@@ -35,7 +32,7 @@ pnpm typecheck            # Typecheck all packages
 
 ## Shared Domain (`@keel/domain`)
 
-Pure types. No runtime dependencies. Both surfaces import from this package.
+Pure types. No runtime dependencies. The TypeScript surfaces import from this package.
 
 Rules:
 - Vanilla TypeScript only — no fp-ts, no React, no Tauri, no Chrome APIs
@@ -44,7 +41,7 @@ Rules:
 - No side effects — types and pure functions only
 - Branded value objects (e.g., `Duration = number & { __brand: "Duration" }`)
 
-**fp-ts is isolated to `apps/desktop/`.** The shared domain must never depend on it.
+**No fp-ts anywhere in the repo** — it left with `apps/desktop` (removed 2026-06-13). The shared domain stays vanilla TypeScript.
 
 ## Coding Conventions
 
@@ -60,4 +57,4 @@ Dependencies flow inward: Domain -> Application -> Infrastructure -> UI.
 
 - **`packages/domain`**: the ActivityEvent log substrate + value objects + the event-taxonomy contract (`packages/domain/docs/event-taxonomy.md`). The intervention layer was retired 2026-06-12 (see `docs/decisions/`) — it returns as a separate module (P5) built on personal baselines.
 - **`apps/browser`**: activity writer (coarse events) + watchlist-gated per-domain sensors (key-action completions) + the blocklist drogue (commitment device — the retirement's lone survivor)
-- **`apps/desktop`**: full DDD architecture (frozen; absorbed its intervention value objects locally on retirement)
+- **`apps/tray`**: macOS menubar app (Tauri) — the desktop activity-log writer. (The frozen `apps/desktop` compass was removed 2026-06-13; archived at tag `desktop-archive-2026-06-13`, reusable gems mapped in `docs/decisions/2026-06-13-remove-desktop-preserve-compass-gems.md`.)
