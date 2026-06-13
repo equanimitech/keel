@@ -15,6 +15,14 @@ export function encodeMessage(obj) {
 
 const MAX_EVENTS_PER_MESSAGE = 5000;
 const MAX_FIELD_BYTES = 2048;
+const MAX_EVENT_BYTES = 8192;
+const MIN_TS = 1262304000000; // 2010-01-01
+const MAX_TS = 4102444800000; // 2100-01-01
+
+function isScalar(v) {
+  return v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean";
+}
+
 // Allowlist: browser writer + sensor kinds (event-taxonomy.md).
 const ALLOWED_KINDS = new Set([
   "writer_started", "writer_paused", "writer_resumed",
@@ -29,13 +37,15 @@ function isValidEvent(e) {
   if (typeof e.id !== "string" || e.id.length === 0 || e.id.length > 128) return false;
   if (e.surface !== "browser") return false;
   if (typeof e.kind !== "string" || !ALLOWED_KINDS.has(e.kind)) return false;
-  if (typeof e.ts !== "number" || !Number.isFinite(e.ts)) return false;
+  if (typeof e.ts !== "number" || !Number.isFinite(e.ts) || e.ts < MIN_TS || e.ts > MAX_TS) return false;
   if (typeof e.sessionId !== "string" || e.sessionId.length > 128) return false;
   if (typeof e.payload !== "object" || e.payload === null) return false;
   for (const v of Object.values(e.payload)) {
+    if (!isScalar(v)) return false;
     if (typeof v === "string" && Buffer.byteLength(v, "utf8") > MAX_FIELD_BYTES) return false;
   }
   if (e.durationMs !== undefined && typeof e.durationMs !== "number") return false;
+  if (Buffer.byteLength(JSON.stringify(e), "utf8") > MAX_EVENT_BYTES) return false;
   return true;
 }
 

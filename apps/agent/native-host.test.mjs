@@ -46,3 +46,21 @@ test("caps event count per message", () => {
   const out = validateInbound({ type: "events", events: many });
   assert.ok(out.events.length <= 5000);
 });
+
+test("rejects non-scalar payload values (nested object / array)", () => {
+  const out = validateInbound({ type: "events", events: [
+    { ...validEvent, id: "n1", payload: { x: { y: "z" } } },
+    { ...validEvent, id: "n2", payload: { x: [1, 2, 3] } },
+    { ...validEvent, id: "ok", payload: { domain: "youtube.com", count: 3, flag: true } },
+  ]});
+  assert.deepEqual(out.events.map((e) => e.id), ["ok"]);
+});
+
+test("rejects out-of-range timestamps", () => {
+  const out = validateInbound({ type: "events", events: [
+    { ...validEvent, id: "old", ts: -1 },
+    { ...validEvent, id: "future", ts: 4102444800001 },
+    { ...validEvent, id: "ok", ts: 1781364354057 },
+  ]});
+  assert.deepEqual(out.events.map((e) => e.id), ["ok"]);
+});
