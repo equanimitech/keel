@@ -11,10 +11,10 @@ It's the first instance of the keel strategy model: a **target** (`claude-code`)
 ```bash
 # from the repo root:
 mkdir -p ~/.keel
-ln -sf "$(pwd)/packages/keel-gate/keel.mjs"  ~/.keel/keel.mjs
-ln -sf "$(pwd)/packages/keel-gate/core.mjs"  ~/.keel/core.mjs    # keel.mjs imports these
-ln -sf "$(pwd)/packages/keel-gate/store.mjs" ~/.keel/store.mjs
-cp -n packages/keel-gate/config.sample.json  ~/.keel/config.json
+ln -sf "$(pwd)/apps/agent/keel.mjs"  ~/.keel/keel.mjs
+ln -sf "$(pwd)/apps/agent/core.mjs"  ~/.keel/core.mjs    # keel.mjs imports these
+ln -sf "$(pwd)/apps/agent/store.mjs" ~/.keel/store.mjs
+cp -n apps/agent/config.sample.json  ~/.keel/config.json
 node ~/.keel/keel.mjs status
 ```
 
@@ -37,7 +37,7 @@ Merge into `~/.claude/settings.json` (create if absent):
 }
 ```
 
-> Note: the three `.mjs` files import each other, so symlink all three into `~/.keel` (the install does this). Alternatively, point the hook `command` at the repo path directly (`node <repo>/packages/keel-gate/keel.mjs …`) and skip the symlinks.
+> Note: the three `.mjs` files import each other, so symlink all three into `~/.keel` (the install does this). Alternatively, point the hook `command` at the repo path directly (`node <repo>/apps/agent/keel.mjs …`) and skip the symlinks.
 
 ## Make it yours
 
@@ -74,7 +74,7 @@ Without the install, `keel vice on/off` still work (GUI auth per call); the daem
 ## Dev
 
 ```bash
-cd packages/keel-gate
+cd apps/agent
 node --test        # unit tests (pure core)
 pnpm typecheck     # JSDoc + // @ts-check (no build)
 ```

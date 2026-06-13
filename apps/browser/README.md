@@ -1,80 +1,35 @@
-# keel
+# keel browser
 
-**Stopping cues for the internet.**
+**See where your attention goes — privately, on your own device.**
 
-A modular attention intervention platform. Part of the [mindful tech](https://github.com/topics/mindful-tech) ecosystem — tools that help humanity regenerate its attention span.
+The web surface of keel. It observes; it does not (yet) intervene. Three things:
 
-## Why
+- **Activity writer** — coarse attention events on every site you visit (tab switches, navigations, focus/idle spans), so you can see where your time goes and how your focus fragments.
+- **Watchlist sensors** — on the domains you put on the *observe tier*, type-based sensors record key-action completions (a video started/finished, a post seen, a game finished). Counts and timings, never content.
+- **The blocklist drogue** — a user-owned commitment device that blocks domains at the network layer. The lone survivor of the retired intervention layer.
 
-Digital experiences have removed every stopping cue that physical experiences provide naturally. Books end. Meals finish. Even Pringles cans eventually empty. But Netflix never runs out, ChatGPT never stops talking, and the feed is bottomless.
+keel is observability-first: it accumulates the raw signal now; gentle steering toward what helps you flourish comes later, built on your own baselines (see the root `README` and `docs/decisions/`).
 
-keel puts stopping cues back. Each module targets a specific compulsion pattern on a specific platform — and you toggle exactly what you need.
-
-## Modules
-
-### YouTube Shorts Shield (v0.1 — active)
-
-Prevents compulsive scrolling on YouTube Shorts.
-
-| Layer | What it does |
-|-------|-------------|
-| **CSS scroll-snap override** | Disables `scroll-snap-type` and `overflow-y` on the Shorts container |
-| **Navigation button hiding** | Removes the "Previous video" / "Next video" buttons |
-| **JS event interception** | Blocks `wheel`, `touchmove`, `keydown` (arrows, j/k, space, page up/down) and locks `scrollTop` |
-
-### Chess.com Shield (planned)
-
-Stopping cue after games. Cooldown before rematch.
-
-### LinkedIn Shield (planned)
-
-Disables infinite scroll on the main feed. Hides algorithmic noise.
-
-## Install
-
-### From source (developer mode)
+## Build & load
 
 ```bash
-git clone https://github.com/rafaelbatistab/equanimi.git
-cd equanimi
 pnpm install
-pnpm build
-```
-
-Then in Chrome:
-1. Go to `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked** → select the `.output/chrome-mv3` folder
-
-### From the Chrome Web Store
-
-_Coming soon._
-
-## Development
-
-```bash
-pnpm dev          # dev mode with hot-reload (opens a fresh Chrome profile)
 pnpm build        # production build → .output/chrome-mv3/
-pnpm zip          # zip for Chrome Web Store submission
 ```
 
-Built with [WXT](https://wxt.dev).
+Then in a Chromium browser:
 
-## Features
+1. `chrome://extensions` → enable **Developer mode**
+2. **Load unpacked** → select `.output/chrome-mv3/`
 
-- **Per-module toggles** via popup — changes apply immediately, no reload
-- **Badge indicator** — green "ON" badge when active
-- **Persistent state** — remembers your preferences across sessions
-- **Lightweight** — ~65 KB total, no external dependencies at runtime
+Dev: `pnpm dev` (hot-reload, fresh profile). Built with [WXT](https://wxt.dev).
 
-## Roadmap
+## What it logs
 
-- [ ] Chess.com shield (post-game stopping cue + cooldown)
-- [ ] LinkedIn shield (feed scroll blocking + sidebar hiding)
-- [ ] Cheat days / blocked days scheduling
-- [ ] Compulsion cooldown timers
-- [ ] Usage time tracking / weekly reflection
-- [ ] Firefox support
+- **Coarse events** (every site): `tab_activated`, `navigation_committed`, `focus_start` / `focus_end`, `idle_start` / `idle_end`.
+- **Sensor completions** (observe tier only): `video_started` / `video_ended`, `post_seen`, `game_finished` — domain + capped scalars, gated behind the watchlist and the hostile-page boundary (see `modules/sensors/`).
+
+Everything lands in extension-local IndexedDB; the manage page exports it as JSONL on demand. The popup mirrors today's tally and which domains are deep-sensed.
 
 ## Sovereignty & privacy
 
@@ -82,16 +37,16 @@ keel is built foundation-first: **sovereignty before everything**. The privacy
 properties below aren't a policy you have to trust — they're structural, enforced
 by what the extension is *capable* of.
 
-**Local-First Ownership.** All state lives in `chrome.storage.local`. No account,
-no server, no sync. keel works fully offline and nothing breaks if equanimitech
-disappears tomorrow — there is no equanimitech server in any code path.
+**Local-First Ownership.** All state lives in `chrome.storage.local` and
+extension-local IndexedDB. No account, no server, no sync. keel works fully
+offline and nothing breaks if equanimitech disappears tomorrow — there is no
+equanimitech server in any code path.
 
 **keel cannot read your browsing.** The manifest requests `declarativeNetRequest`
 — *not* `declarativeNetRequestWithHostAccess`, *not* `webRequest`, and *no*
 `host_permissions`. Blocking happens by static rule inside the browser engine;
-the extension never sees request contents, page bodies, or your history. The only
-network egress anywhere in keel is *your own* BYOK authoring call, to *your own*
-API key.
+the extension never sees request contents or page bodies. keel makes **no network
+calls at all** — events stay in local IndexedDB until you manually export them.
 
 **Modification Rights.** Open source, forkable. Your blocklist is yours to read
 and reason about — a small, legible list, not a black box. Pin any version via
@@ -125,19 +80,13 @@ often browsed — you must flip the switch once:
 2. Enable **Allow in Incognito**
 
 keel runs `incognito: "spanning"` (one shared instance, shared local storage), so
-your shields and blocks carry over with no separate setup.
+your blocks carry over with no separate setup.
 
 ## Philosophy
 
 Buddhism speaks of three poisons: lobha (craving), dosa (aversion), moha (delusion). Platforms have industrialized these poisons at global scale. keel is named after equanimity (upekkhā) — the balanced awareness that interrupts compulsive cycles.
 
-We don't block the internet. We put gaps back where platforms removed them. Gaps where awareness can enter.
-
-Learn more at [equanimi.tech](https://equanimi.tech).
-
-## Tags
-
-`mindful-tech` · `attention` · `digital-wellbeing` · `stopping-cues` · `browser-extension` · `equanimity` · `wxt`
+First it helps you **see** the pattern in your own attention; the gentle steering toward what helps you flourish comes later, on your terms.
 
 ## License
 
