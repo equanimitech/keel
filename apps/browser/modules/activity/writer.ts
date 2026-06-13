@@ -170,6 +170,7 @@ export function startActivityWriter(): void {
       .then((observe) => {
         if (sensorAllowed(domain, observe)) {
           write(validated.kind, { domain, ...validated.payload });
+          flashSensorBadge(sender.tab?.id);
         }
       })
       .catch(() => {
@@ -190,6 +191,29 @@ export function startActivityWriter(): void {
       write(t.kind, undefined, t.durationMs);
     }
   });
+}
+
+/**
+ * Flash the toolbar icon for ~2s when a sensor event lands, so the human
+ * can SEE a key-action completion register without tailing logs. Purely
+ * cosmetic and best-effort: scoped to the firing tab, and never throws
+ * into the write path (a missing `action`, denied permission, or vanished
+ * tab is swallowed). `tabId` undefined falls back to the global badge.
+ */
+const SENSOR_BADGE_MS = 2000;
+
+function flashSensorBadge(tabId: number | undefined): void {
+  try {
+    void browser.action.setBadgeText({ text: "●", tabId }).catch(() => {});
+    void browser.action
+      .setBadgeBackgroundColor({ color: "#3b82f6", tabId })
+      .catch(() => {});
+    setTimeout(() => {
+      void browser.action.setBadgeText({ text: "", tabId }).catch(() => {});
+    }, SENSOR_BADGE_MS);
+  } catch {
+    // action API unavailable (or tab gone) — indicator is non-essential.
+  }
 }
 
 async function runRetentionGuard(write: WriteFn): Promise<void> {
