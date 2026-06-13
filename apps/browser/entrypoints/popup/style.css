@@ -63,6 +63,72 @@ body {
   color: var(--muted-foreground);
 }
 
+.popup-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.popup-version {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+.popup-today-label {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+.popup-today {
+  display: flex;
+  gap: 20px;
+}
+
+.popup-today-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.popup-subtotals {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  padding-top: 2px;
+}
+
+.popup-domains {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.popup-domains-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.popup-domain-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.popup-domain-chip {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: var(--radius, 8px);
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.popup-domains-empty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
 .popup-note {
   margin: 0;
   font-size: 12px;

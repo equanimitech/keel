@@ -8,6 +8,8 @@ import {
   focusTransition,
   idleTransition,
   shouldLogNavigation,
+  startOfLocalDay,
+  tallyCompletionsSince,
   toJsonl,
 } from "./events";
 import { routeFor, shouldLogRoute, routeChanged } from "./events";
@@ -269,5 +271,53 @@ describe("route helpers", () => {
     expect(routeChanged("/shorts", "/shorts")).toBe(false);
     expect(routeChanged(null, "/shorts")).toBe(true);
     expect(routeChanged("/shorts", null)).toBe(false);
+  });
+});
+
+describe("tallyCompletionsSince (popup deep-sensor mirror)", () => {
+  const ev = (kind: string, ts: number) => ({ kind, ts });
+
+  it("counts video_started / game_finished / post_seen at or after the cutoff", () => {
+    const tally = tallyCompletionsSince(
+      [
+        ev("video_started", 100),
+        ev("video_started", 150),
+        ev("game_finished", 200),
+        ev("post_seen", 210),
+        ev("post_seen", 220),
+        ev("focus_start", 230), // coarse event — ignored
+      ],
+      0
+    );
+    expect(tally).toEqual({ videos: 2, games: 1, posts: 2 });
+  });
+
+  it("excludes events before the cutoff", () => {
+    const tally = tallyCompletionsSince(
+      [ev("video_started", 50), ev("video_started", 500)],
+      100
+    );
+    expect(tally).toEqual({ videos: 1, games: 0, posts: 0 });
+  });
+
+  it("ignores video_ended and coarse events in the tally", () => {
+    const tally = tallyCompletionsSince(
+      [
+        ev("video_ended", 100),
+        ev("tab_activated", 100),
+        ev("navigation_committed", 100),
+      ],
+      0
+    );
+    expect(tally).toEqual({ videos: 0, games: 0, posts: 0 });
+  });
+});
+
+describe("startOfLocalDay", () => {
+  it("is at or before the timestamp and idempotent", () => {
+    const ts = 1781370000000;
+    const midnight = startOfLocalDay(ts);
+    expect(midnight).toBeLessThanOrEqual(ts);
+    expect(startOfLocalDay(midnight)).toBe(midnight);
   });
 });

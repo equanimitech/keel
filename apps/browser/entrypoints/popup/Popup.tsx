@@ -1,7 +1,16 @@
 import { useEffect, useState } from "react";
 import { Badge, Button, Card, CardContent } from "@keel/ui";
-import { buildBrowserEvent } from "@/modules/activity/events";
-import { appendEvent, countEvents } from "@/modules/activity/log";
+import {
+  buildBrowserEvent,
+  startOfLocalDay,
+  tallyCompletionsSince,
+  type CompletionTally,
+} from "@/modules/activity/events";
+import {
+  appendEvent,
+  countEvents,
+  readEventsSince,
+} from "@/modules/activity/log";
 import { observeDomains } from "@/modules/watchlist/store";
 
 /**
@@ -13,8 +22,10 @@ import { observeDomains } from "@/modules/watchlist/store";
  */
 export function Popup() {
   const [eventCount, setEventCount] = useState<number | null>(null);
-  const [observed, setObserved] = useState<number | null>(null);
+  const [domains, setDomains] = useState<readonly string[] | null>(null);
+  const [today, setToday] = useState<CompletionTally | null>(null);
   const [panicLogged, setPanicLogged] = useState(false);
+  const version = browser.runtime.getManifest().version;
 
   // The old self-invoked cooldowns, reborn as pure observation: a
   // panic press is a self-anchored vulnerability label (the strongest
@@ -36,33 +47,70 @@ export function Popup() {
       .catch(() => setEventCount(null));
     observeDomains
       .getValue()
-      .then((domains) => setObserved(domains.length))
-      .catch(() => setObserved(null));
+      .then(setDomains)
+      .catch(() => setDomains(null));
+    // Only today's slice, via the ts index — never the whole log.
+    readEventsSince(startOfLocalDay(Date.now()))
+      .then((events) => setToday(tallyCompletionsSince(events, startOfLocalDay(Date.now()))))
+      .catch(() => setToday(null));
   }, []);
 
   return (
     <div className="popup-root">
       <header className="popup-header">
         <h1>keel</h1>
-        <Badge variant="secondary">observing</Badge>
+        <div className="popup-header-meta">
+          <Badge variant="secondary">observing</Badge>
+          <span className="popup-version">v{version}</span>
+        </div>
       </header>
 
       <Card>
         <CardContent className="popup-stats">
-          <div className="popup-stat">
-            <span className="popup-stat-value">
-              {eventCount === null ? "—" : eventCount.toLocaleString()}
-            </span>
-            <span className="popup-stat-label">events in the local log</span>
+          <div className="popup-today-label">Today, keel noticed</div>
+          <div className="popup-today">
+            <div className="popup-today-item">
+              <span className="popup-stat-value">
+                {today === null ? "—" : today.videos}
+              </span>
+              <span className="popup-stat-label">videos</span>
+            </div>
+            <div className="popup-today-item">
+              <span className="popup-stat-value">
+                {today === null ? "—" : today.games}
+              </span>
+              <span className="popup-stat-label">games</span>
+            </div>
+            <div className="popup-today-item">
+              <span className="popup-stat-value">
+                {today === null ? "—" : today.posts}
+              </span>
+              <span className="popup-stat-label">posts</span>
+            </div>
           </div>
-          <div className="popup-stat">
-            <span className="popup-stat-value">
-              {observed === null ? "—" : observed}
-            </span>
-            <span className="popup-stat-label">watchlist domains (deep sensors)</span>
+          <div className="popup-subtotals">
+            {eventCount === null ? "—" : eventCount.toLocaleString()} events ·{" "}
+            {domains === null ? "—" : domains.length} domains — all time
           </div>
         </CardContent>
       </Card>
+
+      <div className="popup-domains">
+        <div className="popup-domains-label">Deep-sensed</div>
+        {domains === null || domains.length === 0 ? (
+          <p className="popup-domains-empty">
+            None yet — add domains on Manage.
+          </p>
+        ) : (
+          <div className="popup-domain-chips">
+            {domains.map((domain) => (
+              <span key={domain} className="popup-domain-chip">
+                {domain}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
 
       <p className="popup-note">
         Everything stays on this machine. Raw events, domains only.

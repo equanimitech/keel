@@ -174,6 +174,49 @@ export function excessEventCount(
   return total > max ? total - max : 0;
 }
 
+// ── Popup mirror (today's deep-sensor completions) ────────────────
+
+/** What keel noticed: the key-action completions the watchlist sensors
+ * emit, tallied for the popup's calm mirror (awareness, not a score). */
+export interface CompletionTally {
+  readonly videos: number;
+  readonly games: number;
+  readonly posts: number;
+}
+
+/** Tally deep-sensor completions at or after `sinceTs`. Pure — the caller
+ * supplies the cutoff (e.g. local midnight via `startOfLocalDay`) so this
+ * stays deterministic and unit-testable. `video_started` counts a video
+ * begun (one per video after the sense fix); coarse events are ignored. */
+export function tallyCompletionsSince(
+  events: readonly Pick<ActivityEvent, "kind" | "ts">[],
+  sinceTs: number
+): CompletionTally {
+  let videos = 0;
+  let games = 0;
+  let posts = 0;
+  for (const event of events) {
+    if (event.ts < sinceTs) {
+      continue;
+    }
+    if (event.kind === "video_started") {
+      videos += 1;
+    } else if (event.kind === "game_finished") {
+      games += 1;
+    } else if (event.kind === "post_seen") {
+      posts += 1;
+    }
+  }
+  return { videos, games, posts };
+}
+
+/** Local midnight for a timestamp — the popup's "today" cutoff. */
+export function startOfLocalDay(ts: number): number {
+  const d = new Date(ts);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
 // ── Export (JSONL) ────────────────────────────────────────────────
 
 /** Render events as JSONL — one JSON object per line, trailing newline. */

@@ -141,6 +141,22 @@ export async function deleteEventsByIds(ids: readonly string[]): Promise<number>
   }
 }
 
+/** Events at or after `sinceTs`, chronological — a bounded read on the ts
+ * index so the popup's "today" mirror never loads the full log. Fail-open:
+ * [] on error. */
+export async function readEventsSince(sinceTs: number): Promise<ActivityEvent[]> {
+  try {
+    const db = await getDb();
+    const tx = db.transaction(STORE_NAME, "readonly");
+    const range = IDBKeyRange.lowerBound(sinceTs);
+    const request = tx.objectStore(STORE_NAME).index("ts").getAll(range);
+    await awaitTransaction(tx);
+    return request.result as ActivityEvent[];
+  } catch {
+    return [];
+  }
+}
+
 /** All events in chronological (ts index) order — the export read path.
  * Fail-open: [] on error. */
 export async function readAllEvents(): Promise<ActivityEvent[]> {
