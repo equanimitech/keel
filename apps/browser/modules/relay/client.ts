@@ -3,23 +3,14 @@
  * observe list back. Pure helpers (chunkEvents/unacked) are unit-tested; the
  * chrome.runtime.connectNative wiring is integration. Fail-open throughout.
  */
-import type { ActivityEvent } from "@keel/domain";
 import { readAllEvents, deleteEventsByIds } from "../activity/log";
 import { replaceObserveDomains } from "../watchlist/store";
+import { chunkEvents } from "./batch";
+
+export { chunkEvents, unacked } from "./batch";
 
 const HOST_NAME = "tech.equanimi.keel";
 const MAX_BATCH = 1000;
-
-export function chunkEvents(events: readonly ActivityEvent[], size: number): ActivityEvent[][] {
-  const out: ActivityEvent[][] = [];
-  for (let i = 0; i < events.length; i += size) out.push(events.slice(i, i + size));
-  return out;
-}
-
-export function unacked(events: readonly ActivityEvent[], ackedIds: readonly string[]): ActivityEvent[] {
-  const acked = new Set(ackedIds);
-  return events.filter((e) => !acked.has(e.id));
-}
 
 /** Connect once, flush all buffered events (ack-prune), pull observe list. */
 export async function flushToHost(): Promise<void> {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { chunkEvents, unacked } from "./client";
+import { chunkEvents, unacked } from "./batch";
 
 const ev = (id: string) => ({ id, surface: "browser", kind: "tab_activated", ts: 1, sessionId: "", payload: {} }) as const;
 
