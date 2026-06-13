@@ -12,6 +12,7 @@
  * (bouts are derived read-side; see packages/domain/docs/event-taxonomy.md).
  */
 
+import { storage } from "wxt/storage";
 import {
   IDLE_DETECTION_SECONDS,
   buildBrowserEvent,
@@ -19,8 +20,12 @@ import {
   excessEventCount,
   focusTransition,
   idleTransition,
+  routeChanged,
+  routeFor,
   shouldLogNavigation,
+  shouldLogRoute,
 } from "./events";
+import { tabUuid, type TabMap } from "./tabs";
 import { appendEvent, countEvents, deleteOldestEvents } from "./log";
 import {
   isArmQuery,
@@ -35,6 +40,10 @@ type WriteFn = (
   payload?: Readonly<Record<string, unknown>>,
   durationMs?: number
 ) => void;
+
+const tabMapItem = storage.defineItem<TabMap>("session:activity:tabMap", { fallback: {} });
+const focusSinceItem = storage.defineItem<number | null>("session:activity:focusSince", { fallback: null });
+const routeByTab = storage.defineItem<Record<number, string | null>>("session:activity:routeByTab", { fallback: {} });
 
 /**
  * Register all attention-event listeners. Must be called synchronously
@@ -68,35 +77,54 @@ export function startActivityWriter(): void {
   // ── Tab activation ────────────────────────────────────────────
   const lastDomainByTab = new Map<number, string>();
 
-  browser.tabs.onActivated.addListener(({ tabId }) => {
-    browser.tabs
-      .get(tabId)
-      .then((tab) => {
-        const domain = tab.url === undefined ? null : domainFromUrl(tab.url);
-        if (domain !== null) {
-          write("tab_activated", { domain });
-          lastDomainByTab.set(tabId, domain);
-        }
-      })
-      .catch(() => {
-        // Tab vanished between event and lookup — drop, fail-open.
-      });
+  browser.tabs.onActivated.addListener(async ({ tabId }) => {
+    try {
+      const tab = await browser.tabs.get(tabId);
+      const domain = tab.url === undefined ? null : domainFromUrl(tab.url);
+      if (domain === null) return;
+      const map = await tabMapItem.getValue();
+      const { uuid, map: next } = tabUuid(map, tabId, () => crypto.randomUUID());
+      if (next !== map) await tabMapItem.setValue(next);
+      write("tab_activated", { domain, tab: uuid });
+      lastDomainByTab.set(tabId, domain);
+    } catch {
+      // tab vanished — fail-open
+    }
   });
 
   // ── Navigation (domain changes only, never per-SPA-path) ──────
-  browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
-    if (changeInfo.url === undefined) {
-      return;
-    }
-    const nextDomain = domainFromUrl(changeInfo.url);
+  browser.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+    if (changeInfo.url === undefined) return;
+    const { domain: nextDomain, route: nextRoute } = routeFor(changeInfo.url);
     const previousDomain = lastDomainByTab.get(tabId) ?? null;
+
+    const map = await tabMapItem.getValue();
+    const minted = tabUuid(map, tabId, () => crypto.randomUUID());
+    if (minted.map !== map) await tabMapItem.setValue(minted.map);
+    const tab = minted.uuid;
+
+    const observe = await observeDomains.getValue();
+    const logDetail = true; // C1: logDetail dial defaults on; config gate is a later task
+
     if (shouldLogNavigation(previousDomain, nextDomain)) {
-      write("navigation_committed", { domain: nextDomain });
+      const payload: Record<string, unknown> = { domain: nextDomain, tab };
+      if (shouldLogRoute(nextDomain, observe, logDetail) && nextRoute !== null) {
+        payload.route = nextRoute;
+      }
+      write("navigation_committed", payload);
+    } else if (shouldLogRoute(nextDomain, observe, logDetail)) {
+      const routes = await routeByTab.getValue();
+      if (routeChanged(routes[tabId] ?? null, nextRoute)) {
+        write("route_changed", { domain: nextDomain, route: nextRoute, tab });
+      }
     }
+
     if (nextDomain === null) {
       lastDomainByTab.delete(tabId);
     } else {
       lastDomainByTab.set(tabId, nextDomain);
+      const routes = await routeByTab.getValue();
+      await routeByTab.setValue({ ...routes, [tabId]: nextRoute });
     }
   });
 
@@ -105,17 +133,16 @@ export function startActivityWriter(): void {
   });
 
   // ── Focus span (browser holds OS focus) ───────────────────────
-  // The worker wakes because of activity, so assume focused-since-now;
-  // the first span is conservative, never inflated.
-  let focusSince: number | null = Date.now();
-
-  browser.windows.onFocusChanged.addListener((windowId) => {
+  // focusSinceItem persists across MV3 SW recycling within the same browser
+  // session. The fallback is null — the first onFocusChanged call that finds
+  // isFocused=true opens the span (focus_start). This matches the original
+  // "conservative" intent: we never inflate a span across an unknown gap.
+  browser.windows.onFocusChanged.addListener(async (windowId) => {
     const isFocused = windowId !== browser.windows.WINDOW_ID_NONE;
+    const focusSince = await focusSinceItem.getValue();
     const t = focusTransition(focusSince, isFocused, Date.now());
-    focusSince = t.spanStart;
-    if (t.kind !== null) {
-      write(t.kind, undefined, t.durationMs);
-    }
+    await focusSinceItem.setValue(t.spanStart);
+    if (t.kind !== null) write(t.kind, undefined, t.durationMs);
   });
 
   // ── Sensor channel (key-action completions, observe tier) ─────
