@@ -129,6 +129,7 @@ struct TrayUi {
     status: MenuItem<Wry>,
     toggle: MenuItem<Wry>,
     permission: MenuItem<Wry>,
+    relaunch: MenuItem<Wry>,
 }
 
 /// Ambient status carries STATE only — alive or paused, no numbers.
@@ -153,13 +154,20 @@ fn toggle_pause(app: &AppHandle) {
     set_status(app, !was_paused);
 }
 
-/// x-win failed (most likely missing macOS permission): surface a clickable
-/// settings item, keep the tray alive, log nothing.
+/// x-win failed, or preflight reports no Screen Recording grant: surface the
+/// settings item AND a relaunch item, keep the tray alive, log nothing.
+///
+/// Both items are shown together because a fresh grant cannot take effect in
+/// this running process — `CGPreflightScreenCaptureAccess()` keeps returning
+/// false until restart — so the honest instruction is two steps: grant in
+/// Settings, then Relaunch keel. Without the relaunch affordance the user is
+/// sent back to a Settings pane that already looks correct (a dead-end loop).
 fn flag_permission_needed(app: &AppHandle) {
     let logger = app.state::<Logger>();
     if !logger.permission_needed.swap(true, Ordering::SeqCst) {
         let ui = app.state::<TrayUi>();
         let _ = ui.menu.insert(&ui.permission, 1);
+        let _ = ui.menu.insert(&ui.relaunch, 2);
     }
 }
 
@@ -168,6 +176,7 @@ fn clear_permission_needed(app: &AppHandle) {
     if logger.permission_needed.swap(false, Ordering::SeqCst) {
         let ui = app.state::<TrayUi>();
         let _ = ui.menu.remove(&ui.permission);
+        let _ = ui.menu.remove(&ui.relaunch);
     }
 }
 
@@ -317,10 +326,12 @@ pub fn run() {
             let permission = MenuItem::with_id(
                 app,
                 "permission",
-                "permission needed — click to open settings",
+                "Screen Recording needed — open Settings",
                 true,
                 None::<&str>,
             )?;
+            let relaunch =
+                MenuItem::with_id(app, "relaunch", "Relaunch keel", true, None::<&str>)?;
             let open = MenuItem::with_id(app, "open", "Open data folder", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
@@ -339,11 +350,14 @@ pub fn run() {
                 "permission" => {
                     let _ = Command::new("open").arg(MACOS_PRIVACY_SETTINGS_URL).spawn();
                 }
+                // A fresh Screen Recording grant only takes effect in a new
+                // process, so relaunch is the one click that activates it.
+                "relaunch" => app.restart(),
                 "quit" => app.exit(0),
                 _ => {}
             });
 
-            app.manage(TrayUi { menu, status, toggle, permission });
+            app.manage(TrayUi { menu, status, toggle, permission, relaunch });
 
             // Without Screen Recording, titles log as "" forever and no
             // prompt ever appears (the API never errors). Ask explicitly.
