@@ -13,13 +13,17 @@ import {
   viceSkipActive, vicePactActive, isAllowedPath,
   buildEvent, capPayload, summarizeEvents, matchDispatch, targetHash, renderRules, consentLines,
   watchlistLines, desktopSensorLines,
+  applyObserveVerdicts, mergeLedger,
 } from "./core.mjs";
-import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, readStdin, TARGET_ID, KEEL_DIR, LOG_DIR, appendEvent, readEvents } from "./store.mjs";
+import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, readStdin, TARGET_ID, KEEL_DIR, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
 import { runHost } from "./native-host.mjs";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
+import { createInterface } from "node:readline";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const emit = (obj) => { if (obj) process.stdout.write(JSON.stringify(obj)); process.exit(0); };
 const emitText = (t) => { if (t) process.stdout.write(t); process.exit(0); };
@@ -369,6 +373,53 @@ function cmdLog(now, sub = "status", day = "today") {
   console.log(`keel log: ${events.length} events today · ${s.sessions} session(s), ${s.activeSessions} active · ${kinds}`);
 }
 
+async function cmdWatchlistScan() {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const py = spawnSync("python3", [
+    join(here, "watchlist_scan.py"),
+    "--ledger", LEDGER_PATH,
+    "--snapshot", SNAPSHOT_PATH,
+  ], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (py.status !== 0 || !py.stdout) {
+    console.error("scan failed:", py.stderr || "(no output)");
+    process.exit(0); // fail-open
+  }
+  /** @type {any} */
+  let slate;
+  try { slate = JSON.parse(py.stdout); } catch { console.error("bad slate JSON"); process.exit(0); }
+  if (slate.error) { console.error("scan:", slate.error, slate.path || slate.detail || ""); process.exit(0); }
+  const candidates = slate.candidates || [];
+  if (candidates.length === 0) { console.log("No new candidates. Observe tier is current."); process.exit(0); }
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const ask = (/** @type {string} */ q) => new Promise((res) => rl.question(q, res));
+  /** @type {Record<string, string>} */
+  const verdicts = {};
+  console.log(`\nkeel watchlist scan — ${candidates.length} candidates. ` +
+    `[o]bserve · [b]enign(never-ask) · [w]ork · [s]kip · [q]uit\n`);
+  for (const c of candidates) {
+    const e = c.evidence;
+    const binge = e.binge ? `binge ${e.binge.max_run}max/${e.binge.pct_in_runs_5plus}%in5+` : "";
+    const line = `${c.key}\n  ${e.dwell_hours}h · ${e.visits} visits · return ${e.return_pct}% · ${binge}` +
+      `${e.is_new ? " · NEW" : ""}\n  suggested: ${c.suggested_tier}  → [o/b/w/s/q]? `;
+    const a = (await ask(line)).trim().toLowerCase()[0];
+    if (a === "q") { break; }
+    if (a === "o") { verdicts[c.key] = "observe"; }
+    else if (a === "b") { verdicts[c.key] = "benign"; }
+    else if (a === "w") { verdicts[c.key] = "work"; }
+    // s/skip → no verdict recorded
+  }
+  rl.close();
+
+  const observe = applyObserveVerdicts(loadWatchlist().observe, verdicts);
+  writeObserveList(observe);
+  saveLedger(mergeLedger(loadLedger(), verdicts));
+  if (slate._snapshot) { saveSnapshot(slate._snapshot); }
+  const added = Object.values(verdicts).filter((v) => v === "observe").length;
+  console.log(`\nDone. ${added} key(s) added to watchlist.observe (${observe.length} total). Ledger + snapshot updated.`);
+  process.exit(0);
+}
+
 async function main() {
   const [cmd, sub] = process.argv.slice(2);
   const now = Date.now();
@@ -392,7 +443,8 @@ async function main() {
   if (cmd === "appetite") return cmdAppetite(now, sub);
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
-  console.log("usage: keel <hook pre-tool|user-submit|session-start | skip | park <HH:MM|15m> | unpark | signoff | vice <on|off|skip|status|panic> | intention [\"<focus>\"|clear] | appetite [tiny|small|normal|deep|clear] | rules | log status | status>");
+  if (cmd === "watchlist" && sub === "scan") return cmdWatchlistScan();
+  console.log("usage: keel <hook pre-tool|user-submit|session-start | skip | park <HH:MM|15m> | unpark | signoff | vice <on|off|skip|status|panic> | intention [\"<focus>\"|clear] | appetite [tiny|small|normal|deep|clear] | rules | log status | status | watchlist scan>");
 }
 
 main().catch(() => process.exit(0)); // fail-open
