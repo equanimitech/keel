@@ -15,6 +15,7 @@ import {
   watchlistLines, desktopSensorLines,
 } from "./core.mjs";
 import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, readStdin, TARGET_ID, KEEL_DIR, LOG_DIR, appendEvent, readEvents } from "./store.mjs";
+import { runHost } from "./native-host.mjs";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -380,6 +381,7 @@ async function main() {
   }
   if (cmd === "log") return cmdLog(now, sub, process.argv[4]);
   if (cmd === "rules") return cmdRules();
+  if (cmd === "native-host") { runHost(); return; }
   if (cmd === "skip") return cmdSkip(now);
   if (cmd === "park") return cmdPark(now, sub);
   if (cmd === "unpark") return cmdUnpark();

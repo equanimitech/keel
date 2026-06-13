@@ -3,6 +3,8 @@
 // unprivileged writer. Chrome frames messages as a uint32 little-endian length
 // prefix followed by UTF-8 JSON. Max 1 MB/message (Chrome limit).
 
+import { appendBrowserEvents, loadWatchlist } from "./store.mjs";
+
 const MAX_MESSAGE_BYTES = 1024 * 1024;
 
 /** Encode one object as a length-prefixed frame (Buffer). */
@@ -76,4 +78,32 @@ export function decodeMessages(buf) {
     offset += 4 + len;
   }
   return { messages, rest: buf.subarray(offset) };
+}
+
+/** Run the native-messaging host: read frames from stdin, write replies to
+ * stdout. Pure handlers do the work; this is just the pump. */
+export function runHost(stdin = process.stdin, stdout = process.stdout) {
+  let buffer = Buffer.alloc(0);
+  const reply = (obj) => stdout.write(encodeMessage(obj));
+
+  stdin.on("data", (chunk) => {
+    buffer = Buffer.concat([buffer, chunk]);
+    let decoded;
+    try {
+      decoded = decodeMessages(buffer);
+    } catch {
+      buffer = Buffer.alloc(0); // oversized/corrupt — reset, fail-open
+      return;
+    }
+    buffer = decoded.rest;
+    for (const raw of decoded.messages) {
+      const msg = validateInbound(raw);
+      if (msg === null) continue; // hostile/off-schema — drop silently
+      if (msg.type === "events") {
+        reply({ type: "ack", ids: appendBrowserEvents(msg.events) });
+      } else if (msg.type === "request_observe") {
+        reply({ type: "observe", domains: loadWatchlist().observe });
+      }
+    }
+  });
 }
