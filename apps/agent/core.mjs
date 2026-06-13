@@ -454,6 +454,13 @@ export function logFileName(ts) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.agent.jsonl`;
 }
 
+/** Local-date daily bucket for the browser surface. @param {number} ts */
+export function browserLogFileName(ts) {
+  const d = new Date(ts);
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.browser.jsonl`;
+}
+
 /** Read-side rollup for `keel log status`.
  * @param {ActivityEvent[]} events @param {number} now @param {number} [activeWindowMs] */
 export function summarizeEvents(events, now, activeWindowMs = 15 * 60_000) {

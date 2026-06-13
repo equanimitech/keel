@@ -64,3 +64,10 @@ test("rejects out-of-range timestamps", () => {
   ]});
   assert.deepEqual(out.events.map((e) => e.id), ["ok"]);
 });
+
+import { browserLogFileName } from "./core.mjs";
+
+test("browserLogFileName buckets by local date with .browser surface", () => {
+  const name = browserLogFileName(1781364354057);
+  assert.match(name, /^\d{4}-\d{2}-\d{2}\.browser\.jsonl$/);
+});

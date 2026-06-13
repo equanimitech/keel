@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, renameSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { mergeTarget, mergeWatchlist, mergeDesktopSensors, emptyState, logFileName, eventLine } from "./core.mjs";
+import { mergeTarget, mergeWatchlist, mergeDesktopSensors, emptyState, logFileName, browserLogFileName, eventLine } from "./core.mjs";
 
 export const KEEL_DIR = join(homedir(), ".keel");
 export const TARGET_ID = "claude-code";
@@ -92,4 +92,18 @@ export function readEvents(dir, ts) {
       .split("\n").filter(Boolean)
       .flatMap((l) => { try { return [JSON.parse(l)]; } catch { return []; } });
   } catch { return []; }
+}
+
+/** Append validated browser events to per-day .browser.jsonl files.
+ * Atomic per-line appendFileSync. Returns the ids written. */
+export function appendBrowserEvents(events) {
+  mkdirSync(LOG_DIR, { recursive: true });
+  const written = [];
+  for (const e of events) {
+    try {
+      appendFileSync(join(LOG_DIR, browserLogFileName(e.ts)), JSON.stringify(e) + "\n");
+      written.push(e.id);
+    } catch { /* fail-open: skip this event */ }
+  }
+  return written;
 }
