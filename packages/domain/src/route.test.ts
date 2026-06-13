@@ -21,6 +21,10 @@ describe("normalizeRoute", () => {
   it("returns null for a host with no registry entry", () => {
     expect(normalizeRoute("github.com", "/rafa/keel")).toBeNull();
   });
+  it("does not leak user-identifying @handle segments", () => {
+    expect(normalizeRoute("youtube.com", "/@SomeCreator")).toBeNull();
+    expect(normalizeRoute("youtube.com", "/@SomeCreator/videos")).toBeNull();
+  });
   it("exposes the registry for reuse", () => {
     expect(ROUTE_REGISTRY["youtube.com"]).toContain("/shorts");
   });

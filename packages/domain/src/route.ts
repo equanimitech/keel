@@ -33,5 +33,8 @@ export function normalizeRoute(host: string, pathname: string): string | null {
     }
   }
   const segment = clean.split("/").filter(Boolean)[0];
-  return segment === undefined ? null : "/" + segment;
+  if (segment === undefined || segment.startsWith("@")) {
+    return null; // user-identifying handle (e.g. /@creator) is not a coarse route
+  }
+  return "/" + segment;
 }

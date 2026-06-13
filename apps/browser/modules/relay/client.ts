@@ -31,6 +31,8 @@ export async function flushToHost(): Promise<void> {
       port.postMessage({ type: "events", events: batch });
     }
     port.postMessage({ type: "request_observe" });
+  } catch {
+    // host crashed mid-flush — buffered events stay in IndexedDB for the next flush
   } finally {
     setTimeout(() => port.disconnect(), 2000); // allow acks to arrive
   }
