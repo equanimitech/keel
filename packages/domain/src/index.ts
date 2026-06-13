@@ -18,6 +18,9 @@
 export type { ActivitySurface, ActivityEventKind, ActivityEvent } from "./activity.js";
 export { createActivityEvent, LEGACY_KIND_ALIASES, canonicalKind } from "./activity.js";
 
+// ── Route Registry ─────────────────────────────────────────────
+export { ROUTE_REGISTRY, normalizeRoute } from "./route.js";
+
 // ── Value Objects ───────────────────────────────────────────────
 export type { Duration, Domain, AppName } from "./value-objects.js";
 export {
