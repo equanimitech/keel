@@ -13,6 +13,45 @@ export function encodeMessage(obj) {
   return Buffer.concat([header, json]);
 }
 
+const MAX_EVENTS_PER_MESSAGE = 5000;
+const MAX_FIELD_BYTES = 2048;
+// Allowlist: browser writer + sensor kinds (event-taxonomy.md).
+const ALLOWED_KINDS = new Set([
+  "writer_started", "writer_paused", "writer_resumed",
+  "tab_activated", "navigation_committed", "route_changed",
+  "focus_start", "focus_end", "idle_start", "idle_end",
+  "log_pruned", "panic_pressed",
+  "video_started", "video_ended", "post_seen", "game_finished",
+]);
+
+function isValidEvent(e) {
+  if (typeof e !== "object" || e === null) return false;
+  if (typeof e.id !== "string" || e.id.length === 0 || e.id.length > 128) return false;
+  if (e.surface !== "browser") return false;
+  if (typeof e.kind !== "string" || !ALLOWED_KINDS.has(e.kind)) return false;
+  if (typeof e.ts !== "number" || !Number.isFinite(e.ts)) return false;
+  if (typeof e.sessionId !== "string" || e.sessionId.length > 128) return false;
+  if (typeof e.payload !== "object" || e.payload === null) return false;
+  for (const v of Object.values(e.payload)) {
+    if (typeof v === "string" && Buffer.byteLength(v, "utf8") > MAX_FIELD_BYTES) return false;
+  }
+  if (e.durationMs !== undefined && typeof e.durationMs !== "number") return false;
+  return true;
+}
+
+/** Validate an inbound message. Returns a sanitized message or null. All
+ * extension input is untrusted; off-schema is dropped, never written. */
+export function validateInbound(msg) {
+  if (typeof msg !== "object" || msg === null) return null;
+  if (msg.type === "request_observe") return { type: "request_observe" };
+  if (msg.type === "events") {
+    if (!Array.isArray(msg.events)) return null;
+    const events = msg.events.filter(isValidEvent).slice(0, MAX_EVENTS_PER_MESSAGE);
+    return { type: "events", events };
+  }
+  return null;
+}
+
 /** Decode as many whole frames as `buf` contains. Returns parsed messages and
  * the leftover bytes (a partial next frame). Oversized frames throw. */
 export function decodeMessages(buf) {
