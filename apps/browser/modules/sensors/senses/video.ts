@@ -8,6 +8,13 @@ import { finiteSeconds, videoCompleted } from "../events";
 import { sendSensorEvent } from "../send";
 
 export function armVideoSense(): void {
+  // LOAD-BEARING ASSUMPTION: platforms SWAP the <video> element per video
+  // (YouTube does — each new video gets a fresh element → fresh wire()).
+  // Dedupe is therefore keyed per element: one started + one ended each.
+  // A platform that REUSES one element across videos would degrade to a
+  // single started+ended for the whole session (once:true + the `ended`
+  // WeakSet suppress every subsequent video). No clean hostile-page signal
+  // for per-video identity exists, so this is the pragmatic boundary.
   const wired = new WeakSet<HTMLVideoElement>();
   const ended = new WeakSet<HTMLVideoElement>();
 
