@@ -6,7 +6,14 @@ $signature:
   docHash: sha256:97ce479cbdc1527b743f87e79fa43796f25a268efc8166a3f92d38f8746f36b4
   signedAt: 2026-06-14T11:05:34.358754Z
   signature: ed25519:QggMIk/KJ/UwhnkaWPlnrrlJyofDY4gwJCyHtafnQJggI7img8VJhdWN/TNtlUyRAN9Os0PtgYHdWJzUchG6BQ==
-type: idea
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:97ce479cbdc1527b743f87e79fa43796f25a268efc8166a3f92d38f8746f36b4
+  docFilename: 2026-06-14-keel-console-tui-status-ritual-launcher.md
+  stampedAt: 2026-06-14T11:05:55.958679Z
+  signature: ed25519:YFKmWdX76VSnfjm6xRmJk0mMLzoOPCgEQhjXCr+wV1I/qMycqU1oMvvMaFYkFyWEDGMiiDbaLzEbMQTTfxZwBg==
 ---
 # keel console TUI — status + ritual launcher
 

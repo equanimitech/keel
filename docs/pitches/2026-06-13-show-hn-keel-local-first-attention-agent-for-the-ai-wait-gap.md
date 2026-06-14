@@ -6,7 +6,14 @@ $signature:
   docHash: sha256:0a60bbc96db2b0ce2cc687da205e76c6bb579642a879280d02925ba94e27f370
   signedAt: 2026-06-13T21:23:33.415626Z
   signature: ed25519:VKXX3a8Vucl31UCCAaGTNOESf92KbZpvSfAbsaSWTVEQVflg/ytZX6h3ZVG9JJmeYwj4Mn5tpVQUgef7AEXQAA==
-type: pitch
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:0a60bbc96db2b0ce2cc687da205e76c6bb579642a879280d02925ba94e27f370
+  docFilename: 2026-06-13-show-hn-keel-local-first-attention-agent-for-the-ai-wait-gap.md
+  stampedAt: 2026-06-13T21:24:49.702753Z
+  signature: ed25519:+GK1u9QzpZY+EZc1TcrFOTw6GuvjU5mdpOKf+AWBLtHhQUeJnWEVd3T1j1idhZN9L2mvxNsdr1Xwp8rparuIAg==
 ---
 A draft "Show HN" post for Hacker News, aimed at Claude Code users. Status: drafted 2026-06-13, **not yet posted**. Save for later.
 
