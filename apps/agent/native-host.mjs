@@ -28,10 +28,10 @@ function isScalar(v) {
 // Allowlist: browser writer + sensor kinds (event-taxonomy.md).
 const ALLOWED_KINDS = new Set([
   "writer_started", "writer_paused", "writer_resumed",
-  "tab_activated", "navigation_committed", "route_changed",
+  "tab_activated", "tab_closed", "navigation_committed", "route_changed",
   "focus_start", "focus_end", "idle_start", "idle_end",
   "log_pruned", "panic_pressed",
-  "video_started", "video_ended", "post_seen", "game_finished",
+  "video_started", "video_ended", "video_paused", "video_resumed", "post_seen", "game_finished",
 ]);
 
 function isValidEvent(e) {

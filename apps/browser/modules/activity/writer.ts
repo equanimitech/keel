@@ -24,6 +24,7 @@ import {
   routeFor,
   shouldLogNavigation,
   shouldLogRoute,
+  shouldLogTabClose,
 } from "./events";
 import { tabUuid, type TabMap } from "./tabs";
 import { appendEvent, countEvents, deleteOldestEvents } from "./log";
@@ -128,7 +129,17 @@ export function startActivityWriter(): void {
     }
   });
 
-  browser.tabs.onRemoved.addListener((tabId) => {
+  browser.tabs.onRemoved.addListener(async (tabId) => {
+    // A closed tab is a dismissal — a stronger "done with this" signal than a
+    // focus switch, and (unlike focus_end) it brackets a BACKGROUND tab the
+    // focus span never saw. Log it only when we tracked a web domain for it.
+    const domain = lastDomainByTab.get(tabId) ?? null;
+    if (shouldLogTabClose(domain)) {
+      const map = await tabMapItem.getValue();
+      const { uuid, map: next } = tabUuid(map, tabId, () => crypto.randomUUID());
+      if (next !== map) await tabMapItem.setValue(next);
+      write("tab_closed", { domain, tab: uuid });
+    }
     lastDomainByTab.delete(tabId);
   });
 

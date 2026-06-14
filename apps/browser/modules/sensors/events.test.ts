@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  INITIAL_PLAYBACK,
+  PAUSE_SETTLE_MS,
   SENSOR_KINDS,
   finiteSeconds,
   isArmQuery,
   isSponsoredLabel,
+  playbackTransition,
   sensorAllowed,
   validateSensorMessage,
   videoCompleted,
@@ -151,6 +154,8 @@ describe("SENSOR_KINDS", () => {
       "game_finished",
       "post_seen",
       "video_ended",
+      "video_paused",
+      "video_resumed",
       "video_started",
     ]);
   });
@@ -191,5 +196,82 @@ describe("videoCompleted (≥90% watched heuristic)", () => {
   it("honors a custom threshold", () => {
     expect(videoCompleted(80, 100, 0.75)).toBe(true);
     expect(videoCompleted(70, 100, 0.75)).toBe(false);
+  });
+});
+
+describe("SENSOR_KINDS includes the video pause/resume grammar", () => {
+  it("accepts video_paused and video_resumed as sensor kinds", () => {
+    expect(SENSOR_KINDS).toContain("video_paused");
+    expect(SENSOR_KINDS).toContain("video_resumed");
+  });
+
+  it("validateSensorMessage accepts a video_paused event", () => {
+    expect(
+      validateSensorMessage({
+        type: "keel-sensor",
+        kind: "video_paused",
+        payload: { seconds: 42 },
+      })
+    ).toEqual({ kind: "video_paused", payload: { seconds: 42 } });
+  });
+});
+
+describe("playbackTransition (debounced pause / resume state machine)", () => {
+  it("a pause from playing arms a pending pause without emitting", () => {
+    const r = playbackTransition(INITIAL_PLAYBACK, { type: "pause", t: 1000 });
+    expect(r.emit).toBeNull();
+    expect(r.state).toEqual({ phase: "pending_pause", pauseTs: 1000 });
+  });
+
+  it("a play before the settle window is a transient — no emit, back to playing", () => {
+    const pending = playbackTransition(INITIAL_PLAYBACK, { type: "pause", t: 1000 }).state;
+    const r = playbackTransition(pending, { type: "play", t: 1000 + PAUSE_SETTLE_MS - 1 });
+    expect(r.emit).toBeNull();
+    expect(r.state).toEqual({ phase: "playing", pauseTs: null });
+  });
+
+  it("a tick before the settle window does not settle", () => {
+    const pending = playbackTransition(INITIAL_PLAYBACK, { type: "pause", t: 1000 }).state;
+    const r = playbackTransition(pending, { type: "tick", t: 1000 + PAUSE_SETTLE_MS - 1 });
+    expect(r.emit).toBeNull();
+    expect(r.state.phase).toBe("pending_pause");
+  });
+
+  it("a tick at or past the settle window emits video_paused", () => {
+    const pending = playbackTransition(INITIAL_PLAYBACK, { type: "pause", t: 1000 }).state;
+    const r = playbackTransition(pending, { type: "tick", t: 1000 + PAUSE_SETTLE_MS });
+    expect(r.emit).toBe("video_paused");
+    expect(r.state.phase).toBe("settled_paused");
+  });
+
+  it("a play after a settled pause emits video_resumed", () => {
+    const pending = playbackTransition(INITIAL_PLAYBACK, { type: "pause", t: 1000 }).state;
+    const settled = playbackTransition(pending, { type: "tick", t: 1000 + PAUSE_SETTLE_MS }).state;
+    const r = playbackTransition(settled, { type: "play", t: 9000 });
+    expect(r.emit).toBe("video_resumed");
+    expect(r.state).toEqual({ phase: "playing", pauseTs: null });
+  });
+
+  it("a stale tick after a transient resume is a no-op", () => {
+    const pending = playbackTransition(INITIAL_PLAYBACK, { type: "pause", t: 1000 }).state;
+    const resumed = playbackTransition(pending, { type: "play", t: 1500 }).state;
+    const r = playbackTransition(resumed, { type: "tick", t: 1000 + PAUSE_SETTLE_MS });
+    expect(r.emit).toBeNull();
+    expect(r.state.phase).toBe("playing");
+  });
+
+  it("a full bail-and-return sequence emits exactly one paused then one resumed", () => {
+    const emissions: (string | null)[] = [];
+    let state = INITIAL_PLAYBACK;
+    for (const input of [
+      { type: "pause", t: 1000 } as const,
+      { type: "tick", t: 1000 + PAUSE_SETTLE_MS } as const,
+      { type: "play", t: 20000 } as const,
+    ]) {
+      const r = playbackTransition(state, input);
+      state = r.state;
+      if (r.emit) emissions.push(r.emit);
+    }
+    expect(emissions).toEqual(["video_paused", "video_resumed"]);
   });
 });

@@ -1,10 +1,19 @@
 /**
  * Video sense — generic over any page that plays HTML5 video.
  * Type-level knowledge: <video> elements + SPA-safe re-wiring.
- * Emits video_started / video_ended (completion grammar).
+ * Emits video_started / video_ended (completion grammar) plus the debounced
+ * video_paused / video_resumed pair (the pure state machine lives in ../events).
  */
 
-import { finiteSeconds, videoCompleted } from "../events";
+import {
+  INITIAL_PLAYBACK,
+  PAUSE_SETTLE_MS,
+  finiteSeconds,
+  playbackTransition,
+  videoCompleted,
+  type PlaybackInput,
+  type PlaybackState,
+} from "../events";
 import { sendSensorEvent } from "../send";
 
 export function armVideoSense(): void {
@@ -62,6 +71,34 @@ export function armVideoSense(): void {
     });
     video.addEventListener("ended", () => {
       emitEnded(video);
+    });
+
+    // Pause/resume grammar. A raw `pause` fires on ad breaks, scrubbing, and
+    // autoplay swaps, so the pure machine only "settles" into video_paused
+    // after the element stays paused past PAUSE_SETTLE_MS; a `play` before
+    // then is a transient. A play after a settled pause emits video_resumed.
+    // The setTimeout is the only impurity — it feeds a `tick` to the machine.
+    let playback: PlaybackState = INITIAL_PLAYBACK;
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    const feedPlayback = (input: PlaybackInput): void => {
+      const result = playbackTransition(playback, input);
+      playback = result.state;
+      if (result.emit !== null) {
+        sendSensorEvent(result.emit, { seconds: finiteSeconds(video.currentTime) });
+      }
+    };
+    video.addEventListener("pause", () => {
+      const t = Date.now();
+      feedPlayback({ type: "pause", t });
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(
+        () => feedPlayback({ type: "tick", t: t + PAUSE_SETTLE_MS }),
+        PAUSE_SETTLE_MS
+      );
+    });
+    video.addEventListener("play", () => {
+      clearTimeout(settleTimer);
+      feedPlayback({ type: "play", t: Date.now() });
     });
   };
 

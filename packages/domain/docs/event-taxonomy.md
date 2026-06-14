@@ -11,9 +11,9 @@ conforms to one of three patterns. Stamped basis:
 
 | Pattern | Shape | Examples | Academic anchor |
 |---|---|---|---|
-| **Span** | `<state>_start` / `<state>_end`; `durationMs` on the end event when the start was observed | `idle_start`/`idle_end`, `focus_start`/`focus_end`, `session_start`/`session_end` | AFK bracketing (ActivityWatch); interval substrate for resumption lag (Iqbal & Bailey 2006) |
+| **Span** | `<state>_start` / `<state>_end`; `durationMs` on the end event when the start was observed | `idle_start`/`idle_end`, `focus_start`/`focus_end`, `session_start`/`session_end`, `video_paused`/`video_resumed` (brackets the paused interval; lets active-watch time exclude pauses) | AFK bracketing (ActivityWatch); interval substrate for resumption lag (Iqbal & Bailey 2006) |
 | **Switch** | `<thing>_switched` / `<thing>_activated`; payload carries the *new* target; `durationMs` may close the previous span | `app_switched`, `tab_activated` | Switch events — fragmentation metrics (Mark CHI 2014); coarse breakpoints (Adamczyk & Bailey 2004) |
-| **Completion** | past-tense action end | `navigation_committed`, `tool_completed`, `video_ended`, `post_seen` | Action completions = breakpoint candidates ("never clock-based", OASIS) |
+| **Completion** | past-tense action end | `navigation_committed`, `tool_completed`, `video_ended`, `post_seen`, `tab_closed` (a dismissal) | Action completions = breakpoint candidates ("never clock-based", OASIS) |
 
 Rules:
 
@@ -41,11 +41,14 @@ Rules:
   `keyDowns`/`mouseDowns`/`scrolls`/`mouseMoves`; counts only, never
   keycodes or content; fully-idle windows are skipped, ≤2.9k events/day).
 - **browser** (`apps/browser`): `writer_started`, `tab_activated` (payload
-  `domain`), `navigation_committed` (payload `domain`), `focus_start`/
-  `focus_end` (browser holds OS focus), `idle_start`/`idle_end`
-  (chrome.idle; locked counts as idle), `log_pruned`, `panic_pressed`
-  (popup self-report), and — observe tier only — the sensor completions
-  `video_started`, `video_ended`, `post_seen`, `game_finished`.
+  `domain`), `tab_closed` (payload `domain`; a dismissal that also brackets a
+  background tab no focus span saw), `navigation_committed` (payload
+  `domain`), `focus_start`/`focus_end` (browser holds OS focus),
+  `idle_start`/`idle_end` (chrome.idle; locked counts as idle), `log_pruned`,
+  `panic_pressed` (popup self-report), and — observe tier only — the sensor
+  completions `video_started`, `video_ended`, `post_seen`, `game_finished`,
+  plus the debounced watch-span pair `video_paused`/`video_resumed` (settles
+  past ~2.5s so ad breaks and scrubs do not register).
 
 Architecture note (OASIS mapping): the desktop observer emits the global
 *switch stream* (application-independent layer); each per-app surface

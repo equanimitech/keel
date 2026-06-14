@@ -12,7 +12,17 @@ import {
   tallyCompletionsSince,
   toJsonl,
 } from "./events";
-import { routeFor, shouldLogRoute, routeChanged } from "./events";
+import { routeFor, shouldLogRoute, routeChanged, shouldLogTabClose } from "./events";
+
+describe("shouldLogTabClose", () => {
+  it("logs a tab_closed only when the removed tab had a known domain", () => {
+    expect(shouldLogTabClose("youtube.com")).toBe(true);
+  });
+
+  it("does not log when the tab's domain was never tracked (non-web / new tab)", () => {
+    expect(shouldLogTabClose(null)).toBe(false);
+  });
+});
 
 describe("domainFromUrl", () => {
   it("strips to a bare lowercase domain — never a full URL", () => {

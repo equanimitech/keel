@@ -31,6 +31,15 @@ test("accepts a well-formed events message and drops bad events", () => {
   assert.deepEqual(out.events.map((e) => e.id), ["e1"]); // bad shape + bad kind dropped
 });
 
+test("accepts the tab_closed + video pause/resume kinds", () => {
+  const kinds = ["tab_closed", "video_paused", "video_resumed"];
+  const out = validateInbound({
+    type: "events",
+    events: kinds.map((kind, i) => ({ ...validEvent, id: `k${i}`, kind })),
+  });
+  assert.deepEqual(out.events.map((e) => e.kind), kinds);
+});
+
 test("accepts request_observe", () => {
   assert.deepEqual(validateInbound({ type: "request_observe" }), { type: "request_observe" });
 });

@@ -18,6 +18,8 @@
 export const SENSOR_KINDS = [
   "video_started",
   "video_ended",
+  "video_paused",
+  "video_resumed",
   "post_seen",
   "game_finished",
 ] as const;
@@ -137,4 +139,75 @@ export function sensorAllowed(
   return observe.some(
     (entry) => domain === entry || domain.endsWith("." + entry)
   );
+}
+
+/**
+ * Debounce window before a paused video "settles" into a video_paused.
+ * A raw <video> `pause` is ambiguous (ad breaks, scrubbing, autoplay
+ * transitions, tab backgrounding), so a pause only counts once playback
+ * stays paused this long — short enough to feel immediate, long enough to
+ * drop scrubs and ad swaps.
+ */
+export const PAUSE_SETTLE_MS = 2500;
+
+export type PlaybackPhase = "playing" | "pending_pause" | "settled_paused";
+
+/** Pure playback state for the pause/resume grammar. `pauseTs` is the
+ * moment the current pending pause began (null while playing). */
+export interface PlaybackState {
+  readonly phase: PlaybackPhase;
+  readonly pauseTs: number | null;
+}
+
+export const INITIAL_PLAYBACK: PlaybackState = { phase: "playing", pauseTs: null };
+
+export type PlaybackInput =
+  | { readonly type: "play"; readonly t: number }
+  | { readonly type: "pause"; readonly t: number }
+  | { readonly type: "tick"; readonly t: number };
+
+export interface PlaybackResult {
+  readonly state: PlaybackState;
+  readonly emit: "video_paused" | "video_resumed" | null;
+}
+
+/**
+ * Timer-free state machine for debounced pause/resume. The DOM wiring feeds
+ * it `pause`/`play` events plus a `tick` scheduled at pauseTs + settleMs:
+ *   - a pause from playing arms a pending pause (no emit yet),
+ *   - a play before the tick is a transient (scrub/ad) — back to playing,
+ *   - a tick at/after the settle window emits `video_paused`,
+ *   - a play after a settled pause emits `video_resumed`.
+ * Pure so the debounce/pairing is unit-testable without real timers.
+ */
+export function playbackTransition(
+  state: PlaybackState,
+  input: PlaybackInput,
+  settleMs: number = PAUSE_SETTLE_MS
+): PlaybackResult {
+  switch (state.phase) {
+    case "playing":
+      if (input.type === "pause") {
+        return { state: { phase: "pending_pause", pauseTs: input.t }, emit: null };
+      }
+      return { state, emit: null };
+    case "pending_pause":
+      if (input.type === "play") {
+        return { state: INITIAL_PLAYBACK, emit: null };
+      }
+      if (
+        input.type === "tick" &&
+        state.pauseTs !== null &&
+        input.t - state.pauseTs >= settleMs
+      ) {
+        return { state: { phase: "settled_paused", pauseTs: state.pauseTs }, emit: "video_paused" };
+      }
+      return { state, emit: null };
+    case "settled_paused":
+      if (input.type === "play") {
+        return { state: INITIAL_PLAYBACK, emit: "video_resumed" };
+      }
+      return { state, emit: null };
+  }
+  return { state, emit: null };
 }

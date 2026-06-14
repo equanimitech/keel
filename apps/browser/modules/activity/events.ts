@@ -110,6 +110,18 @@ export function shouldLogNavigation(
 }
 
 /**
+ * A `tab_closed` event fires only when the removed tab had a known (web)
+ * domain we were tracking. Tabs we never saw a domain for (chrome://, new
+ * tab page, non-web) are skipped — closing them carries no attention signal.
+ * Unlike `focus_end`, this also captures the dismissal of a BACKGROUND tab
+ * (e.g. a video left playing in another tab, then closed) that no focus
+ * transition would bracket.
+ */
+export function shouldLogTabClose(domain: string | null): domain is string {
+  return domain !== null;
+}
+
+/**
  * Outcome of feeding one observation into a span (start/end + durationMs
  * pattern — see packages/domain/docs/event-taxonomy.md).
  *
