@@ -17,16 +17,25 @@ export async function flushToHost(): Promise<void> {
   let port: ReturnType<typeof browser.runtime.connectNative>;
   try {
     port = browser.runtime.connectNative(HOST_NAME);
-  } catch {
-    return; // host not installed — stay on the export stopgap
+  } catch (e) {
+    console.warn("[keel relay] connectNative threw:", e); // host not installed — stay on the export stopgap
+    return;
   }
   try {
+    // Surface a failed handshake instead of failing silently. connectNative
+    // returns a port even when the host is unreachable; the failure only shows
+    // up here as lastError on disconnect.
+    port.onDisconnect.addListener(() => {
+      const err = browser.runtime.lastError;
+      if (err) console.warn("[keel relay] native host disconnected:", err.message);
+    });
     port.onMessage.addListener((raw: unknown) => {
       const msg = raw as { type?: string; ids?: string[]; domains?: string[] };
       if (msg.type === "ack" && msg.ids) void deleteEventsByIds(msg.ids);
       else if (msg.type === "observe" && msg.domains) void replaceObserveDomains(msg.domains);
     });
     const events = await readAllEvents();
+    console.debug("[keel relay] flushing", events.length, "buffered events to", HOST_NAME);
     for (const batch of chunkEvents(events, MAX_BATCH)) {
       port.postMessage({ type: "events", events: batch });
     }

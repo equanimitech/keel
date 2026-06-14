@@ -8,10 +8,14 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 
 const HOST_NAME = "tech.equanimi.keel";
-// Brave (Chromium family) per-user native-messaging host dir on macOS:
+// Brave on macOS reads native-messaging host manifests from CHROME's host dir,
+// NOT its own BraveSoftware path. Verified via fs_usage: a connectNative call
+// makes Brave stat() ~/Library/Application Support/Google/Chrome/
+// NativeMessagingHosts/<host>.json (plus the /Library system path). Brave reuses
+// Chrome's location so hosts installed for Chrome work in Brave too.
 const BRAVE_NM_DIR = join(
   homedir(),
-  "Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts"
+  "Library/Application Support/Google/Chrome/NativeMessagingHosts"
 );
 
 const extId = process.argv[2];

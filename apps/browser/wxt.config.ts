@@ -38,7 +38,12 @@ export default defineConfig({
     // Only egress anywhere in keel is the user's own BYOK authoring call.
     // "idle" powers the activity writer's browser_idle/browser_active
     // events (120s detection interval) — still no host permissions.
-    permissions: ["storage", "tabs", "activeTab", "declarativeNetRequest", "idle", "alarms"],
+    //   • nativeMessaging connects ONLY to the keel native host registered in
+    //     the OS, gated to this extension by the host manifest's
+    //     allowed_origins. It relays domains and timings to ~/.keel/log, never
+    //     page content or URLs, and grants no web access. It is the relay that
+    //     lets the browser writer reach the shared substrate.
+    permissions: ["storage", "tabs", "activeTab", "declarativeNetRequest", "idle", "alarms", "nativeMessaging"],
     // Single shared instance in incognito so the porn Drogue's block holds
     // there too (where porn is most often browsed). The user must still flip
     // "Allow in incognito" once — see README. Shared storage = one source of
