@@ -12,6 +12,36 @@
 
 ---
 
+> **Status: SHIPPED, verified end-to-end 2026-06-14.** All 12 tasks are complete:
+> browser events now land in `~/.keel/log/<date>.browser.jsonl` and the observe
+> list pushes back. The code shipped ahead of this checklist (built 2026-06-13),
+> and getting the relay to actually flow required two fixes BEYOND this plan, both
+> committed 2026-06-14:
+>
+> 1. **Wrong host directory (Task 10).** Brave on macOS reads native-messaging
+>    manifests from CHROME's host dir
+>    (`~/Library/Application Support/Google/Chrome/NativeMessagingHosts`), not the
+>    BraveSoftware path this plan installed to. So `connectNative` always returned
+>    "Specified native messaging host not found" and zero events flowed. Confirmed
+>    with fs_usage; `native-host-install.mjs` now targets the Chrome dir.
+> 2. **Missing `nativeMessaging` permission.** `connectNative` is blocked without
+>    it, and `wxt.config.ts` never declared it, so the relay failed silently. Added
+>    (documented inline). The client now also surfaces `onDisconnect`/`lastError`
+>    instead of failing silently.
+>
+> **Beyond the plan:** three lifecycle event kinds were added the same day,
+> `tab_closed` and the debounced `video_paused`/`video_resumed` pair (test-first;
+> see `packages/domain/docs/event-taxonomy.md`).
+>
+> **Residual follow-ups (not blocking):**
+> - `logDetail` config gate, Task 4 hardcodes `true`.
+> - Fold the cold-start watchlist scan into the extension (`chrome.history`) and
+>   retire `apps/agent/watchlist_scan.py` (the Python read was always a throwaway
+>   bootstrap; the browser is the steady-state observer).
+> - Tray-as-host migration (spec open question); `keel.mjs` is the host for now.
+
+---
+
 ## File Structure
 
 **Create:**
@@ -48,7 +78,7 @@
 - Test: `packages/domain/src/route.test.ts`
 - Modify: `packages/domain/src/index.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // packages/domain/src/route.test.ts
@@ -87,12 +117,12 @@ describe("normalizeRoute", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @keel/domain exec vitest run src/route.test.ts`
 Expected: FAIL ("Cannot find module './route'").
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```ts
 // packages/domain/src/route.ts
@@ -135,7 +165,7 @@ export function normalizeRoute(host: string, pathname: string): string | null {
 }
 ```
 
-- [ ] **Step 4: Add the export**
+- [x] **Step 4: Add the export**
 
 In `packages/domain/src/index.ts`, add alongside the existing exports:
 
@@ -143,12 +173,12 @@ In `packages/domain/src/index.ts`, add alongside the existing exports:
 export { ROUTE_REGISTRY, normalizeRoute } from "./route";
 ```
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `pnpm --filter @keel/domain exec vitest run src/route.test.ts`
 Expected: PASS (6 tests).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add packages/domain/src/route.ts packages/domain/src/route.test.ts packages/domain/src/index.ts
@@ -163,7 +193,7 @@ git commit -m "feat(domain): shared route registry + normalizeRoute"
 - Modify: `apps/browser/modules/activity/events.ts`
 - Test: `apps/browser/modules/activity/events.test.ts`
 
-- [ ] **Step 1: Write the failing test** (append to `events.test.ts`)
+- [x] **Step 1: Write the failing test** (append to `events.test.ts`)
 
 ```ts
 import { routeFor, shouldLogRoute, routeChanged } from "./events";
@@ -203,12 +233,12 @@ describe("route helpers", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @keel/browser exec vitest run modules/activity/events.test.ts`
 Expected: FAIL ("routeFor is not exported").
 
-- [ ] **Step 3: Write minimal implementation** (add to `events.ts`, after `domainFromUrl`)
+- [x] **Step 3: Write minimal implementation** (add to `events.ts`, after `domainFromUrl`)
 
 ```ts
 import { normalizeRoute } from "@keel/domain";
@@ -247,12 +277,12 @@ export function routeChanged(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @keel/browser exec vitest run modules/activity/events.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/browser/modules/activity/events.ts apps/browser/modules/activity/events.test.ts
@@ -267,7 +297,7 @@ git commit -m "feat(browser): pure route decision helpers (routeFor/shouldLogRou
 - Create: `apps/browser/modules/activity/tabs.ts`
 - Test: `apps/browser/modules/activity/tabs.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 // apps/browser/modules/activity/tabs.test.ts
@@ -296,12 +326,12 @@ describe("tabUuid", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @keel/browser exec vitest run modules/activity/tabs.test.ts`
 Expected: FAIL ("Cannot find module './tabs'").
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```ts
 // apps/browser/modules/activity/tabs.ts
@@ -331,12 +361,12 @@ export function tabUuid(
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @keel/browser exec vitest run modules/activity/tabs.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/browser/modules/activity/tabs.ts apps/browser/modules/activity/tabs.test.ts
@@ -352,7 +382,7 @@ git commit -m "feat(browser): pure tab-identity uuid reducer"
 
 This task is chrome.* integration (not unit-testable without heavy mocks); the pure logic it calls is already covered by Tasks 1–3. Verification is a manual load + log inspection.
 
-- [ ] **Step 1: Add storage-session state for the tab map and open spans**
+- [x] **Step 1: Add storage-session state for the tab map and open spans**
 
 At the top of `writer.ts`, add imports + a session-backed state helper:
 
@@ -367,7 +397,7 @@ const focusSinceItem = storage.defineItem<number | null>("session:activity:focus
 const routeByTab = storage.defineItem<Record<number, string | null>>("session:activity:routeByTab", { fallback: {} });
 ```
 
-- [ ] **Step 2: Replace the tab-activation listener to attach a uuid**
+- [x] **Step 2: Replace the tab-activation listener to attach a uuid**
 
 Replace the existing `browser.tabs.onActivated` block (currently logs `{ domain }`) with:
 
@@ -388,7 +418,7 @@ browser.tabs.onActivated.addListener(async ({ tabId }) => {
 });
 ```
 
-- [ ] **Step 3: Replace the navigation listener to attach uuid + observe-tier route**
+- [x] **Step 3: Replace the navigation listener to attach uuid + observe-tier route**
 
 Replace the `browser.tabs.onUpdated` block with one that (a) still logs domain-change navigations, and (b) additionally logs `route_changed` for same-domain observe-tier hops:
 
@@ -429,7 +459,7 @@ browser.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
 });
 ```
 
-- [ ] **Step 4: Persist the focus span across SW restarts**
+- [x] **Step 4: Persist the focus span across SW restarts**
 
 Replace the in-memory `let focusSince` initialization and the `onFocusChanged` listener body to read/write `focusSinceItem` instead of the local variable, so a span survives a worker restart:
 
@@ -443,16 +473,16 @@ browser.windows.onFocusChanged.addListener(async (windowId) => {
 });
 ```
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `pnpm --filter @keel/browser run typecheck`
 Expected: no errors.
 
-- [ ] **Step 6: Manual verification**
+- [x] **Step 6: Manual verification**
 
 Run: `pnpm --filter @keel/browser dev`, load the unpacked extension in Brave, add `youtube.com` to the observe tier on the manage page, browse a few Shorts, then export the log from the manage page. Confirm: `tab_activated`/`navigation_committed` carry `tab`; YouTube Shorts hops emit `route_changed` with `route:"/shorts"`; github events carry `tab` but no `route`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/browser/modules/activity/writer.ts
@@ -469,7 +499,7 @@ git commit -m "feat(browser): tab uuid + observe-tier route + persisted focus sp
 - Modify: `apps/agent/store.mjs`
 - Test: `apps/agent/store.test.mjs` (create if absent)
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```js
 // apps/agent/store.test.mjs
@@ -489,12 +519,12 @@ test("writeJsonAtomic writes valid JSON and leaves no temp file", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --test apps/agent/store.test.mjs`
 Expected: FAIL ("writeJsonAtomic is not a function").
 
-- [ ] **Step 3: Implement + use it**
+- [x] **Step 3: Implement + use it**
 
 In `store.mjs`, add the helper and route `saveState` through it:
 
@@ -515,12 +545,12 @@ Change `saveState` body's last line from
 to
 `writeJsonAtomic(STATE_PATH, s);`
 
-- [ ] **Step 4: Run test + existing suite**
+- [x] **Step 4: Run test + existing suite**
 
 Run: `node --test apps/agent/store.test.mjs && pnpm --filter @keel/agent test`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/agent/store.mjs apps/agent/store.test.mjs
@@ -535,7 +565,7 @@ git commit -m "fix(agent): atomic temp+rename for state writes"
 - Create: `apps/agent/native-host.mjs`
 - Test: `apps/agent/native-host.test.mjs`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```js
 // apps/agent/native-host.test.mjs
@@ -559,12 +589,12 @@ test("decodeMessages keeps a partial trailing frame in rest", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --test apps/agent/native-host.test.mjs`
 Expected: FAIL ("Cannot find module './native-host.mjs'" / not a function).
 
-- [ ] **Step 3: Implement framing**
+- [x] **Step 3: Implement framing**
 
 ```js
 // apps/agent/native-host.mjs
@@ -600,12 +630,12 @@ export function decodeMessages(buf) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --test apps/agent/native-host.test.mjs`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/agent/native-host.mjs apps/agent/native-host.test.mjs
@@ -620,7 +650,7 @@ git commit -m "feat(agent): native-messaging length-prefixed framing"
 - Modify: `apps/agent/native-host.mjs`
 - Test: `apps/agent/native-host.test.mjs`
 
-- [ ] **Step 1: Write the failing test** (append)
+- [x] **Step 1: Write the failing test** (append)
 
 ```js
 import { validateInbound } from "./native-host.mjs";
@@ -656,12 +686,12 @@ test("caps event count per message", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --test apps/agent/native-host.test.mjs`
 Expected: FAIL ("validateInbound is not a function").
 
-- [ ] **Step 3: Implement validation**
+- [x] **Step 3: Implement validation**
 
 ```js
 const MAX_EVENTS_PER_MESSAGE = 5000;
@@ -704,12 +734,12 @@ export function validateInbound(msg) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --test apps/agent/native-host.test.mjs`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/agent/native-host.mjs apps/agent/native-host.test.mjs
@@ -725,7 +755,7 @@ git commit -m "feat(agent): hardened inbound validation for native host"
 - Modify: `apps/agent/store.mjs` (add `appendBrowserEvents`, reuse `loadWatchlist`)
 - Test: `apps/agent/native-host.test.mjs`
 
-- [ ] **Step 1: Write the failing test** (append)
+- [x] **Step 1: Write the failing test** (append)
 
 ```js
 import { browserLogFileName } from "./core.mjs";
@@ -736,12 +766,12 @@ test("browserLogFileName buckets by local date with .browser surface", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `node --test apps/agent/native-host.test.mjs`
 Expected: FAIL ("browserLogFileName is not a function").
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `core.mjs`, beside `logFileName`:
 
@@ -774,12 +804,12 @@ export function appendBrowserEvents(events) {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `node --test apps/agent/native-host.test.mjs`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/agent/core.mjs apps/agent/store.mjs apps/agent/native-host.test.mjs
@@ -796,7 +826,7 @@ git commit -m "feat(agent): browser-surface log append + filename"
 
 The stdio loop is integration; the pure handlers (`validateInbound`, framing, `appendBrowserEvents`) are already tested. Verification is manual end-to-end (Task 11).
 
-- [ ] **Step 1: Implement the host loop**
+- [x] **Step 1: Implement the host loop**
 
 Append to `native-host.mjs`:
 
@@ -833,7 +863,7 @@ export function runHost(stdin = process.stdin, stdout = process.stdout) {
 }
 ```
 
-- [ ] **Step 2: Wire the subcommand**
+- [x] **Step 2: Wire the subcommand**
 
 In `keel.mjs`, add the import near the other `store`/local imports:
 
@@ -849,12 +879,12 @@ In `main()`, before the final fallthrough, add:
 
 Note: `native-host` must NOT call `emit`/`process.exit` — it stays alive for the stdio session.
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `pnpm --filter @keel/agent run typecheck`
 Expected: no errors.
 
-- [ ] **Step 4: Smoke the framing end-to-end (manual)**
+- [x] **Step 4: Smoke the framing end-to-end (manual)**
 
 Run a one-shot pipe that sends a `request_observe` frame and prints the reply:
 
@@ -866,7 +896,7 @@ process.stdout.write(encodeMessage({ type: "request_observe" }));
 ```
 Expected: a length-prefixed `{"type":"observe","domains":[...]}` frame.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/agent/native-host.mjs apps/agent/keel.mjs
@@ -880,7 +910,7 @@ git commit -m "feat(agent): native-host stdio loop + keel native-host dispatch"
 **Files:**
 - Create: `apps/agent/native-host-install.mjs`
 
-- [ ] **Step 1: Implement the installer**
+- [x] **Step 1: Implement the installer**
 
 ```js
 // apps/agent/native-host-install.mjs
@@ -928,12 +958,12 @@ chmodSync(manifestPath, 0o644);
 console.log(`Installed native-messaging host:\n  ${manifestPath}\n  launcher: ${launcher}\n  allowed extension: ${extId}`);
 ```
 
-- [ ] **Step 2: Verify it writes a valid manifest (manual)**
+- [x] **Step 2: Verify it writes a valid manifest (manual)**
 
 Run: `node apps/agent/native-host-install.mjs abcdefghijklmnopabcdefghijklmnop`
 Expected: prints the manifest + launcher paths; `cat "$HOME/Library/Application Support/BraveSoftware/Brave-Browser/NativeMessagingHosts/tech.equanimi.keel.json"` shows `allowed_origins` pinned to the id.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add apps/agent/native-host-install.mjs
@@ -950,7 +980,7 @@ git commit -m "feat(agent): native-messaging manifest installer (allowed_origins
 - Create: `apps/browser/modules/relay/client.ts`
 - Test: `apps/browser/modules/relay/client.test.ts`
 
-- [ ] **Step 1: Write the failing test** (pure batching/ack reducer)
+- [x] **Step 1: Write the failing test** (pure batching/ack reducer)
 
 ```ts
 // apps/browser/modules/relay/client.test.ts
@@ -971,12 +1001,12 @@ describe("relay batching", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @keel/browser exec vitest run modules/relay/client.test.ts`
 Expected: FAIL ("Cannot find module './client'").
 
-- [ ] **Step 3: Add `deleteEventsByIds` to `log.ts`**
+- [x] **Step 3: Add `deleteEventsByIds` to `log.ts`**
 
 ```ts
 /** Delete events whose value.id is in `ids` (ack-prune). Fail-open: 0 on error. */
@@ -1007,7 +1037,7 @@ export async function deleteEventsByIds(ids: readonly string[]): Promise<number>
 }
 ```
 
-- [ ] **Step 4: Add `replaceObserveDomains` to `watchlist/store.ts`**
+- [x] **Step 4: Add `replaceObserveDomains` to `watchlist/store.ts`**
 
 ```ts
 /** Replace the whole observe list from the relay (config.json is source of
@@ -1018,7 +1048,7 @@ export async function replaceObserveDomains(domains: readonly string[]): Promise
 }
 ```
 
-- [ ] **Step 5: Implement the client**
+- [x] **Step 5: Implement the client**
 
 ```ts
 // apps/browser/modules/relay/client.ts
@@ -1069,12 +1099,12 @@ export async function flushToHost(): Promise<void> {
 }
 ```
 
-- [ ] **Step 6: Run test to verify it passes**
+- [x] **Step 6: Run test to verify it passes**
 
 Run: `pnpm --filter @keel/browser exec vitest run modules/relay/client.test.ts`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/browser/modules/activity/log.ts apps/browser/modules/watchlist/store.ts apps/browser/modules/relay/client.ts apps/browser/modules/relay/client.test.ts
@@ -1088,7 +1118,7 @@ git commit -m "feat(browser): native-host relay client (flush, ack-prune, observ
 **Files:**
 - Modify: `apps/browser/entrypoints/background.ts`
 
-- [ ] **Step 1: Add the flush trigger**
+- [x] **Step 1: Add the flush trigger**
 
 In `background.ts`'s `defineBackground` body, after `startActivityWriter()`:
 
@@ -1103,16 +1133,16 @@ browser.alarms.onAlarm.addListener((alarm) => {
 });
 ```
 
-- [ ] **Step 2: Ensure `alarms` permission**
+- [x] **Step 2: Ensure `alarms` permission**
 
 In `apps/browser/wxt.config.ts`, confirm `"alarms"` is in the manifest `permissions` array; add it if missing.
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `pnpm --filter @keel/browser run typecheck`
 Expected: no errors.
 
-- [ ] **Step 4: End-to-end manual verification**
+- [x] **Step 4: End-to-end manual verification**
 
 1. `pnpm --filter @keel/browser dev`; load unpacked in Brave; note the extension id.
 2. `node apps/agent/native-host-install.mjs <that-extension-id>`.
@@ -1120,7 +1150,7 @@ Expected: no errors.
 4. Reload the extension; browse a few Shorts; wait for the flush (or toggle focus).
 5. Confirm `~/.keel/log/<today>.browser.jsonl` now contains the browser events (with `tab` + `route`), and the manage page's observe list reflects `config.json` (manual mirror retired).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/browser/entrypoints/background.ts apps/browser/wxt.config.ts
