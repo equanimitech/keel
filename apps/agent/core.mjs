@@ -15,7 +15,7 @@
 /** @typedef {{ windows: ViceWindow[], reassertEveryMin: number }} Vice */
 /** @typedef {{ driver: Driver, rules: Rule[], orient: Orient, skipBudget: SkipBudget, voice: Voice, vice: Vice }} Target */
 /** @typedef {{ observed?: boolean, skipped?: boolean }} Night */
-/** @typedef {{ credits: number, creditsMonth: string, skipUntilTs: number, parkAtTs: number, viceUntilTs: number, viceSkipUntilTs: number, sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, intention: string, intentionDay: string, granularity: string, lastRuleHash: string, consentShownTs: number, nights: Record<string, Night> }} State */
+/** @typedef {{ credits: number, creditsMonth: string, skipUntilTs: number, parkAtTs: number, viceUntilTs: number, viceSkipUntilTs: number, sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, intention: string, granularity: string, lastRuleHash: string, consentShownTs: number, nights: Record<string, Night> }} State */
 
 /** Clock pressure is capped strictly below the full-lockdown threshold (1.0): the
  * wall-clock ramp escalates wind-down nudges but NEVER hard-locks coding on its own.
@@ -53,7 +53,7 @@ export const DEFAULT_TARGET = {
 export const emptyState = () => ({
   credits: 0, creditsMonth: "", skipUntilTs: 0, parkAtTs: 0, viceUntilTs: 0, viceSkipUntilTs: 0,
   sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, lastRitualNudge: "", inferNudgedTs: 0,
-  intention: "", intentionDay: "", granularity: "", lastRuleHash: "", consentShownTs: 0, nights: {},
+  intention: "", granularity: "", lastRuleHash: "", consentShownTs: 0, nights: {},
 });
 
 /** Merge a partial target config over the defaults. @param {any} t @returns {Target} */
@@ -337,22 +337,21 @@ export function ritualNudge(state, now, voice) {
   return { line, mark: dk };
 }
 
-/** Set the day's session intention (the focus the chat is guardrailed to).
- * Day-scoped — auto-stales at the next dayKey. @param {State} state @param {string} text @param {number} now */
-export function setIntention(state, text, now) {
-  return { ...state, intention: String(text ?? "").trim(), intentionDay: dayKey(now) };
+/** Set the session intention (the focus the chat is guardrailed to).
+ * Session-scoped — reset to "" at session-start (startup/clear). @param {State} state @param {string} text */
+export function setIntention(state, text) {
+  return { ...state, intention: String(text ?? "").trim() };
 }
 
-/** The active intention for *today*, or "" if none / stale (set on an earlier day).
- * @param {State} state @param {number} now */
-export function activeIntention(state, now) {
-  return state.intentionDay === dayKey(now) ? (state.intention || "") : "";
+/** The active intention for this session, or "" if none set. @param {State} state */
+export function activeIntention(state) {
+  return state.intention || "";
 }
 
-/** The per-turn guardrail line — keeps the chat anchored to today's declared focus.
- * Empty when no active intention. @param {State} state @param {number} now @returns {string} */
-export function intentionLine(state, now) {
-  const i = activeIntention(state, now);
+/** The per-turn guardrail line — keeps the chat anchored to the session's declared focus.
+ * Empty when no active intention. @param {State} state @returns {string} */
+export function intentionLine(state) {
+  const i = activeIntention(state);
   return i ? `[keel] ◎ intention: ${i} — capture drift (idea/pain), hold the thread.` : "";
 }
 

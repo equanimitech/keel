@@ -111,7 +111,7 @@ async function handleUserSubmit(now) {
   // to infer the intention from the conversation and set it silently. Surfaces in the HUD.
   // (Granularity needs no inference — it always has a floor, set at session-start.)
   const freshTurn = state.sessionStartTs === now;        // the session's first prompt
-  const unset = !activeIntention(state, now);
+  const unset = !activeIntention(state);
   let nudge = "";
   if (!freshTurn && unset && state.inferNudgedTs !== state.sessionStartTs) {
     state.inferNudgedTs = state.sessionStartTs;
@@ -142,12 +142,12 @@ async function handleSessionStart(now) {
   const reflection = reflectionLine(state, target, now);
   const nudge = ritualNudge(state, now, target.voice);
   if (nudge) state = { ...state, lastRitualNudge: nudge.mark };
-  // Per-session granularity: a fresh session (or /clear) resets to the floor (tldr);
-  // resume/compact keep whatever level was set, so a long session isn't reset under you.
-  // ponytail: source-gated reset, not sessionStartTs-keyed — predictable, no hidden coupling.
-  if (input?.source === "startup" || input?.source === "clear") state = { ...state, granularity: "" };
+  // Per-session focus + depth: a fresh session (or /clear) resets intention to unset and
+  // granularity to the floor (tldr); resume/compact keep whatever was set, so a long
+  // session isn't reset under you. Source-gated — predictable, no hidden sessionStartTs coupling.
+  if (input?.source === "startup" || input?.source === "clear") state = { ...state, intention: "", granularity: "" };
   saveState(state);
-  return emitText([...consent, reflection, nudge?.line, intentionLine(state, now), granularityLine(state)].filter(Boolean).join("\n"));
+  return emitText([...consent, reflection, nudge?.line, intentionLine(state), granularityLine(state)].filter(Boolean).join("\n"));
 }
 
 function cmdSkip(now) {
@@ -202,20 +202,20 @@ function cmdSignoff(now) {
   console.log(`keel: signed off. Coding closed + vices raised, held until ${target.driver.reset}. The day is sealed. \`keel unpark\` reopens coding; \`keel vice skip\` lifts vices (costs a credit).`);
 }
 
-function cmdIntention(now, arg) {
+function cmdIntention(arg) {
   const text = String(arg ?? "").trim();
   if (text === "clear") {
-    saveState(setIntention(loadState(), "", now));
+    saveState(setIntention(loadState(), ""));
     console.log("keel: intention cleared.");
     return;
   }
   if (!text) {
-    const cur = activeIntention(loadState(), now);
-    console.log(cur ? `keel: intention — ${cur}` : "keel: no intention set today. `keel intention \"<focus>\"` to set one.");
+    const cur = activeIntention(loadState());
+    console.log(cur ? `keel: intention — ${cur}` : "keel: no intention set this session. `keel intention \"<focus>\"` to set one.");
     return;
   }
-  saveState(setIntention(loadState(), text, now));
-  console.log(`keel: intention set — ${text}. Held for today; surfaced each turn. \`keel intention clear\` to release.`);
+  saveState(setIntention(loadState(), text));
+  console.log(`keel: intention set — ${text}. Held for this session; surfaced each turn. \`keel intention clear\` to release.`);
 }
 
 function cmdGranularity(arg) {
@@ -345,7 +345,7 @@ function cmdHud(now) {
   }
 
   // Always-on indicators: intention (when set) + the session granularity (always — there's a floor).
-  const inten = activeIntention(state, now);
+  const inten = activeIntention(state);
   if (inten) parts.push(`◎ ${inten.length > 24 ? inten.slice(0, 23) + "…" : inten}`);
   parts.push(`▤ ${activeGranularity(state)}`);
 
@@ -443,7 +443,7 @@ async function main() {
   if (cmd === "signoff") return cmdSignoff(now);
   if (cmd === "vice" || cmd === "vices") return cmdVice(now, sub);
   if (cmd === "vice-tick") return cmdViceTick(now);
-  if (cmd === "intention") return cmdIntention(now, process.argv.slice(3).join(" "));
+  if (cmd === "intention") return cmdIntention(process.argv.slice(3).join(" "));
   if (cmd === "granularity" || cmd === "gran") return cmdGranularity(sub);
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);

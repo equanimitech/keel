@@ -5,6 +5,7 @@ import {
   denyingRule, nextResetTs, recordNight, lastNNights, renderOrient, reflectionLine,
   mergeTarget, emptyState, nightKey, parseParkTarget, parkActive, frictionNow,
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
+  setIntention, activeIntention,
 } from "./core.mjs";
 
 const driver = { windDown: "23:30", hardStop: "01:00", reset: "05:00" };
@@ -20,6 +21,13 @@ test("granularity: parses aliases, falls back to the floor, never empty", () => 
   assert.equal(activeGranularity({ granularity: "nonsense" }), DEFAULT_GRANULARITY);
   // A set level survives within the session.
   assert.equal(activeGranularity(setGranularity(emptyState(), "page")), "page");
+});
+
+test("intention: session-scoped, empty when unset (no day-keying)", () => {
+  assert.equal(activeIntention(emptyState()), "");
+  assert.equal(activeIntention(setIntention(emptyState(), "  ship export  ")), "ship export");
+  // No intentionDay: the value stands on its own; session-start clears it (tested via the hook).
+  assert.equal(setIntention(emptyState(), "x").intentionDay, undefined);
 });
 
 test("toMin parses HH:MM", () => {
