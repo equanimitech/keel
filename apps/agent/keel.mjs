@@ -8,7 +8,7 @@ import {
   refillCredits, spendSkip, updateSession, denyingRule, recordNight,
   denyReason, renderOrient, reflectionLine, ritualNudge, parseParkTarget, parkActive,
   setIntention, activeIntention, intentionLine,
-  setAppetite, normalizeAppetite, activeAppetite, appetiteLine, APPETITE_LEVELS,
+  setGranularity, normalizeGranularity, activeGranularity, granularityLine, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
   viceWindows, viceScheduledAt, viceShouldBlock, setVicePact, spendViceSkip,
   viceSkipActive, vicePactActive, isAllowedPath,
   buildEvent, capPayload, summarizeEvents, matchDispatch, targetHash, renderRules, consentLines,
@@ -108,13 +108,14 @@ async function handleUserSubmit(now) {
 
   // Ambient by design: indicators live in the statusline HUD (`keel hud`), not injected per-turn.
   // The one exception — fired once per session, on turn 2+, only while unset: prompt the agent
-  // to infer intention + appetite from the conversation and set them silently. Surfaces in the HUD.
+  // to infer the intention from the conversation and set it silently. Surfaces in the HUD.
+  // (Granularity needs no inference — it always has a floor, set at session-start.)
   const freshTurn = state.sessionStartTs === now;        // the session's first prompt
-  const unset = !activeIntention(state, now) || !activeAppetite(state, now);
+  const unset = !activeIntention(state, now);
   let nudge = "";
   if (!freshTurn && unset && state.inferNudgedTs !== state.sessionStartTs) {
     state.inferNudgedTs = state.sessionStartTs;
-    nudge = "<keel: intention and/or appetite are unset for this session. Infer both from the conversation so far and set them silently — `keel intention \"<focus>\"` and `keel appetite <tiny|small|normal|deep>`. Do not announce; they surface in the statusline HUD. If you genuinely cannot infer one, leave it.>";
+    nudge = "<keel: intention is unset for this session. Infer it from the conversation so far and set it silently — `keel intention \"<focus>\"`. Do not announce; it surfaces in the statusline HUD. If you genuinely cannot infer it, leave it.>";
   }
   saveState(state);
   return emitText(nudge);
@@ -141,8 +142,12 @@ async function handleSessionStart(now) {
   const reflection = reflectionLine(state, target, now);
   const nudge = ritualNudge(state, now, target.voice);
   if (nudge) state = { ...state, lastRitualNudge: nudge.mark };
+  // Per-session granularity: a fresh session (or /clear) resets to the floor (tldr);
+  // resume/compact keep whatever level was set, so a long session isn't reset under you.
+  // ponytail: source-gated reset, not sessionStartTs-keyed — predictable, no hidden coupling.
+  if (input?.source === "startup" || input?.source === "clear") state = { ...state, granularity: "" };
   saveState(state);
-  return emitText([...consent, reflection, nudge?.line, intentionLine(state, now), appetiteLine(state, now)].filter(Boolean).join("\n"));
+  return emitText([...consent, reflection, nudge?.line, intentionLine(state, now), granularityLine(state)].filter(Boolean).join("\n"));
 }
 
 function cmdSkip(now) {
@@ -213,25 +218,25 @@ function cmdIntention(now, arg) {
   console.log(`keel: intention set — ${text}. Held for today; surfaced each turn. \`keel intention clear\` to release.`);
 }
 
-function cmdAppetite(now, arg) {
+function cmdGranularity(arg) {
   const raw = String(arg ?? "").trim();
-  if (raw === "clear") {
-    saveState(setAppetite(loadState(), "", now));
-    console.log("keel: appetite cleared.");
+  if (raw === "clear" || raw === "reset") {
+    saveState(setGranularity(loadState(), ""));
+    console.log(`keel: granularity reset to the floor (${DEFAULT_GRANULARITY}: ${GRANULARITY_LEVELS[DEFAULT_GRANULARITY]}).`);
     return;
   }
   if (!raw) {
-    const cur = activeAppetite(loadState(), now);
-    console.log(cur ? `keel: appetite — ${cur}: ${APPETITE_LEVELS[cur]}` : "keel: no appetite set today. `keel appetite <tiny|small|normal|deep>`.");
+    const cur = activeGranularity(loadState());
+    console.log(`keel: granularity — ${cur}: ${GRANULARITY_LEVELS[cur]}`);
     return;
   }
-  const level = normalizeAppetite(raw);
+  const level = normalizeGranularity(raw);
   if (!level) {
-    console.log(`keel: unknown appetite "${raw}". Choose: tiny | small | normal | deep.`);
+    console.log(`keel: unknown granularity "${raw}". Choose: ${Object.keys(GRANULARITY_LEVELS).join(" | ")} (or reset).`);
     return;
   }
-  saveState(setAppetite(loadState(), level, now));
-  console.log(`keel: appetite set — ${level}: ${APPETITE_LEVELS[level]} Held for today; surfaced each turn. \`keel appetite clear\` to release.`);
+  saveState(setGranularity(loadState(), level));
+  console.log(`keel: granularity set — ${level}: ${GRANULARITY_LEVELS[level]} Held for this session; surfaced in the HUD. \`keel granularity reset\` returns to ${DEFAULT_GRANULARITY}.`);
 }
 
 // ── Vice block (hosts toggle + scheduled Ulysses pact) ────────
@@ -339,11 +344,10 @@ function cmdHud(now) {
     parts.push(d.backstop ? `keel 🌙 past stop · ${minsUntil(d.backstop)}m to backstop` : "keel 🌙 past stop");
   }
 
-  // Always-on indicators: intention + appetite, when set.
+  // Always-on indicators: intention (when set) + the session granularity (always — there's a floor).
   const inten = activeIntention(state, now);
-  const app = activeAppetite(state, now);
   if (inten) parts.push(`◎ ${inten.length > 24 ? inten.slice(0, 23) + "…" : inten}`);
-  if (app) parts.push(`▤ ${app}`);
+  parts.push(`▤ ${activeGranularity(state)}`);
 
   process.stdout.write(parts.join("  ·  "));
 }
@@ -440,11 +444,11 @@ async function main() {
   if (cmd === "vice" || cmd === "vices") return cmdVice(now, sub);
   if (cmd === "vice-tick") return cmdViceTick(now);
   if (cmd === "intention") return cmdIntention(now, process.argv.slice(3).join(" "));
-  if (cmd === "appetite") return cmdAppetite(now, sub);
+  if (cmd === "granularity" || cmd === "gran") return cmdGranularity(sub);
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
   if (cmd === "watchlist" && sub === "scan") return cmdWatchlistScan();
-  console.log("usage: keel <hook pre-tool|user-submit|session-start | skip | park <HH:MM|15m> | unpark | signoff | vice <on|off|skip|status|panic> | intention [\"<focus>\"|clear] | appetite [tiny|small|normal|deep|clear] | rules | log status | status | watchlist scan>");
+  console.log("usage: keel <hook pre-tool|user-submit|session-start | skip | park <HH:MM|15m> | unpark | signoff | vice <on|off|skip|status|panic> | intention [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | rules | log status | status | watchlist scan>");
 }
 
 main().catch(() => process.exit(0)); // fail-open

@@ -4,9 +4,10 @@ Global launcher for the keel ritual system. Type `keel` in Alfred → a menu of
 every ritual and keel action.
 
 - **Rituals** (Morning, Wind-down, Sign-off, Weekly, Recall, Wake-up, and
-  Intention/Appetite/Sidenote with inline text) open Claude in iTerm.
-- **Instant actions** (Vices on/off/skip/status, Panic, Status, Lock now) run in
-  the background via `keel.mjs` and report through a notification.
+  Intention/Sidenote with inline text) open Claude in iTerm.
+- **Instant actions** (Granularity page/report/sentence/reset, Vices
+  on/off/skip/status, Panic, Status, Lock now) run in the background via
+  `keel.mjs` and report through a notification.
 - **Pipelines** (Journal review, Jungian distill) open in iTerm.
 
 ## Install / update

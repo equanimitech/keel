@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # ── generalization seam: knobs (menu only needs labels; run.sh holds the rest) ──
-ARG_VERBS="intention appetite sidenote"   # rituals that take inline free text
+ARG_VERBS="intention sidenote"   # rituals that take inline free text (Claude). granularity is direct keel state, see ITEMS.
 
 q="${1:-}"
 
@@ -34,7 +34,10 @@ ITEMS=(
   "Recall|/recall → Claude|ritual:/recall"
   "Wake-up|/wake-up → Claude|ritual:/wake-up"
   "Intention…|type: keel intention <focus>|ritual:/intention"
-  "Appetite…|type: keel appetite tiny/small/normal/deep|ritual:/appetite"
+  "Granularity: page|set response depth → keel|keel:granularity page"
+  "Granularity: report|deepest, defensible → keel|keel:granularity report"
+  "Granularity: sentence|coarsest → keel|keel:granularity sentence"
+  "Granularity: reset (tldr)|back to the floor → keel|keel:granularity reset"
   "Sidenote…|type: keel sidenote <thought>|ritual:/sidenote"
   "Vices on|raise the site block till reset|keel:vice on"
   "Vices off|lower the site block|keel:vice off"

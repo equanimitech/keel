@@ -4,10 +4,23 @@ import {
   toMin, frictionAt, phaseOf, refillCredits, spendSkip, updateSession, unbrokenMin,
   denyingRule, nextResetTs, recordNight, lastNNights, renderOrient, reflectionLine,
   mergeTarget, emptyState, nightKey, parseParkTarget, parkActive, frictionNow,
+  normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
 } from "./core.mjs";
 
 const driver = { windDown: "23:30", hardStop: "01:00", reset: "05:00" };
 const near = (a, b) => Math.abs(a - b) < 0.02;
+
+test("granularity: parses aliases, falls back to the floor, never empty", () => {
+  assert.equal(normalizeGranularity("tl;dr"), "tldr");
+  assert.equal(normalizeGranularity("L3"), "page");
+  assert.equal(normalizeGranularity("detailed"), "report");
+  assert.equal(normalizeGranularity("garbage"), "");        // unrecognized → caller keeps current
+  // The floor: unset or invalid state still yields a contract, never "".
+  assert.equal(activeGranularity(emptyState()), DEFAULT_GRANULARITY);
+  assert.equal(activeGranularity({ granularity: "nonsense" }), DEFAULT_GRANULARITY);
+  // A set level survives within the session.
+  assert.equal(activeGranularity(setGranularity(emptyState(), "page")), "page");
+});
 
 test("toMin parses HH:MM", () => {
   assert.equal(toMin("23:30"), 1410);

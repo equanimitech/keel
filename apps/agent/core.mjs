@@ -15,7 +15,7 @@
 /** @typedef {{ windows: ViceWindow[], reassertEveryMin: number }} Vice */
 /** @typedef {{ driver: Driver, rules: Rule[], orient: Orient, skipBudget: SkipBudget, voice: Voice, vice: Vice }} Target */
 /** @typedef {{ observed?: boolean, skipped?: boolean }} Night */
-/** @typedef {{ credits: number, creditsMonth: string, skipUntilTs: number, parkAtTs: number, viceUntilTs: number, viceSkipUntilTs: number, sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, intention: string, intentionDay: string, appetite: string, appetiteDay: string, lastRuleHash: string, consentShownTs: number, nights: Record<string, Night> }} State */
+/** @typedef {{ credits: number, creditsMonth: string, skipUntilTs: number, parkAtTs: number, viceUntilTs: number, viceSkipUntilTs: number, sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, intention: string, intentionDay: string, granularity: string, lastRuleHash: string, consentShownTs: number, nights: Record<string, Night> }} State */
 
 /** Clock pressure is capped strictly below the full-lockdown threshold (1.0): the
  * wall-clock ramp escalates wind-down nudges but NEVER hard-locks coding on its own.
@@ -53,7 +53,7 @@ export const DEFAULT_TARGET = {
 export const emptyState = () => ({
   credits: 0, creditsMonth: "", skipUntilTs: 0, parkAtTs: 0, viceUntilTs: 0, viceSkipUntilTs: 0,
   sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, lastRitualNudge: "", inferNudgedTs: 0,
-  intention: "", intentionDay: "", appetite: "", appetiteDay: "", lastRuleHash: "", consentShownTs: 0, nights: {},
+  intention: "", intentionDay: "", granularity: "", lastRuleHash: "", consentShownTs: 0, nights: {},
 });
 
 /** Merge a partial target config over the defaults. @param {any} t @returns {Target} */
@@ -356,39 +356,44 @@ export function intentionLine(state, now) {
   return i ? `[keel] ◎ intention: ${i} — capture drift (idea/pain), hold the thread.` : "";
 }
 
-/** Session appetite levels → the depth/granularity contract each implies. */
-export const APPETITE_LEVELS = {
-  tiny:   "coarsest only — handles + one-liners, no exploration.",
-  small:  "light — quick exploration, stay shallow.",
-  normal: "systemic — full analysis at normal depth.",
-  deep:   "deep dive — exhaustive, multi-file, detailed.",
+/** Response-granularity levels → the depth contract each implies (maps to semantic-zoom). */
+export const GRANULARITY_LEVELS = {
+  sentence: "L1 — one sentence, claim only.",
+  tldr:     "L2 — one paragraph, claim + mechanism. The resting floor.",
+  page:     "L3 — ~a page: claim + mechanism + worked example, scannable.",
+  report:   "L5 — multi-section, citations, edge cases. Defensible.",
 };
 
-/** Normalize a raw appetite arg to a canonical level, or "" if unrecognized. @param {string} raw */
-export function normalizeAppetite(raw) {
-  const s = String(raw ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "");
-  if (s === "tiny") return "tiny";
-  if (s === "small" || s === "light") return "small";
-  if (s === "normal" || s === "systemic" || s === "medium") return "normal";
-  if (s === "deep" || s === "deepwork" || s === "deepdive") return "deep";
+/** The granularity every session opens at, and the floor whenever none is set. */
+export const DEFAULT_GRANULARITY = "tldr";
+
+/** Normalize a raw granularity arg to a canonical level, or "" if unrecognized. @param {string} raw */
+export function normalizeGranularity(raw) {
+  const s = String(raw ?? "").trim().toLowerCase().replace(/[\s_;-]+/g, "");
+  if (s === "sentence" || s === "1" || s === "l1" || s === "oneliner" || s === "line") return "sentence";
+  if (s === "tldr" || s === "2" || s === "l2" || s === "paragraph" || s === "brief" || s === "summary") return "tldr";
+  if (s === "page" || s === "3" || s === "l3" || s === "medium" || s === "usable") return "page";
+  if (s === "report" || s === "5" || s === "l5" || s === "full" || s === "detailed" || s === "deep") return "report";
   return "";
 }
 
-/** Set the day's session appetite (the depth dial). Day-scoped. @param {State} state @param {string} level @param {number} now */
-export function setAppetite(state, level, now) {
-  return { ...state, appetite: level, appetiteDay: dayKey(now) };
+/** Set the session granularity (the response-depth dial). Session-scoped — a fresh
+ * session resets it to the floor at session-start. @param {State} state @param {string} level */
+export function setGranularity(state, level) {
+  return { ...state, granularity: level };
 }
 
-/** Active appetite for today, or "" if none / stale. @param {State} state @param {number} now */
-export function activeAppetite(state, now) {
-  return state.appetiteDay === dayKey(now) ? (state.appetite || "") : "";
+/** The active granularity — the session's set level, or the default floor when unset.
+ * Never empty: a granularity contract is always in force. @param {State} state */
+export function activeGranularity(state) {
+  return state.granularity && GRANULARITY_LEVELS[state.granularity] ? state.granularity : DEFAULT_GRANULARITY;
 }
 
-/** Per-turn depth-contract line — sets the granularity budget and prompts scope-drift flagging.
- * Empty when no active appetite. @param {State} state @param {number} now @returns {string} */
-export function appetiteLine(state, now) {
-  const a = activeAppetite(state, now);
-  return a && APPETITE_LEVELS[a] ? `[keel] ▤ appetite: ${a} — ${APPETITE_LEVELS[a]} Flag if scope drifts past it.` : "";
+/** The granularity contract line — surfaced at session-start and in the HUD. Always renders,
+ * because there is always a floor. @param {State} state @returns {string} */
+export function granularityLine(state) {
+  const g = activeGranularity(state);
+  return `[keel] ▤ granularity: ${g} — ${GRANULARITY_LEVELS[g]} Zoom per-response on signal ("page it", "in a sentence").`;
 }
 
 /** The SessionStart reflection (empty until there are observed nights).
