@@ -11,7 +11,7 @@
 /** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, morningNudge: string, weeklyNudge: string, granularity: Granularity }} Voice */
 /** @typedef {Record<string, string>} Watches  name → start time "HH:MM" */
 /** @typedef {{ rules: Rule[], orient: Orient, voice: Voice, watches: Watches, windDown: string }} Target */
-/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, watchIntentions: Record<string, string>, intentionDay: string, granularity: string, lastRuleHash: string, consentShownTs: number }} State */
+/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastSignOnDay: string, inferNudgedTs: number, watchIntentions: Record<string, string>, intentionDay: string, granularity: string, lastRuleHash: string, consentShownTs: number }} State */
 
 /** Named time-of-day watches (intention blocks) → start time. The active watch is the
  * latest start ≤ now, wrapping past midnight to the last watch. The `night` watch is the
@@ -48,7 +48,7 @@ export const DEFAULT_TARGET = {
 
 /** @returns {State} */
 export const emptyState = () => ({
-  sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, lastRitualNudge: "", inferNudgedTs: 0,
+  sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, lastSignOnDay: "", inferNudgedTs: 0,
   watchIntentions: {}, intentionDay: "", granularity: "", lastRuleHash: "", consentShownTs: 0,
 });
 
@@ -200,19 +200,17 @@ export const dayKey = (now) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-/** An ambient, once-per-calendar-day ritual suggestion, fired in the morning window.
- * Monday → weekly-review; any other day → morning. A fading nudge, not a nag:
- * at most one per day, only between 04:00 and 14:00 local. Returns { line, mark }
- * to emit (mark = the dayKey to persist as lastRitualNudge) or null to stay silent.
- * Pure — caller persists the mark. @param {State} state @param {number} now */
+/** The day-open nudge — persists every session until `/sign-on` actually runs this
+ * waking-day (keyed off lastSignOnDay, not "already nudged"). Monday → weeklyNudge;
+ * any other day → morningNudge. No time window: focusDayKey rolls at 04:00, so a
+ * late-night session still counts as the prior (signed-on) day and stays silent.
+ * Returns { line } to emit, or null. Pure — `keel signon` clears it by stamping
+ * lastSignOnDay. @param {State} state @param {number} now */
 export function ritualNudge(state, now, voice) {
-  const dk = dayKey(now);
-  if (state.lastRitualNudge === dk) return null;           // already nudged today
-  const h = new Date(now).getHours();
-  if (h < 4 || h >= 14) return null;                        // morning-ish window only
+  if (state.lastSignOnDay === focusDayKey(now)) return null; // already signed on this waking-day
   const line = new Date(now).getDay() === 1 ? (voice?.weeklyNudge || "") : (voice?.morningNudge || "");
   if (!line) return null;                                   // silent unless the user configured rituals
-  return { line, mark: dk };
+  return { line };
 }
 
 /** The waking-day boundary in hours — the logical day flips at 04:00, not midnight,

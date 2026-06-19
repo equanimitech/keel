@@ -6,7 +6,7 @@
 import {
   phaseOf, nowMinOf, frictionNow, nightWindow, minToHHMM, toDurationMin,
   updateSession, denyingRule,
-  denyReason, renderOrient, ritualNudge,
+  denyReason, renderOrient, ritualNudge, focusDayKey,
   setIntention, rollIntentionDay, activeIntention, activeWatch, intentionLine,
   setGranularity, normalizeGranularity, activeGranularity, granularityLine, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
   isAllowedPath,
@@ -135,8 +135,8 @@ async function handleSessionStart(now) {
     consent = consentLines();
     state = { ...state, consentShownTs: now };
   }
+  // Persists every session until `/sign-on` runs this waking-day (no mark to spend).
   const nudge = ritualNudge(state, now, target.voice);
-  if (nudge) state = { ...state, lastRitualNudge: nudge.mark };
   // Focus is day-scoped, depth is session-scoped. Intention clears only on a new
   // calendar day (rollIntentionDay) — it survives session restarts and /clear, since
   // per-session focus is already covered by Claude's own session goals. Granularity is
@@ -164,6 +164,13 @@ function cmdStatus(now) {
 // "friction all the way up" is pass 2; for now signoff just acknowledges the close.
 function cmdSignoff() {
   console.log("keel: signed off. The day is sealed. (keel no longer walls coding — your declared night is the only hard stop.)");
+}
+
+// Marks the day as opened — `/sign-on` calls this on completion. Clears the day-open
+// nudge (ritualNudge keys off lastSignOnDay) until the next waking-day (04:00 roll).
+function cmdSignon(now) {
+  saveState({ ...loadState(), lastSignOnDay: focusDayKey(now) });
+  console.log("keel: signed on. The day is open — nudge cleared till tomorrow.");
 }
 
 // Sets the intention for a watch. `keel intention "<focus>"` → the current watch;
@@ -241,6 +248,9 @@ function cmdHud(now) {
     const mins = (w.nightStart - nowMinOf(now) + 1440) % 1440;
     parts.push(`keel 🌙 winding down · ${mins}m to night`);
   }
+
+  // Day-open pending — persists until `/sign-on` runs this waking-day.
+  if (state.lastSignOnDay !== focusDayKey(now)) parts.push("⊙ sign-on");
 
   // Always-on indicators: the current watch's intention (when set) + the session granularity.
   const inten = activeIntention(state, now, target.watches);
@@ -336,12 +346,13 @@ async function main() {
   if (cmd === "rules") return cmdRules();
   if (cmd === "native-host") { runHost(); return; }
   if (cmd === "signoff") return cmdSignoff();
+  if (cmd === "signon") return cmdSignon(now);
   if (cmd === "intention") return cmdIntention(process.argv.slice(3).join(" "), now);
   if (cmd === "granularity" || cmd === "gran") return cmdGranularity(sub);
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
   if (cmd === "watchlist" && sub === "scan") return cmdWatchlistScan();
-  console.log("usage: keel <hook pre-tool|user-submit|session-start | signoff | intention [<watch>] [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | rules | log status | status | watchlist scan>");
+  console.log("usage: keel <hook pre-tool|user-submit|session-start | signon | signoff | intention [<watch>] [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | rules | log status | status | watchlist scan>");
 }
 
 main().catch(() => process.exit(0)); // fail-open

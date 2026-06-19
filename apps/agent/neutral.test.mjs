@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   toMin, frictionAt, mergeTarget, emptyState, DEFAULT_TARGET,
-  ritualNudge, targetHash, renderRules, consentLines,
+  ritualNudge, focusDayKey, targetHash, renderRules, consentLines,
   mergeWatchlist, watchlistLines, mergeDesktopSensors, desktopSensorLines,
 } from "./core.mjs";
 
@@ -49,7 +49,9 @@ test("ritual nudges fire when configured: weekly on Monday, morning otherwise", 
   assert.equal(ritualNudge(emptyState(), monday, voice)?.line, "weekly line");
   assert.equal(ritualNudge(emptyState(), tuesday, voice)?.line, "good morning line");
   const night = new Date(2026, 5, 9, 23, 0).getTime();
-  assert.equal(ritualNudge(emptyState(), night, voice), null); // window still respected
+  assert.equal(ritualNudge(emptyState(), night, voice)?.line, "good morning line"); // no window — persists until signed on
+  const signedOn = { ...emptyState(), lastSignOnDay: focusDayKey(night) };
+  assert.equal(ritualNudge(signedOn, night, voice), null);     // signed on this waking-day → silent
 });
 
 test("default voice carries no prescriptive substitution", () => {
