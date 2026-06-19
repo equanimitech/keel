@@ -1,10 +1,11 @@
 {
   "targets": {
     "claude-code": {
-      "driver": { "kind": "wind-down", "windDown": "23:00", "hardStop": "01:00", "reset": "05:00", "backstop": "03:00" },
+      "watches": { "morning": "07:00", "afternoon": "13:00", "evening": "18:00", "night": "23:30" },
+      "windDown": "60m",
       "voice": {
         "windDownNudge": "Wind-down window — a good moment to land open work.",
-        "lockdown": "Coding tools are paused until {reset} — the late backstop, the one wall keel keeps. Past here, sleep is the move."
+        "lockdown": "Coding tools are paused until {reset} — your declared night, the one wall keel keeps. Past here, sleep is the move."
       }
     }
   }

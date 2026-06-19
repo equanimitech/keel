@@ -4,10 +4,10 @@
 // Fail-open: any error → exit 0, allow. A hook must never trap the user.
 
 import {
-  phaseOf, nowMinOf, frictionNow, toMin, inWindow,
+  phaseOf, nowMinOf, frictionNow, nightWindow, minToHHMM, toDurationMin,
   updateSession, denyingRule,
   denyReason, renderOrient, ritualNudge,
-  setIntention, rollIntentionDay, activeIntention, intentionLine,
+  setIntention, rollIntentionDay, activeIntention, activeWatch, intentionLine,
   setGranularity, normalizeGranularity, activeGranularity, granularityLine, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
   isAllowedPath,
   buildEvent, capPayload, summarizeEvents, matchDispatch, targetHash, renderRules, consentLines,
@@ -74,7 +74,7 @@ async function handleObservedHook(sub, now) {
 async function handlePreTool(now) {
   const target = loadTarget();
   const state = loadState();
-  const f = frictionNow(target, state, now);
+  const f = frictionNow(target, now);
   const input = await readStdin();
   const rule = denyingRule(target, f, input?.tool_name, state, now);
   const allowed = !rule || isAllowedPath(input?.tool_input?.file_path, rule.allowPaths, homedir());
@@ -98,7 +98,7 @@ async function handleUserSubmit(now) {
   logHookEvent("prompt", now, input);
   const target = loadTarget();
   let state = updateSession(loadState(), now, target.orient);
-  const phase = phaseOf(frictionNow(target, state, now));
+  const phase = phaseOf(frictionNow(target, now));
   // Mark whether THIS turn opened under lockdown — the breakpoint signal PreToolUse reads.
   state.turnLockedTs = phase === "lockdown" ? state.lastPromptTs : 0;
 
@@ -107,7 +107,7 @@ async function handleUserSubmit(now) {
   // to infer the intention from the conversation and set it silently. Surfaces in the HUD.
   // (Granularity needs no inference — it always has a floor, set at session-start.)
   const freshTurn = state.sessionStartTs === now;        // the session's first prompt
-  const unset = !activeIntention(state);
+  const unset = !activeIntention(state, now, target.watches);
   let nudge = "";
   if (!freshTurn && unset && state.inferNudgedTs !== state.sessionStartTs) {
     state.inferNudgedTs = state.sessionStartTs;
@@ -144,42 +144,52 @@ async function handleSessionStart(now) {
   state = rollIntentionDay(state, now);
   if (input?.source === "startup" || input?.source === "clear") state = { ...state, granularity: "" };
   saveState(state);
-  return emitText([...consent, nudge?.line, intentionLine(state), granularityLine(state)].filter(Boolean).join("\n"));
+  return emitText([...consent, nudge?.line, intentionLine(state, now, target.watches), granularityLine(state)].filter(Boolean).join("\n"));
 }
 
 function cmdStatus(now) {
   const target = loadTarget();
-  const state = loadState();
-  const f = frictionNow(target, state, now);
+  const f = frictionNow(target, now);
   const locked = phaseOf(f) === "lockdown";
-  const d = target.driver;
+  const w = nightWindow(target.watches, toDurationMin(target.windDown));
   console.log(
-    `keel[${TARGET_ID}]: f=${f.toFixed(2)} phase=${phaseOf(f)}${locked ? " (LOCKED · backstop)" : ""} ` +
-    `windDown=${d.windDown} hardStop=${d.hardStop} backstop=${d.backstop ?? "—"} reset=${d.reset}`,
+    `keel[${TARGET_ID}]: f=${f.toFixed(2)} phase=${phaseOf(f)}${locked ? " (LOCKED · night)" : ""} ` +
+    `watch=${activeWatch(now, target.watches)} windDown=${target.windDown} ` +
+    (w ? `night=${minToHHMM(w.nightStart)}→${minToHHMM(w.reset)}` : "(no night watch → pure-soft)"),
   );
 }
 
 // ponytail: signoff's old levers (self-imposed park + vice block) retired with the
-// walls (decision 2026-06-17 — block kept for the backstop only). The dial-driven
+// walls (decision 2026-06-17 — block kept for the night-lock only). The dial-driven
 // "friction all the way up" is pass 2; for now signoff just acknowledges the close.
 function cmdSignoff() {
-  console.log("keel: signed off. The day is sealed. (keel no longer walls coding — the late backstop is the only hard stop.)");
+  console.log("keel: signed off. The day is sealed. (keel no longer walls coding — your declared night is the only hard stop.)");
 }
 
+// Sets the intention for a watch. `keel intention "<focus>"` → the current watch;
+// `keel intention <watch> "<focus>"` → a named watch. Day-scoped (clears at the 04:00 roll).
 function cmdIntention(arg, now) {
-  const text = String(arg ?? "").trim();
+  const target = loadTarget();
+  const watches = target.watches;
+  const raw = String(arg ?? "").trim();
+  // optional leading watch name
+  let watch = activeWatch(now, watches);
+  let text = raw;
+  const m = raw.match(/^(\S+)\s*(.*)$/);
+  if (m && Object.prototype.hasOwnProperty.call(watches, m[1])) { watch = m[1]; text = m[2].trim(); }
+
   if (text === "clear") {
-    saveState(setIntention(loadState(), "", now));
-    console.log("keel: intention cleared.");
+    saveState(setIntention(loadState(), watch, "", now));
+    console.log(`keel: ${watch} intention cleared.`);
     return;
   }
   if (!text) {
-    const cur = activeIntention(loadState());
-    console.log(cur ? `keel: intention — ${cur}` : "keel: no intention set today. `keel intention \"<focus>\"` to set one.");
+    const cur = (loadState().watchIntentions ?? {})[watch] || "";
+    console.log(cur ? `keel: ${watch} intention — ${cur}` : `keel: no intention set for ${watch}. \`keel intention "<focus>"\` to set one.`);
     return;
   }
-  saveState(setIntention(loadState(), text, now));
-  console.log(`keel: intention set — ${text}. Held for today; surfaced each turn. \`keel intention clear\` to release.`);
+  saveState(setIntention(loadState(), watch, text, now));
+  console.log(`keel: ${watch} intention set — ${text}. Held for today; surfaced during the ${watch} watch. \`keel intention ${watch} clear\` to release.`);
 }
 
 function cmdGranularity(arg) {
@@ -219,21 +229,21 @@ function sessionCount() {  // approximate # of concurrent Claude Code sessions
 function cmdHud(now) {
   const target = loadTarget();
   const state = loadState();
-  const d = target.driver;
-  const phase = phaseOf(frictionNow(target, state, now));
-  const minsUntil = (hhmm) => (toMin(hhmm) - nowMinOf(now) + 1440) % 1440;
+  const w = nightWindow(target.watches, toDurationMin(target.windDown));
+  const phase = phaseOf(frictionNow(target, now));
 
   const parts = [];
 
-  // Abnormal states only — silent on a normal day or an on-track wind-down.
+  // Abnormal states only — silent on a normal day.
   if (phase === "lockdown") {
-    parts.push(`keel 🔒 locked till ${d.reset}`);
-  } else if (phase === "wind_down" && !inWindow(nowMinOf(now), toMin(d.windDown), toMin(d.hardStop))) {
-    parts.push(d.backstop ? `keel 🌙 past stop · ${minsUntil(d.backstop)}m to backstop` : "keel 🌙 past stop");
+    parts.push(`keel 🔒 locked till ${w ? minToHHMM(w.reset) : "wake"}`);
+  } else if (phase === "wind_down" && w) {
+    const mins = (w.nightStart - nowMinOf(now) + 1440) % 1440;
+    parts.push(`keel 🌙 winding down · ${mins}m to night`);
   }
 
-  // Always-on indicators: intention (when set) + the session granularity (always — there's a floor).
-  const inten = activeIntention(state);
+  // Always-on indicators: the current watch's intention (when set) + the session granularity.
+  const inten = activeIntention(state, now, target.watches);
   if (inten) parts.push(`◎ ${inten.length > 24 ? inten.slice(0, 23) + "…" : inten}`);
   parts.push(`▤ ${activeGranularity(state)}`);
 
@@ -331,7 +341,7 @@ async function main() {
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
   if (cmd === "watchlist" && sub === "scan") return cmdWatchlistScan();
-  console.log("usage: keel <hook pre-tool|user-submit|session-start | signoff | intention [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | rules | log status | status | watchlist scan>");
+  console.log("usage: keel <hook pre-tool|user-submit|session-start | signoff | intention [<watch>] [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | rules | log status | status | watchlist scan>");
 }
 
 main().catch(() => process.exit(0)); // fail-open

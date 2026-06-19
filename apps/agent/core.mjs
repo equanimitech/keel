@@ -5,29 +5,34 @@
 /** @typedef {"hide"|"dim"|"delay"|"blur"|"block"} Notch */
 /** @typedef {"immediate"|"breakpoint"} Arming */
 /** @typedef {number} Friction  0..1 */
-/** @typedef {{ kind?: string, windDown: string, hardStop: string, reset: string, backstop?: string }} Driver */
 /** @typedef {{ notch: Notch, engagesAt: Friction, arming?: Arming, maxGraceMin?: number, tools: string[], allowPaths?: string[] }} Rule */
 /** @typedef {{ bellAfterMin: number, sessionGapMin: number }} Orient */
 /** @typedef {{ windDown: string, lockdown: string }} Granularity */
 /** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, morningNudge: string, weeklyNudge: string, granularity: Granularity }} Voice */
-/** @typedef {{ driver: Driver, rules: Rule[], orient: Orient, voice: Voice }} Target */
-/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, intention: string, intentionDay: string, granularity: string, lastRuleHash: string, consentShownTs: number }} State */
+/** @typedef {Record<string, string>} Watches  name → start time "HH:MM" */
+/** @typedef {{ rules: Rule[], orient: Orient, voice: Voice, watches: Watches, windDown: string }} Target */
+/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, watchIntentions: Record<string, string>, intentionDay: string, granularity: string, lastRuleHash: string, consentShownTs: number }} State */
 
-/** Clock pressure is capped strictly below the full-lockdown threshold (1.0): the
- * wall-clock ramp escalates wind-down nudges but NEVER hard-locks coding on its own.
- * Lockdown engages from a sovereign act (sign-off / park) or the late `backstop`. */
-export const WIND_DOWN_CEIL = 0.99;
+/** Named time-of-day watches (intention blocks) → start time. The active watch is the
+ * latest start ≤ now, wrapping past midnight to the last watch. The `night` watch is the
+ * sleep/lock window — coding locks during it (the one wall keel keeps); its start is the
+ * hard stop, its end (next watch) is the wake/reset. Fully configurable. */
+export const DEFAULT_WATCHES = { morning: "09:00", afternoon: "13:00", evening: "19:00", night: "01:30" };
+
+/** Default wind-down lead — how long before `night` the friction ramp begins (pressure, not lock). */
+export const DEFAULT_WIND_DOWN = "90m";
 
 /** @type {Target} */
 export const DEFAULT_TARGET = {
-  driver: { kind: "wind-down", windDown: "22:30", hardStop: "00:00", reset: "05:00", backstop: "03:00" },
+  watches: DEFAULT_WATCHES,
+  windDown: DEFAULT_WIND_DOWN,
   rules: [{ notch: "block", engagesAt: 1.0, arming: "breakpoint", maxGraceMin: 10,
             tools: ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"],
             allowPaths: ["~/journals", "~/.keel"] }],
   orient: { bellAfterMin: 120, sessionGapMin: 30 },
   voice: {
     windDownNudge: "Wind-down window — a good moment to land open work.",
-    lockdown: "Coding tools are paused until {reset} — the late backstop, the one wall keel keeps. Past here your judgment isn't yours to trust; sleep is the move.",
+    lockdown: "Coding tools are paused until {reset} — your declared night, the one wall keel keeps. Past here your judgment isn't yours to trust; sleep is the move.",
     substitution: "",
     consequence: "",
     identity: "",
@@ -44,16 +49,17 @@ export const DEFAULT_TARGET = {
 /** @returns {State} */
 export const emptyState = () => ({
   sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, lastRitualNudge: "", inferNudgedTs: 0,
-  intention: "", intentionDay: "", granularity: "", lastRuleHash: "", consentShownTs: 0,
+  watchIntentions: {}, intentionDay: "", granularity: "", lastRuleHash: "", consentShownTs: 0,
 });
 
 /** Merge a partial target config over the defaults. @param {any} t @returns {Target} */
 export function mergeTarget(t = {}) {
   return {
-    driver: { ...DEFAULT_TARGET.driver, ...t.driver },
     rules: t.rules ?? DEFAULT_TARGET.rules,
     orient: { ...DEFAULT_TARGET.orient, ...t.orient },
     voice: { ...DEFAULT_TARGET.voice, ...t.voice },
+    watches: (t.watches && Object.keys(t.watches).length) ? t.watches : DEFAULT_WATCHES,
+    windDown: t.windDown ?? DEFAULT_TARGET.windDown,
   };
 }
 
@@ -70,14 +76,40 @@ export function inWindow(nowMin, start, end) {
   return start > end ? nowMin >= start || nowMin < end : nowMin >= start && nowMin < end;
 }
 
-/** wind-down driver → f ∈ [0,1]: 0 day · linear ramp windDown→hardStop · 1 lockdown.
- * @param {number} nowMin @param {Driver} driver @returns {Friction} */
-export function frictionAt(nowMin, driver) {
-  const w = toMin(driver.windDown), h = toMin(driver.hardStop), r = toMin(driver.reset);
-  if (!inWindow(nowMin, w, r)) return 0;
-  if (inWindow(nowMin, h, r)) return 1;
-  const span = ((h - w + 1440) % 1440) || 1;
-  const into = (nowMin - w + 1440) % 1440;
+/** Parse a duration ("90", "90m", "1h", "1h30m") → minutes; 0 if unparseable. @param {string} s */
+export function toDurationMin(s) {
+  const str = String(s ?? "").trim().toLowerCase();
+  if (/^\d+$/.test(str)) return Number(str);
+  const m = str.match(/^(?:(\d+)h)?(?:(\d+)m)?$/);
+  return m && (m[1] || m[2]) ? Number(m[1] || 0) * 60 + Number(m[2] || 0) : 0;
+}
+
+/** Minutes-of-day (0..1439) → "HH:MM". @param {number} m */
+export const minToHHMM = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+
+/** The night (lock) window derived from the watches + wind-down lead: ramp starts `leadMin`
+ * before `night`, the lock runs the whole `night` watch [nightStart, reset), reset = the next
+ * watch start after night. null when no `night` watch is set (⇒ pure-soft: no ramp, no lock).
+ * @param {Watches} watches @param {number} leadMin */
+export function nightWindow(watches, leadMin) {
+  if (!watches || !watches.night) return null;
+  const nightStart = toMin(watches.night);
+  const starts = Object.values(watches).map(toMin).sort((a, b) => a - b);
+  const after = starts.find((m) => m > nightStart);
+  const reset = after != null ? after : starts[0];
+  const windDownStart = (((nightStart - leadMin) % 1440) + 1440) % 1440;
+  return { windDownStart, nightStart, reset };
+}
+
+/** Wind-down friction f ∈ [0,1], derived from the watches: 0 by day · linear ramp across the
+ * wind-down lead · 1 through the `night` watch (the lock). @param {number} nowMin @param {Watches} watches @param {number} leadMin @returns {Friction} */
+export function frictionAt(nowMin, watches, leadMin) {
+  const w = nightWindow(watches, leadMin);
+  if (!w) return 0;
+  if (!inWindow(nowMin, w.windDownStart, w.reset)) return 0;   // outside the wind-down → reset arc
+  if (inWindow(nowMin, w.nightStart, w.reset)) return 1;       // inside the night watch → lock
+  const span = ((w.nightStart - w.windDownStart + 1440) % 1440) || 1;
+  const into = (nowMin - w.windDownStart + 1440) % 1440;
   return Math.max(0, Math.min(1, into / span));
 }
 
@@ -89,22 +121,11 @@ export function phaseOf(f) {
 }
 
 export const nowMinOf = (now) => { const d = new Date(now); return d.getHours() * 60 + d.getMinutes(); };
-export const monthKey = (now) => new Date(now).toISOString().slice(0, 7);
-/** The late safety net: an un-signed-off night still hard-locks from `backstop`
- * until reset. No `backstop` configured ⇒ no clock-driven lockdown ever (pure
- * sovereign). @param {number} now @param {Driver} driver */
-export function backstopActive(now, driver) {
-  if (!driver.backstop) return false;
-  return inWindow(nowMinOf(now), toMin(driver.backstop), toMin(driver.reset));
-}
 
-/** Effective friction. The clock ramps wind-down PRESSURE but is capped below the
- * lockdown threshold (WIND_DOWN_CEIL) — it nudges, never hard-locks. Full lockdown
- * (1.0) comes only from the late `backstop` — the one wall keel keeps.
- * @param {Target} target @param {State} state @param {number} now */
-export function frictionNow(target, state, now) {
-  if (backstopActive(now, target.driver)) return 1;
-  return Math.min(frictionAt(nowMinOf(now), target.driver), WIND_DOWN_CEIL);
+/** Effective friction now — derived entirely from the watches + wind-down lead: the `night`
+ * watch is the lock, the lead is the ramp before it. @param {Target} target @param {number} now */
+export function frictionNow(target, now) {
+  return frictionAt(nowMinOf(now), target.watches, toDurationMin(target.windDown));
 }
 
 // ── Session ─────────────────────────────────────────────────────
@@ -148,8 +169,10 @@ export function isAllowedPath(filePath, allowPaths, home) {
 // ── Presentation (pure) ─────────────────────────────────────────
 
 /** @param {string} s @param {Target} target */
-export const fill = (s, target) =>
-  String(s).replaceAll("{reset}", target.driver.reset);
+export const fill = (s, target) => {
+  const w = nightWindow(target.watches, toDurationMin(target.windDown));
+  return String(s).replaceAll("{reset}", w ? minToHHMM(w.reset) : "wake");
+};
 
 /** The PreToolUse deny reason. @param {Target} target */
 export const denyReason = (target) =>
@@ -200,33 +223,49 @@ export const DAY_START_HOUR = 4;
  * dayKey (calendar, used by the ritual nudge) so late-night work isn't a new day. @param {number} now */
 export const focusDayKey = (now) => dayKey(now - DAY_START_HOUR * 3600_000);
 
-/** Set the day's intention (the focus the chat is guardrailed to).
- * Day-scoped — cleared on waking-day rollover (see rollIntentionDay), not session reset.
- * @param {State} state @param {string} text @param {number} [now] stamps the owning day */
-export function setIntention(state, text, now) {
-  const intention = String(text ?? "").trim();
-  return { ...state, intention, intentionDay: intention && now != null ? focusDayKey(now) : state.intentionDay };
+/** Which named watch `now` falls in — the latest start ≤ now, wrapping past midnight
+ * to the last watch. "" if no watches configured. @param {number} now @param {Watches} [watches] */
+export function activeWatch(now, watches = DEFAULT_WATCHES) {
+  const entries = Object.entries(watches ?? {})
+    .map(([name, t]) => ({ name, m: toMin(t) }))
+    .sort((a, b) => a.m - b.m);
+  if (!entries.length) return "";
+  const nm = nowMinOf(now);
+  let cur = entries[entries.length - 1].name;   // before the first start → wrapped from the last watch
+  for (const e of entries) { if (nm >= e.m) cur = e.name; }
+  return cur;
 }
 
-/** Clear the intention if it belongs to an earlier waking-day; otherwise keep it.
+/** Set the focus for one watch (named time block). Day-scoped — all watches clear at the
+ * waking-day rollover. Empty text clears that watch.
+ * @param {State} state @param {string} watch @param {string} text @param {number} now */
+export function setIntention(state, watch, text, now) {
+  const t = String(text ?? "").trim();
+  const wi = { ...(state.watchIntentions ?? {}) };
+  if (t) { wi[watch] = t; } else { delete wi[watch]; }
+  return { ...state, watchIntentions: wi, intentionDay: focusDayKey(now) };
+}
+
+/** Clear all watch intentions if they belong to an earlier waking-day; otherwise keep them.
  * Per-day semantics: survives session restarts/clears within a day, resets at the 04:00 boundary.
  * @param {State} state @param {number} now @returns {State} */
 export function rollIntentionDay(state, now) {
   const today = focusDayKey(now);
   if (state.intentionDay === today) return state;
-  return { ...state, intention: "", intentionDay: today };
+  return { ...state, watchIntentions: {}, intentionDay: today };
 }
 
-/** The active intention for today, or "" if none set. @param {State} state */
-export function activeIntention(state) {
-  return state.intention || "";
+/** The active watch's intention, or "" if none set. @param {State} state @param {number} now @param {Watches} [watches] */
+export function activeIntention(state, now, watches) {
+  return (state.watchIntentions ?? {})[activeWatch(now, watches)] || "";
 }
 
-/** The per-turn guardrail line — keeps the chat anchored to the day's declared focus.
- * Empty when no active intention. @param {State} state @returns {string} */
-export function intentionLine(state) {
-  const i = activeIntention(state);
-  return i ? `[keel] ◎ intention: ${i} — capture drift (idea/pain), hold the thread.` : "";
+/** The per-turn guardrail line — anchors the chat to the current watch's declared focus.
+ * Empty when none set. @param {State} state @param {number} now @param {Watches} [watches] @returns {string} */
+export function intentionLine(state, now, watches) {
+  const w = activeWatch(now, watches);
+  const i = (state.watchIntentions ?? {})[w] || "";
+  return i ? `[keel] ◎ ${w} intention: ${i} — capture drift (idea/pain), hold the thread.` : "";
 }
 
 /** Response-granularity levels → the depth contract each implies (maps to semantic-zoom). */
@@ -402,9 +441,11 @@ export function targetHash(target) {
  * @param {Target} t @param {any} configured raw (unmerged) user config for provenance */
 export function renderRules(t, configured = {}) {
   const src = (k) => (configured && configured[k] !== undefined ? "custom" : "default");
+  const w = nightWindow(t.watches, toDurationMin(t.windDown));
   const lines = [
     `keel rules — effective target (hash ${targetHash(t)})`,
-    `driver (${src("driver")}): kind=${t.driver.kind ?? "wind-down"} windDown=${t.driver.windDown} hardStop=${t.driver.hardStop} reset=${t.driver.reset}${t.driver.backstop ? ` backstop=${t.driver.backstop}` : ""}`,
+    `watches (${src("watches")}): ${Object.entries(t.watches).map(([n, s]) => `${n}@${s}`).join(", ")}`,
+    `wind-down (${src("windDown")}): ${t.windDown} lead → ${w ? `ramp ${minToHHMM(w.windDownStart)}→${minToHHMM(w.nightStart)}, lock (night) until ${minToHHMM(w.reset)}` : "no night watch → pure-soft, never locks"}`,
   ];
   for (const r of t.rules) {
     lines.push(`rule (${src("rules")}): ${r.notch} at f≥${r.engagesAt} · ${r.arming ?? "immediate"}${r.maxGraceMin ? ` (grace ${r.maxGraceMin}m)` : ""} · tools: ${r.tools.join(", ")}${r.allowPaths?.length ? ` · always-allowed paths: ${r.allowPaths.join(", ")}` : ""}`);

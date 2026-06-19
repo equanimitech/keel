@@ -6,29 +6,31 @@ import {
   mergeWatchlist, watchlistLines, mergeDesktopSensors, desktopSensorLines,
 } from "./core.mjs";
 
-const driver = { windDown: "23:30", hardStop: "01:00", reset: "05:00" };
+// night@01:00 + 90m lead reproduces a 23:30→01:00 ramp, 01:00→05:00 lock.
+const watches = { morning: "05:00", afternoon: "13:00", evening: "19:00", night: "01:00" };
+const lead = 90;
 
 // ── characterization: pin the friction curve before defaults move ──
 
-test("characterization: wind-down ramp is linear windDown→hardStop, every 10 min", () => {
-  const wd = toMin("23:30");
-  const span = 90; // 23:30 → 01:00
+test("characterization: wind-down ramp is linear over the lead, every 10 min", () => {
+  const wd = toMin("23:30");   // night(01:00) − 90m lead
+  const span = 90;
   for (let dm = 0; dm <= span; dm += 10) {
     const m = (wd + dm) % 1440;
     const expected = Math.min(dm / span, 1);
-    const got = frictionAt(m, driver);
+    const got = frictionAt(m, watches, lead);
     assert.ok(Math.abs(got - expected) < 1e-9, `at +${dm}min expected ${expected}, got ${got}`);
   }
   for (const m of [toMin("05:00"), toMin("12:00"), toMin("23:20")]) {
-    assert.equal(frictionAt(m, driver), 0);
+    assert.equal(frictionAt(m, watches, lead), 0);
   }
-  assert.equal(frictionAt(toMin("03:00"), driver), 1); // lockdown plateau
+  assert.equal(frictionAt(toMin("03:00"), watches, lead), 1); // night (lockdown) plateau
 });
 
-test("characterization: mergeTarget preserves unknown driver kind and deep-merges voice", () => {
-  const t = mergeTarget({ driver: { kind: "pomodoro" }, voice: { lockdown: "custom" } });
-  assert.equal(t.driver.kind, "pomodoro");          // preserved, not rejected
-  assert.equal(t.driver.reset, DEFAULT_TARGET.driver.reset); // defaults fill gaps
+test("characterization: mergeTarget fills defaults, replaces watches wholesale, deep-merges voice", () => {
+  const t = mergeTarget({ watches: { night: "02:00" }, voice: { lockdown: "custom" } });
+  assert.deepEqual(t.watches, { night: "02:00" });            // watches replaced, not deep-merged
+  assert.equal(t.windDown, DEFAULT_TARGET.windDown);          // default fills the gap
   assert.equal(t.voice.lockdown, "custom");
   assert.equal(t.voice.windDownNudge, DEFAULT_TARGET.voice.windDownNudge);
 });
@@ -57,17 +59,17 @@ test("default voice carries no prescriptive substitution", () => {
 // ── rules observability: hash + render ─────────────────────────
 
 test("targetHash is stable, key-order-insensitive, value-sensitive", () => {
-  const a = mergeTarget({ driver: { windDown: "23:00", hardStop: "01:00" } });
-  const b = mergeTarget({ driver: { hardStop: "01:00", windDown: "23:00" } });
+  const a = mergeTarget({ watches: { morning: "07:00", night: "01:00" }, windDown: "60m" });
+  const b = mergeTarget({ windDown: "60m", watches: { night: "01:00", morning: "07:00" } });
   assert.equal(targetHash(a), targetHash(b));
-  const c = mergeTarget({ driver: { windDown: "22:00", hardStop: "01:00" } });
+  const c = mergeTarget({ watches: { morning: "07:00", night: "00:00" }, windDown: "60m" });
   assert.notEqual(targetHash(a), targetHash(c));
 });
 
 test("renderRules shows effective values and marks custom vs default sections", () => {
-  const out = renderRules(mergeTarget({ driver: { windDown: "23:00" } }), { driver: { windDown: "23:00" } });
-  assert.match(out, /windDown.*23:00/s);
-  assert.match(out, /driver.*custom/s);     // overridden section marked
+  const out = renderRules(mergeTarget({ windDown: "60m" }), { windDown: "60m" });
+  assert.match(out, /wind-down.*60m/s);
+  assert.match(out, /wind-down.*custom/s);  // overridden section marked
   assert.match(out, /orient.*default/s);    // untouched section marked
   assert.match(out, /Edit/);                 // gated tools visible
 });

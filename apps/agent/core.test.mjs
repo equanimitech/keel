@@ -3,12 +3,14 @@ import assert from "node:assert/strict";
 import {
   toMin, frictionAt, phaseOf, updateSession, unbrokenMin,
   denyingRule, renderOrient,
-  mergeTarget, emptyState, frictionNow, backstopActive,
+  mergeTarget, emptyState, frictionNow,
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
   setIntention, activeIntention, rollIntentionDay, focusDayKey,
 } from "./core.mjs";
 
-const driver = { windDown: "23:30", hardStop: "01:00", reset: "05:00" };
+// Watches with night@01:00 + a 90m lead reproduce the old 23:30→01:00 ramp, 01:00→05:00 lock.
+const watches = { morning: "05:00", afternoon: "13:00", evening: "19:00", night: "01:00" };
+const lead = 90;
 const near = (a, b) => Math.abs(a - b) < 0.02;
 
 test("granularity: parses aliases, falls back to the floor, never empty", () => {
@@ -23,13 +25,16 @@ test("granularity: parses aliases, falls back to the floor, never empty", () => 
   assert.equal(activeGranularity(setGranularity(emptyState(), "page")), "page");
 });
 
-test("intention: day-scoped, trims, stamps the waking-day it was set on", () => {
-  assert.equal(activeIntention(emptyState()), "");
-  assert.equal(activeIntention(setIntention(emptyState(), "  ship export  ")), "ship export");
-  const noon = Date.parse("2026-06-19T12:00:00");
-  assert.equal(setIntention(emptyState(), "x", noon).intentionDay, "2026-06-19");
-  // Set without `now` leaves the stamp untouched (CLI path always passes now).
-  assert.equal(setIntention({ intentionDay: "2026-06-18" }, "x").intentionDay, "2026-06-18");
+test("intention: per-watch, trims, stamps the waking-day, no cross-watch bleed", () => {
+  const noon = Date.parse("2026-06-19T12:00:00");          // → morning watch (05:00 ≤ noon < 13:00)
+  const eve = Date.parse("2026-06-19T20:00:00");           // → evening watch
+  assert.equal(activeIntention(emptyState(), noon, watches), "");
+  const s = setIntention(emptyState(), "morning", "  ship export  ", noon);
+  assert.equal(activeIntention(s, noon, watches), "ship export");   // trimmed, surfaced in its watch
+  assert.equal(s.intentionDay, "2026-06-19");
+  const s2 = setIntention(s, "evening", "review PRs", noon);
+  assert.equal(activeIntention(s2, noon, watches), "ship export");  // morning still active at noon
+  assert.equal(activeIntention(s2, eve, watches), "review PRs");    // evening surfaces only in the evening
 });
 
 test("focusDayKey: the day flips at 04:00, not midnight", () => {
@@ -40,12 +45,12 @@ test("focusDayKey: the day flips at 04:00, not midnight", () => {
 
 test("rollIntentionDay: keeps within a waking-day, clears across the 04:00 boundary", () => {
   const lateNight = Date.parse("2026-06-19T01:00:00");   // still 2026-06-18's day
-  const setLastEve = setIntention(emptyState(), "ship export", Date.parse("2026-06-18T20:00:00"));
+  const setLastEve = setIntention(emptyState(), "evening", "ship export", Date.parse("2026-06-18T20:00:00"));
   // 01:00 the "next" calendar morning is the same waking-day → intention survives.
-  assert.equal(activeIntention(rollIntentionDay(setLastEve, lateNight)), "ship export");
-  // Past 04:00 → new waking-day → cleared.
+  assert.equal(rollIntentionDay(setLastEve, lateNight).watchIntentions.evening, "ship export");
+  // Past 04:00 → new waking-day → all watches cleared.
   const nextMorning = Date.parse("2026-06-19T09:00:00");
-  assert.equal(activeIntention(rollIntentionDay(setLastEve, nextMorning)), "");
+  assert.deepEqual(rollIntentionDay(setLastEve, nextMorning).watchIntentions, {});
 });
 
 test("toMin parses HH:MM", () => {
@@ -53,14 +58,14 @@ test("toMin parses HH:MM", () => {
   assert.equal(toMin("01:00"), 60);
 });
 
-test("frictionAt across the wrapping night", () => {
-  assert.equal(frictionAt(toMin("12:00"), driver), 0);
-  assert.equal(frictionAt(toMin("23:20"), driver), 0);
-  assert.ok(near(frictionAt(toMin("23:30"), driver), 0));
-  assert.ok(near(frictionAt(toMin("00:30"), driver), 0.667));
-  assert.equal(frictionAt(toMin("01:00"), driver), 1);
-  assert.equal(frictionAt(toMin("03:00"), driver), 1);
-  assert.equal(frictionAt(toMin("05:00"), driver), 0);
+test("frictionAt across the wrapping night (derived from the night watch + lead)", () => {
+  assert.equal(frictionAt(toMin("12:00"), watches, lead), 0);
+  assert.equal(frictionAt(toMin("23:20"), watches, lead), 0);
+  assert.ok(near(frictionAt(toMin("23:30"), watches, lead), 0));      // ramp start = night(01:00) − 90m
+  assert.ok(near(frictionAt(toMin("00:30"), watches, lead), 0.667));
+  assert.equal(frictionAt(toMin("01:00"), watches, lead), 1);         // night begins → lock
+  assert.equal(frictionAt(toMin("03:00"), watches, lead), 1);
+  assert.equal(frictionAt(toMin("05:00"), watches, lead), 0);         // morning → reset
 });
 
 test("phaseOf maps f to a label", () => {
@@ -84,7 +89,7 @@ test("updateSession continues within gap, resets after gap", () => {
 
 const now = 1_000_000_000_000;
 const bpTarget = {
-  driver, rules: [{ notch: "block", engagesAt: 1, arming: "breakpoint", maxGraceMin: 10, tools: ["Edit", "Bash"] }],
+  rules: [{ notch: "block", engagesAt: 1, arming: "breakpoint", maxGraceMin: 10, tools: ["Edit", "Bash"] }],
 };
 
 test("denyingRule: breakpoint arming respects the turn boundary", () => {
@@ -101,16 +106,16 @@ test("denyingRule: breakpoint arming respects the turn boundary", () => {
 });
 
 test("immediate arming denies regardless of turn", () => {
-  const t = { driver, rules: [{ notch: "block", engagesAt: 1, arming: "immediate", tools: ["Edit"] }] };
+  const t = { rules: [{ notch: "block", engagesAt: 1, arming: "immediate", tools: ["Edit"] }] };
   assert.ok(denyingRule(t, 1, "Edit", { skipUntilTs: 0, turnLockedTs: 0, lastPromptTs: now }, now));
 });
 
-test("frictionNow: calm afternoon is 0; only the late backstop forces full lockdown", () => {
-  const t = mergeTarget({ driver: { ...driver, backstop: "03:00" } });
-  const noon = new Date("2026-06-05T14:00:00").getTime();
-  assert.equal(frictionNow(t, emptyState(), noon), 0);                          // day → no friction
-  assert.equal(backstopActive(new Date("2026-06-06T02:30:00").getTime(), t.driver), false);
-  assert.equal(frictionNow(t, emptyState(), new Date("2026-06-06T03:30:00").getTime()), 1); // past backstop → lockdown
+test("frictionNow: calm afternoon is 0; ramp before night; night watch forces full lockdown", () => {
+  const t = mergeTarget({ watches, windDown: "90m" });
+  assert.equal(frictionNow(t, new Date("2026-06-05T14:00:00").getTime()), 0);   // day → no friction
+  const ramp = frictionNow(t, new Date("2026-06-06T00:00:00").getTime());       // inside the 90m lead
+  assert.ok(ramp > 0 && ramp < 1, `expected ramp, got ${ramp}`);
+  assert.equal(frictionNow(t, new Date("2026-06-06T03:00:00").getTime()), 1);   // inside night → lockdown
 });
 
 test("renderOrient: silent by day, voiced otherwise", () => {
@@ -119,7 +124,7 @@ test("renderOrient: silent by day, voiced otherwise", () => {
   const wd = renderOrient(t, "wind_down", { ...emptyState(), lastPromptTs: now, sessionStartTs: now }, now);
   assert.match(wd, /\[keel\].*wind-down|land(ing)? open work/i);
   assert.match(wd, /high-level/); // wind-down granularity nudge
-  const locked = renderOrient(t, "lockdown", { ...emptyState(), skipUntilTs: 0, lastPromptTs: now }, now);
-  assert.match(locked, /paused until 05:00/);
+  const locked = renderOrient(t, "lockdown", { ...emptyState(), lastPromptTs: now }, now);
+  assert.match(locked, /paused until 09:00/);   // reset = morning watch (default 09:00)
   assert.match(locked, /Coarsest only/); // lockdown granularity nudge
 });

@@ -239,7 +239,7 @@ test("session-start logs rule_changed when the effective rules hash moves", asyn
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
   runHook(home, "session-start", { session_id: "s-r1" });
   const cfgPath = join(home, ".keel", "config.json");
-  writeFileSync(cfgPath, JSON.stringify({ targets: { "claude-code": { driver: { windDown: "21:00" } } } }));
+  writeFileSync(cfgPath, JSON.stringify({ targets: { "claude-code": { windDown: "60m" } } }));
   runHook(home, "session-start", { session_id: "s-r2" });
   const file = join(home, ".keel", "log", logFileName(Date.now()));
   const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
