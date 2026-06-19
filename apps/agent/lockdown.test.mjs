@@ -1,15 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  mergeTarget, phaseOf, frictionNow, backstopActive, lockedDown, denyingRule,
+  mergeTarget, phaseOf, frictionNow, backstopActive, denyingRule,
   emptyState, WIND_DOWN_CEIL, isAllowedPath,
 } from "./core.mjs";
 
 const HOME = "/Users/rafa";
 const ALLOW = ["~/journals", "~/.keel"];
 
-// Sovereign lockdown model: the clock only ramps wind-down PRESSURE; the hard
-// lockdown engages from sign-off / park, or the late backstop — never the clock alone.
+// Backstop-only lockdown model (decision 2026-06-17): the clock only ramps wind-down
+// PRESSURE; the one hard lockdown keel keeps is the late backstop — never the clock
+// alone, and no longer sign-off / park (those walls are retired).
 const target = mergeTarget({ driver: { windDown: "23:00", hardStop: "01:00", reset: "05:00", backstop: "03:00" } });
 const at = (h, m = 0) => new Date(2026, 5, 8, h, m, 0, 0).getTime();
 const bpRule = [{ notch: "block", engagesAt: 1, arming: "immediate", tools: ["Edit", "Bash"] }];
@@ -24,12 +25,11 @@ test("clock past hardStop does NOT hard-lock (the bug): friction capped below 1"
   assert.equal(denyingRule(lockTarget, f, "Edit", { ...emptyState(), lastPromptTs: at(1, 30) }, at(1, 30)), null);
 });
 
-test("sign-off / park engages full lockdown immediately, even by day", () => {
-  const parked = { ...emptyState(), parkAtTs: at(14, 0) };       // signoff sets parkAtTs=now
-  const f = frictionNow(target, parked, at(14, 30));
+test("backstop engages full lockdown and the deny rule fires at the breakpoint", () => {
+  const f = frictionNow(target, emptyState(), at(3, 30));        // past backstop
   assert.equal(f, 1);
   assert.equal(phaseOf(f), "lockdown");
-  assert.ok(denyingRule(lockTarget, f, "Edit", { ...parked, turnLockedTs: at(14, 30), lastPromptTs: at(14, 30) }, at(14, 30)));
+  assert.ok(denyingRule(lockTarget, f, "Edit", { ...emptyState(), turnLockedTs: at(3, 30), lastPromptTs: at(3, 30) }, at(3, 30)));
 });
 
 test("backstop is the late safety net: locks an un-signed-off night from 03:00", () => {
@@ -38,7 +38,6 @@ test("backstop is the late safety net: locks an un-signed-off night from 03:00",
   assert.equal(backstopActive(at(5, 30), target.driver), false);  // past reset → released
   assert.equal(frictionNow(target, emptyState(), at(2, 30)) < 1, true);
   assert.equal(frictionNow(target, emptyState(), at(3, 30)), 1);
-  assert.equal(lockedDown(target, emptyState(), at(3, 30)), true);
 });
 
 test("no backstop configured ⇒ pure sovereign (clock never locks)", () => {

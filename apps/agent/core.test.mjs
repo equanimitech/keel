@@ -1,11 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  toMin, frictionAt, phaseOf, refillCredits, spendSkip, updateSession, unbrokenMin,
-  denyingRule, nextResetTs, recordNight, lastNNights, renderOrient, reflectionLine,
-  mergeTarget, emptyState, nightKey, parseParkTarget, parkActive, frictionNow,
+  toMin, frictionAt, phaseOf, updateSession, unbrokenMin,
+  denyingRule, renderOrient,
+  mergeTarget, emptyState, frictionNow, backstopActive,
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
-  setIntention, activeIntention,
+  setIntention, activeIntention, rollIntentionDay, focusDayKey,
 } from "./core.mjs";
 
 const driver = { windDown: "23:30", hardStop: "01:00", reset: "05:00" };
@@ -23,11 +23,29 @@ test("granularity: parses aliases, falls back to the floor, never empty", () => 
   assert.equal(activeGranularity(setGranularity(emptyState(), "page")), "page");
 });
 
-test("intention: session-scoped, empty when unset (no day-keying)", () => {
+test("intention: day-scoped, trims, stamps the waking-day it was set on", () => {
   assert.equal(activeIntention(emptyState()), "");
   assert.equal(activeIntention(setIntention(emptyState(), "  ship export  ")), "ship export");
-  // No intentionDay: the value stands on its own; session-start clears it (tested via the hook).
-  assert.equal(setIntention(emptyState(), "x").intentionDay, undefined);
+  const noon = Date.parse("2026-06-19T12:00:00");
+  assert.equal(setIntention(emptyState(), "x", noon).intentionDay, "2026-06-19");
+  // Set without `now` leaves the stamp untouched (CLI path always passes now).
+  assert.equal(setIntention({ intentionDay: "2026-06-18" }, "x").intentionDay, "2026-06-18");
+});
+
+test("focusDayKey: the day flips at 04:00, not midnight", () => {
+  assert.equal(focusDayKey(Date.parse("2026-06-19T03:59:00")), "2026-06-18"); // pre-dawn → prior day
+  assert.equal(focusDayKey(Date.parse("2026-06-19T04:00:00")), "2026-06-19"); // boundary → new day
+  assert.equal(focusDayKey(Date.parse("2026-06-19T23:30:00")), "2026-06-19");
+});
+
+test("rollIntentionDay: keeps within a waking-day, clears across the 04:00 boundary", () => {
+  const lateNight = Date.parse("2026-06-19T01:00:00");   // still 2026-06-18's day
+  const setLastEve = setIntention(emptyState(), "ship export", Date.parse("2026-06-18T20:00:00"));
+  // 01:00 the "next" calendar morning is the same waking-day → intention survives.
+  assert.equal(activeIntention(rollIntentionDay(setLastEve, lateNight)), "ship export");
+  // Past 04:00 → new waking-day → cleared.
+  const nextMorning = Date.parse("2026-06-19T09:00:00");
+  assert.equal(activeIntention(rollIntentionDay(setLastEve, nextMorning)), "");
 });
 
 test("toMin parses HH:MM", () => {
@@ -49,23 +67,6 @@ test("phaseOf maps f to a label", () => {
   assert.equal(phaseOf(0), "day");
   assert.equal(phaseOf(0.5), "wind_down");
   assert.equal(phaseOf(1), "lockdown");
-});
-
-test("refillCredits carries leftover + perMonth, capped, on month change", () => {
-  const t = mergeTarget({ skipBudget: { perMonth: 2, cap: 3 } });
-  assert.equal(refillCredits({ credits: 0, creditsMonth: "2026-05" }, t, "2026-06").credits, 2);
-  // carryover: 2 left + 2 = 4, capped to 3
-  assert.equal(refillCredits({ credits: 2, creditsMonth: "2026-05" }, t, "2026-06").credits, 3);
-  // no-op same month
-  assert.equal(refillCredits({ credits: 1, creditsMonth: "2026-06" }, t, "2026-06").credits, 1);
-});
-
-test("spendSkip decrements + sets skipUntil; refuses at 0", () => {
-  const ok = spendSkip({ credits: 2 }, 999);
-  assert.equal(ok.spent, true);
-  assert.equal(ok.state.credits, 1);
-  assert.equal(ok.state.skipUntilTs, 999);
-  assert.equal(spendSkip({ credits: 0 }, 999).spent, false);
 });
 
 test("updateSession continues within gap, resets after gap", () => {
@@ -97,8 +98,6 @@ test("denyingRule: breakpoint arming respects the turn boundary", () => {
   assert.equal(denyingRule(bpTarget, 1, "Read", { skipUntilTs: 0, turnLockedTs: now, lastPromptTs: now }, now), null);
   // below engagesAt → allow
   assert.equal(denyingRule(bpTarget, 0.6, "Edit", { skipUntilTs: 0, turnLockedTs: now, lastPromptTs: now }, now), null);
-  // skip active → allow
-  assert.equal(denyingRule(bpTarget, 1, "Edit", { skipUntilTs: now + 1e6, turnLockedTs: now, lastPromptTs: now }, now), null);
 });
 
 test("immediate arming denies regardless of turn", () => {
@@ -106,59 +105,12 @@ test("immediate arming denies regardless of turn", () => {
   assert.ok(denyingRule(t, 1, "Edit", { skipUntilTs: 0, turnLockedTs: 0, lastPromptTs: now }, now));
 });
 
-test("nextResetTs is a future 05:00", () => {
-  const t = new Date("2026-06-01T23:40:00").getTime();
-  const r = new Date(nextResetTs(t, driver));
-  assert.equal(r.getHours(), 5);
-  assert.ok(r.getTime() > t);
-});
-
-test("reflection counts observed nights, held = no skip (honest label)", () => {
-  let s = emptyState();
-  // three prior nights: one wound-down-early (observed, no skip), one skipped, one not observed
-  const n1 = now - 1 * 86_400_000, n2 = now - 2 * 86_400_000;
-  s = recordNight(s, n1, driver, { observed: true });             // held
-  s = recordNight(s, n2, driver, { observed: true, skipped: true }); // not held
-  const last = lastNNights(s, driver, now, 7);
-  assert.equal(last.length, 2);
-  assert.equal(last.filter((x) => x.held).length, 1);
-  assert.match(reflectionLine({ ...s, credits: 2 }, mergeTarget({}), now), /1 of the last 2 session night/);
-});
-
-test("parseParkTarget: wall-clock and durations", () => {
-  const t0 = new Date("2026-06-05T20:45:00").getTime();
-  // future wall-clock today
-  assert.equal(new Date(parseParkTarget("21:00", t0)).getHours(), 21);
-  assert.equal(new Date(parseParkTarget("21:00", t0)).getDate(), 5);
-  // already-passed wall-clock rolls to tomorrow
-  assert.equal(new Date(parseParkTarget("20:00", t0)).getDate(), 6);
-  // durations
-  assert.equal(parseParkTarget("15m", t0), t0 + 15 * 60_000);
-  assert.equal(parseParkTarget("90", t0), t0 + 90 * 60_000);
-  assert.equal(parseParkTarget("1h30m", t0), t0 + 90 * 60_000);
-  // junk
-  assert.equal(parseParkTarget("nope", t0), null);
-  assert.equal(parseParkTarget("25:00", t0), null);
-  assert.equal(parseParkTarget("", t0), null);
-});
-
-test("parkActive bites from parkAtTs until that park's reset", () => {
-  const set = new Date("2026-06-05T20:45:00").getTime();
-  const park = new Date("2026-06-05T21:00:00").getTime();
-  const s = { ...emptyState(), parkAtTs: park };
-  assert.equal(parkActive(s, set, driver), false);                 // before park time
-  assert.equal(parkActive(s, park + 1000, driver), true);          // just after
-  assert.equal(parkActive(s, new Date("2026-06-06T04:59:00").getTime(), driver), true);  // through the night
-  assert.equal(parkActive(s, new Date("2026-06-06T05:01:00").getTime(), driver), false); // past reset → expired
-  assert.equal(parkActive(emptyState(), park + 1000, driver), false);                    // no park set
-});
-
-test("frictionNow raises a calm afternoon to full lockdown under park", () => {
-  const t = mergeTarget({ driver });
+test("frictionNow: calm afternoon is 0; only the late backstop forces full lockdown", () => {
+  const t = mergeTarget({ driver: { ...driver, backstop: "03:00" } });
   const noon = new Date("2026-06-05T14:00:00").getTime();
-  assert.equal(frictionNow(t, emptyState(), noon), 0);
-  const parked = { ...emptyState(), parkAtTs: new Date("2026-06-05T13:00:00").getTime() };
-  assert.equal(frictionNow(t, parked, noon), 1);
+  assert.equal(frictionNow(t, emptyState(), noon), 0);                          // day → no friction
+  assert.equal(backstopActive(new Date("2026-06-06T02:30:00").getTime(), t.driver), false);
+  assert.equal(frictionNow(t, emptyState(), new Date("2026-06-06T03:30:00").getTime()), 1); // past backstop → lockdown
 });
 
 test("renderOrient: silent by day, voiced otherwise", () => {

@@ -4,21 +4,19 @@
 // Fail-open: any error → exit 0, allow. A hook must never trap the user.
 
 import {
-  phaseOf, nowMinOf, monthKey, skipActive, nextResetTs, frictionNow, toMin, inWindow,
-  refillCredits, spendSkip, updateSession, denyingRule, recordNight,
-  denyReason, renderOrient, reflectionLine, ritualNudge, parseParkTarget, parkActive,
-  setIntention, activeIntention, intentionLine,
+  phaseOf, nowMinOf, frictionNow, toMin, inWindow,
+  updateSession, denyingRule,
+  denyReason, renderOrient, ritualNudge,
+  setIntention, rollIntentionDay, activeIntention, intentionLine,
   setGranularity, normalizeGranularity, activeGranularity, granularityLine, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
-  viceWindows, viceScheduledAt, viceShouldBlock, setVicePact, spendViceSkip,
-  viceSkipActive, vicePactActive, isAllowedPath,
+  isAllowedPath,
   buildEvent, capPayload, summarizeEvents, matchDispatch, targetHash, renderRules, consentLines,
   watchlistLines, desktopSensorLines,
   applyObserveVerdicts, mergeLedger,
 } from "./core.mjs";
-import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, readStdin, TARGET_ID, KEEL_DIR, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
+import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, readStdin, TARGET_ID, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
 import { runHost } from "./native-host.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
-import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
@@ -86,7 +84,6 @@ async function handlePreTool(now) {
     ...(rule?.notch ? { keel_rule_notch: rule.notch } : {}),
   } });
   if (allowed) return emit(null); // allow (silent)
-  saveState(recordNight(state, now, target.driver, { observed: true }));
   return emit({
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
@@ -103,8 +100,7 @@ async function handleUserSubmit(now) {
   let state = updateSession(loadState(), now, target.orient);
   const phase = phaseOf(frictionNow(target, state, now));
   // Mark whether THIS turn opened under lockdown — the breakpoint signal PreToolUse reads.
-  state.turnLockedTs = phase === "lockdown" && !skipActive(state, now) ? state.lastPromptTs : 0;
-  if (phase !== "day") state = recordNight(state, now, target.driver, { observed: true });
+  state.turnLockedTs = phase === "lockdown" ? state.lastPromptTs : 0;
 
   // Ambient by design: indicators live in the statusline HUD (`keel hud`), not injected per-turn.
   // The one exception — fired once per session, on turn 2+, only while unset: prompt the agent
@@ -115,7 +111,7 @@ async function handleUserSubmit(now) {
   let nudge = "";
   if (!freshTurn && unset && state.inferNudgedTs !== state.sessionStartTs) {
     state.inferNudgedTs = state.sessionStartTs;
-    nudge = "<keel: intention is unset for this session. Infer it from the conversation so far and set it silently — `keel intention \"<focus>\"`. Do not announce; it surfaces in the statusline HUD. If you genuinely cannot infer it, leave it.>";
+    nudge = "<keel: today's intention is unset. Infer it from the conversation so far and set it silently — `keel intention \"<focus>\"`. Do not announce; it surfaces in the statusline HUD. If you genuinely cannot infer it, leave it.>";
   }
   saveState(state);
   return emitText(nudge);
@@ -125,7 +121,7 @@ async function handleSessionStart(now) {
   const input = await readStdin();
   logHookEvent("session_start", now, input);
   const target = loadTarget();
-  let state = refillCredits(loadState(), target, monthKey(now));
+  let state = loadState();
   // Rules observability: any change to the effective rules — including the
   // watchlist (config spine) — becomes a logged event.
   const hash = targetHash({ target, watchlist: loadWatchlist(), desktop: loadDesktopSensors() });
@@ -139,83 +135,51 @@ async function handleSessionStart(now) {
     consent = consentLines();
     state = { ...state, consentShownTs: now };
   }
-  const reflection = reflectionLine(state, target, now);
   const nudge = ritualNudge(state, now, target.voice);
   if (nudge) state = { ...state, lastRitualNudge: nudge.mark };
-  // Per-session focus + depth: a fresh session (or /clear) resets intention to unset and
-  // granularity to the floor (tldr); resume/compact keep whatever was set, so a long
-  // session isn't reset under you. Source-gated — predictable, no hidden sessionStartTs coupling.
-  if (input?.source === "startup" || input?.source === "clear") state = { ...state, intention: "", granularity: "" };
+  // Focus is day-scoped, depth is session-scoped. Intention clears only on a new
+  // calendar day (rollIntentionDay) — it survives session restarts and /clear, since
+  // per-session focus is already covered by Claude's own session goals. Granularity is
+  // a per-session dial: a fresh session (startup/clear) resets it to the floor (tldr).
+  state = rollIntentionDay(state, now);
+  if (input?.source === "startup" || input?.source === "clear") state = { ...state, granularity: "" };
   saveState(state);
-  return emitText([...consent, reflection, nudge?.line, intentionLine(state), granularityLine(state)].filter(Boolean).join("\n"));
-}
-
-function cmdSkip(now) {
-  const target = loadTarget();
-  const refilled = refillCredits(loadState(), target, monthKey(now));
-  const { spent, state } = spendSkip(refilled, nextResetTs(now, target.driver));
-  if (!spent) {
-    console.log(`keel: 0 skip credits left — coding stays paused until ${target.driver.reset}.`);
-    return;
-  }
-  saveState(recordNight(state, now, target.driver, { observed: true, skipped: true }));
-  console.log(`keel: skip spent. Coding unblocked until ${target.driver.reset}. ${state.credits} credit(s) left this month.`);
+  return emitText([...consent, nudge?.line, intentionLine(state), granularityLine(state)].filter(Boolean).join("\n"));
 }
 
 function cmdStatus(now) {
   const target = loadTarget();
-  const state = refillCredits(loadState(), target, monthKey(now));
+  const state = loadState();
   const f = frictionNow(target, state, now);
-  const locked = phaseOf(f) === "lockdown" && !skipActive(state, now);
-  const park = state.parkAtTs
-    ? ` park=${new Date(state.parkAtTs).toTimeString().slice(0, 5)}${parkActive(state, now, target.driver) ? "(BITING)" : ""}`
-    : "";
+  const locked = phaseOf(f) === "lockdown";
+  const d = target.driver;
   console.log(
-    `keel[${TARGET_ID}]: f=${f.toFixed(2)} phase=${phaseOf(f)}${locked ? " (LOCKED)" : ""} ` +
-    `credits=${state.credits} windDown=${target.driver.windDown} hardStop=${target.driver.hardStop} reset=${target.driver.reset}${park}`,
+    `keel[${TARGET_ID}]: f=${f.toFixed(2)} phase=${phaseOf(f)}${locked ? " (LOCKED · backstop)" : ""} ` +
+    `windDown=${d.windDown} hardStop=${d.hardStop} backstop=${d.backstop ?? "—"} reset=${d.reset}`,
   );
 }
 
-function cmdPark(now, arg) {
-  const target = loadTarget();
-  const ts = parseParkTarget(arg, now);
-  if (!ts) {
-    console.log("keel: park needs a time. e.g. `keel park 21:00` or `keel park 15m`.");
-    return;
-  }
-  saveState({ ...loadState(), parkAtTs: ts });
-  const at = new Date(ts).toTimeString().slice(0, 5);
-  const mins = Math.round((ts - now) / 60_000);
-  console.log(`keel: parked. Coding stops at ${at} (in ${mins} min), held until ${target.driver.reset}. \`keel unpark\` to cancel.`);
+// ponytail: signoff's old levers (self-imposed park + vice block) retired with the
+// walls (decision 2026-06-17 — block kept for the backstop only). The dial-driven
+// "friction all the way up" is pass 2; for now signoff just acknowledges the close.
+function cmdSignoff() {
+  console.log("keel: signed off. The day is sealed. (keel no longer walls coding — the late backstop is the only hard stop.)");
 }
 
-function cmdUnpark() {
-  saveState({ ...loadState(), parkAtTs: 0 });
-  console.log("keel: park cleared.");
-}
-
-function cmdSignoff(now) {
-  const target = loadTarget();
-  // Sovereign close: lock coding AND raise vices for the rest of the night, same lifecycle as park.
-  saveState(setVicePact({ ...loadState(), parkAtTs: now }, now, target.driver));
-  try { viceApply("on"); } catch { /* daemon reconciles within the tick window */ }
-  console.log(`keel: signed off. Coding closed + vices raised, held until ${target.driver.reset}. The day is sealed. \`keel unpark\` reopens coding; \`keel vice skip\` lifts vices (costs a credit).`);
-}
-
-function cmdIntention(arg) {
+function cmdIntention(arg, now) {
   const text = String(arg ?? "").trim();
   if (text === "clear") {
-    saveState(setIntention(loadState(), ""));
+    saveState(setIntention(loadState(), "", now));
     console.log("keel: intention cleared.");
     return;
   }
   if (!text) {
     const cur = activeIntention(loadState());
-    console.log(cur ? `keel: intention — ${cur}` : "keel: no intention set this session. `keel intention \"<focus>\"` to set one.");
+    console.log(cur ? `keel: intention — ${cur}` : "keel: no intention set today. `keel intention \"<focus>\"` to set one.");
     return;
   }
-  saveState(setIntention(loadState(), text));
-  console.log(`keel: intention set — ${text}. Held for this session; surfaced each turn. \`keel intention clear\` to release.`);
+  saveState(setIntention(loadState(), text, now));
+  console.log(`keel: intention set — ${text}. Held for today; surfaced each turn. \`keel intention clear\` to release.`);
 }
 
 function cmdGranularity(arg) {
@@ -239,82 +203,6 @@ function cmdGranularity(arg) {
   console.log(`keel: granularity set — ${level}: ${GRANULARITY_LEVELS[level]} Held for this session; surfaced in the HUD. \`keel granularity reset\` returns to ${DEFAULT_GRANULARITY}.`);
 }
 
-// ── Vice block (hosts toggle + scheduled Ulysses pact) ────────
-function viceBlocked() {
-  try { return readFileSync("/etc/hosts", "utf8").includes(">>> keel vice-block"); }
-  catch { return false; }
-}
-
-/** Apply the hosts block via the privileged primitive, by the least-friction path
- * available: direct (root daemon) · passwordless sudo (sudoers.d) · GUI auth (fallback).
- * @param {"on"|"off"} action */
-function viceApply(action) {
-  const script = `${KEEL_DIR}/vice-block.sh`;
-  if (typeof process.getuid === "function" && process.getuid() === 0)
-    return execFileSync(script, [action], { stdio: "ignore" });
-  try { return execFileSync("sudo", ["-n", script, action], { stdio: "ignore" }); }
-  catch {
-    return execFileSync("osascript",
-      ["-e", `do shell script ${JSON.stringify(`${script} ${action}`)} with administrator privileges`],
-      { stdio: "ignore" });
-  }
-}
-
-const windowsLabel = (target) => viceWindows(target).map((w) => `${w.from}→${w.to}`).join(", ");
-
-function cmdVice(now, sub) {
-  const target = loadTarget();
-  const reset = target.driver.reset;
-  let state = refillCredits(loadState(), target, monthKey(now));
-
-  if (sub === "on" || sub === "panic") {
-    state = setVicePact(state, now, target.driver);
-    saveState(state);
-    try { viceApply("on"); } catch { /* daemon reconciles */ }
-    console.log(`keel: vices raised — held until ${reset}. \`keel vice skip\` lifts early (costs a credit).`);
-    return;
-  }
-  if (sub === "skip") {
-    const { spent, state: s2 } = spendViceSkip(state, nextResetTs(now, target.driver));
-    if (!spent) { console.log(`keel: 0 skip credits left — vices stay up until ${reset}.`); return; }
-    saveState(s2);
-    try { viceApply("off"); } catch { /* daemon reconciles */ }
-    console.log(`keel: skip spent. Vices down until ${reset}. ${s2.credits} credit(s) left this month.`);
-    return;
-  }
-  if (sub === "off") {
-    state = { ...state, viceUntilTs: 0 };          // drop the manual pact
-    saveState(state);
-    if (viceShouldBlock(target, state, now)) {     // a schedule window still bites
-      console.log(`keel: vices scheduled now (${windowsLabel(target)}). \`keel vice skip\` lifts early (costs a credit).`);
-      return;
-    }
-    try { viceApply("off"); } catch { /* daemon reconciles */ }
-    console.log("keel: vices down.");
-    return;
-  }
-  // status (default)
-  const should = viceShouldBlock(target, state, now);
-  const actual = viceBlocked();
-  const sched = viceScheduledAt(nowMinOf(now), target);
-  const pact = vicePactActive(state, now) ? ` · pact→${new Date(state.viceUntilTs).toTimeString().slice(0, 5)}` : "";
-  const skip = viceSkipActive(state, now) ? ` · skip→${new Date(state.viceSkipUntilTs).toTimeString().slice(0, 5)}` : "";
-  console.log(
-    `keel vices: ${actual ? "🔒 up" : "🔓 down"} (want ${should ? "up" : "down"})` +
-    ` · schedule ${windowsLabel(target)}${sched ? " [in window]" : ""}${pact}${skip} · credits=${state.credits}`,
-  );
-}
-
-/** The root daemon's heartbeat: reconcile /etc/hosts to the desired state. Quiet on no-op. */
-function cmdViceTick(now) {
-  const target = loadTarget();
-  const should = viceShouldBlock(target, loadState(), now);
-  if (should === viceBlocked()) return;            // already reconciled
-  const stamp = new Date(now).toISOString();
-  try { viceApply(should ? "on" : "off"); console.log(`[${stamp}] vice-tick: ${should ? "raised" : "lifted"} vices.`); }
-  catch (e) { console.log(`[${stamp}] vice-tick: FAILED (${should ? "raise" : "lift"}) — ${e?.message ?? e}`); }
-}
-
 // ── HUD (for the Claude Code statusLine) ──────────────────────
 function sessionCount() {  // approximate # of concurrent Claude Code sessions
   try {  // no shell: execFile with an arg array. pgrep exits 1 if none → caught.
@@ -330,7 +218,7 @@ function sessionCount() {  // approximate # of concurrent Claude Code sessions
 // the held-until + skips. Context glyphs appear only when they carry signal.
 function cmdHud(now) {
   const target = loadTarget();
-  const state = refillCredits(loadState(), target, monthKey(now));
+  const state = loadState();
   const d = target.driver;
   const phase = phaseOf(frictionNow(target, state, now));
   const minsUntil = (hhmm) => (toMin(hhmm) - nowMinOf(now) + 1440) % 1440;
@@ -437,18 +325,13 @@ async function main() {
   if (cmd === "log") return cmdLog(now, sub, process.argv[4]);
   if (cmd === "rules") return cmdRules();
   if (cmd === "native-host") { runHost(); return; }
-  if (cmd === "skip") return cmdSkip(now);
-  if (cmd === "park") return cmdPark(now, sub);
-  if (cmd === "unpark") return cmdUnpark();
-  if (cmd === "signoff") return cmdSignoff(now);
-  if (cmd === "vice" || cmd === "vices") return cmdVice(now, sub);
-  if (cmd === "vice-tick") return cmdViceTick(now);
-  if (cmd === "intention") return cmdIntention(process.argv.slice(3).join(" "));
+  if (cmd === "signoff") return cmdSignoff();
+  if (cmd === "intention") return cmdIntention(process.argv.slice(3).join(" "), now);
   if (cmd === "granularity" || cmd === "gran") return cmdGranularity(sub);
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
   if (cmd === "watchlist" && sub === "scan") return cmdWatchlistScan();
-  console.log("usage: keel <hook pre-tool|user-submit|session-start | skip | park <HH:MM|15m> | unpark | signoff | vice <on|off|skip|status|panic> | intention [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | rules | log status | status | watchlist scan>");
+  console.log("usage: keel <hook pre-tool|user-submit|session-start | signoff | intention [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | rules | log status | status | watchlist scan>");
 }
 
 main().catch(() => process.exit(0)); // fail-open

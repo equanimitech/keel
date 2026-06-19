@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   toMin, frictionAt, mergeTarget, emptyState, DEFAULT_TARGET,
-  reflectionLine, ritualNudge, targetHash, renderRules, consentLines,
+  ritualNudge, targetHash, renderRules, consentLines,
   mergeWatchlist, watchlistLines, mergeDesktopSensors, desktopSensorLines,
 } from "./core.mjs";
 
@@ -35,28 +35,6 @@ test("characterization: mergeTarget preserves unknown driver kind and deep-merge
 
 // ── neutral defaults ───────────────────────────────────────────
 
-test("default reflection is factual, not shaming, and templated", () => {
-  const state = { ...emptyState(), credits: 2, nights: { "2026-06-10": { observed: true } } };
-  const line = reflectionLine(state, mergeTarget({}), new Date(2026, 5, 11, 12, 0).getTime());
-  assert.ok(line.length > 0);
-  assert.ok(!/wound down on your own/.test(line)); // Rafa's copy moved to his config
-  assert.ok(!/late night/.test(line));             // sleep framing out of the domain
-  assert.match(line, /1 of the last 1/);           // counts still surface
-});
-
-test("reflection template is voice-configurable with {held}/{n}/{credits}", () => {
-  const target = mergeTarget({ voice: { reflection: "held {held}/{n}, {credits} credits" } });
-  const state = { ...emptyState(), credits: 3, nights: { "2026-06-10": { observed: true } } };
-  const line = reflectionLine(state, target, new Date(2026, 5, 11, 12, 0).getTime());
-  assert.equal(line, "held 1/1, 3 credits");
-});
-
-test("empty reflection template silences the reflection entirely", () => {
-  const target = mergeTarget({ voice: { reflection: "" } });
-  const state = { ...emptyState(), credits: 3, nights: { "2026-06-10": { observed: true } } };
-  assert.equal(reflectionLine(state, target, new Date(2026, 5, 11, 12, 0).getTime()), "");
-});
-
 test("ritual nudges are silent by default (no foreign slash commands)", () => {
   const tuesdayMorning = new Date(2026, 5, 9, 9, 0).getTime();
   assert.equal(ritualNudge(emptyState(), tuesdayMorning, mergeTarget({}).voice), null);
@@ -70,11 +48,6 @@ test("ritual nudges fire when configured: weekly on Monday, morning otherwise", 
   assert.equal(ritualNudge(emptyState(), tuesday, voice)?.line, "good morning line");
   const night = new Date(2026, 5, 9, 23, 0).getTime();
   assert.equal(ritualNudge(emptyState(), night, voice), null); // window still respected
-});
-
-test("default skip budget is generous (users tighten, defaults never coerce)", () => {
-  assert.ok(DEFAULT_TARGET.skipBudget.perMonth >= 4);
-  assert.ok(DEFAULT_TARGET.skipBudget.cap >= DEFAULT_TARGET.skipBudget.perMonth);
 });
 
 test("default voice carries no prescriptive substitution", () => {
@@ -95,7 +68,7 @@ test("renderRules shows effective values and marks custom vs default sections", 
   const out = renderRules(mergeTarget({ driver: { windDown: "23:00" } }), { driver: { windDown: "23:00" } });
   assert.match(out, /windDown.*23:00/s);
   assert.match(out, /driver.*custom/s);     // overridden section marked
-  assert.match(out, /skipBudget.*default/s); // untouched section marked
+  assert.match(out, /orient.*default/s);    // untouched section marked
   assert.match(out, /Edit/);                 // gated tools visible
 });
 

@@ -7,15 +7,11 @@
 /** @typedef {number} Friction  0..1 */
 /** @typedef {{ kind?: string, windDown: string, hardStop: string, reset: string, backstop?: string }} Driver */
 /** @typedef {{ notch: Notch, engagesAt: Friction, arming?: Arming, maxGraceMin?: number, tools: string[], allowPaths?: string[] }} Rule */
-/** @typedef {{ perMonth: number, cap: number }} SkipBudget */
 /** @typedef {{ bellAfterMin: number, sessionGapMin: number }} Orient */
 /** @typedef {{ windDown: string, lockdown: string }} Granularity */
-/** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, reflection: string, morningNudge: string, weeklyNudge: string, granularity: Granularity }} Voice */
-/** @typedef {{ from: string, to: string }} ViceWindow */
-/** @typedef {{ windows: ViceWindow[], reassertEveryMin: number }} Vice */
-/** @typedef {{ driver: Driver, rules: Rule[], orient: Orient, skipBudget: SkipBudget, voice: Voice, vice: Vice }} Target */
-/** @typedef {{ observed?: boolean, skipped?: boolean }} Night */
-/** @typedef {{ credits: number, creditsMonth: string, skipUntilTs: number, parkAtTs: number, viceUntilTs: number, viceSkipUntilTs: number, sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, intention: string, granularity: string, lastRuleHash: string, consentShownTs: number, nights: Record<string, Night> }} State */
+/** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, morningNudge: string, weeklyNudge: string, granularity: Granularity }} Voice */
+/** @typedef {{ driver: Driver, rules: Rule[], orient: Orient, voice: Voice }} Target */
+/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastRitualNudge: string, inferNudgedTs: number, intention: string, intentionDay: string, granularity: string, lastRuleHash: string, consentShownTs: number }} State */
 
 /** Clock pressure is capped strictly below the full-lockdown threshold (1.0): the
  * wall-clock ramp escalates wind-down nudges but NEVER hard-locks coding on its own.
@@ -29,15 +25,13 @@ export const DEFAULT_TARGET = {
             tools: ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"],
             allowPaths: ["~/journals", "~/.keel"] }],
   orient: { bellAfterMin: 120, sessionGapMin: 30 },
-  skipBudget: { perMonth: 4, cap: 6 },
   voice: {
     windDownNudge: "Wind-down window — a good moment to land open work.",
-    lockdown: "Coding tools are paused until {reset} — your own schedule. Spend a skip if it matters: `keel skip` ({credits} left).",
+    lockdown: "Coding tools are paused until {reset} — the late backstop, the one wall keel keeps. Past here your judgment isn't yours to trust; sleep is the move.",
     substitution: "",
     consequence: "",
     identity: "",
     signoffNudge: "",
-    reflection: "[keel] {held} of the last {n} session night(s) closed on schedule. {credits} skip credit(s) this month.",
     morningNudge: "",
     weeklyNudge: "",
     granularity: {
@@ -45,15 +39,12 @@ export const DEFAULT_TARGET = {
       lockdown: "Coarsest only — one-line status + tomorrow's first step; no detail.",
     },
   },
-  // Scheduled vice block. Empty windows → derived from the coding night (driver windDown→reset).
-  vice: { windows: [], reassertEveryMin: 5 },
 };
 
 /** @returns {State} */
 export const emptyState = () => ({
-  credits: 0, creditsMonth: "", skipUntilTs: 0, parkAtTs: 0, viceUntilTs: 0, viceSkipUntilTs: 0,
   sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, lastRitualNudge: "", inferNudgedTs: 0,
-  intention: "", granularity: "", lastRuleHash: "", consentShownTs: 0, nights: {},
+  intention: "", intentionDay: "", granularity: "", lastRuleHash: "", consentShownTs: 0,
 });
 
 /** Merge a partial target config over the defaults. @param {any} t @returns {Target} */
@@ -62,9 +53,7 @@ export function mergeTarget(t = {}) {
     driver: { ...DEFAULT_TARGET.driver, ...t.driver },
     rules: t.rules ?? DEFAULT_TARGET.rules,
     orient: { ...DEFAULT_TARGET.orient, ...t.orient },
-    skipBudget: { ...DEFAULT_TARGET.skipBudget, ...t.skipBudget },
     voice: { ...DEFAULT_TARGET.voice, ...t.voice },
-    vice: { ...DEFAULT_TARGET.vice, ...t.vice },
   };
 }
 
@@ -101,51 +90,6 @@ export function phaseOf(f) {
 
 export const nowMinOf = (now) => { const d = new Date(now); return d.getHours() * 60 + d.getMinutes(); };
 export const monthKey = (now) => new Date(now).toISOString().slice(0, 7);
-export const skipActive = (/** @type {State} */ s, now) => now < (s.skipUntilTs ?? 0);
-
-/** Reset instant of the current keel-night (epoch ms). @param {number} now @param {Driver} driver */
-export function nextResetTs(now, driver) {
-  const r = toMin(driver.reset);
-  const cand = new Date(now); cand.setHours(0, 0, 0, 0); cand.setMinutes(r);
-  if (now >= cand.getTime()) cand.setDate(cand.getDate() + 1);
-  return cand.getTime();
-}
-export const nightKey = (now, /** @type {Driver} */ driver) =>
-  new Date(nextResetTs(now, driver)).toISOString().slice(0, 10);
-
-// ── Self-imposed park (a one-shot hard stop you set now) ─────────
-
-/** Parse a park argument into an absolute instant (epoch ms), or null.
- * Accepts a wall-clock "HH:MM" (today, or tomorrow if already past) or a
- * relative duration "90", "15m", "1h", "1h30m". @param {string} arg @param {number} now */
-export function parseParkTarget(arg, now) {
-  const s = String(arg ?? "").trim().toLowerCase();
-  if (!s) return null;
-  const hhmm = s.match(/^(\d{1,2}):(\d{2})$/);
-  if (hhmm) {
-    const h = Number(hhmm[1]), m = Number(hhmm[2]);
-    if (h > 23 || m > 59) return null;
-    const cand = new Date(now); cand.setHours(h, m, 0, 0);
-    if (cand.getTime() <= now) cand.setDate(cand.getDate() + 1);
-    return cand.getTime();
-  }
-  const dur = s.match(/^(?:(\d+)h)?(?:(\d+)m)?$|^(\d+)$/);
-  if (dur) {
-    const mins = dur[3] != null ? Number(dur[3]) : (Number(dur[1] || 0) * 60 + Number(dur[2] || 0));
-    if (mins > 0) return now + mins * 60_000;
-  }
-  return null;
-}
-
-/** Is a self-imposed park currently biting? Active from parkAtTs until that
- * park's following reset (same lifecycle as a normal lockdown night).
- * @param {State} state @param {number} now @param {Driver} driver */
-export function parkActive(state, now, driver) {
-  const p = state.parkAtTs ?? 0;
-  if (!p || now < p) return false;
-  return now < nextResetTs(p, driver);
-}
-
 /** The late safety net: an un-signed-off night still hard-locks from `backstop`
  * until reset. No `backstop` configured ⇒ no clock-driven lockdown ever (pure
  * sovereign). @param {number} now @param {Driver} driver */
@@ -154,81 +98,16 @@ export function backstopActive(now, driver) {
   return inWindow(nowMinOf(now), toMin(driver.backstop), toMin(driver.reset));
 }
 
-/** Whether coding is in hard lockdown right now — a SOVEREIGN state, not the clock:
- * set by sign-off / park, or the late `backstop`. The wall-clock ramp does NOT lock.
- * @param {Target} target @param {State} state @param {number} now */
-export function lockedDown(target, state, now) {
-  return parkActive(state, now, target.driver) || backstopActive(now, target.driver);
-}
-
 /** Effective friction. The clock ramps wind-down PRESSURE but is capped below the
  * lockdown threshold (WIND_DOWN_CEIL) — it nudges, never hard-locks. Full lockdown
- * (1.0) comes only from a sovereign lockdown state (sign-off / park / backstop).
+ * (1.0) comes only from the late `backstop` — the one wall keel keeps.
  * @param {Target} target @param {State} state @param {number} now */
 export function frictionNow(target, state, now) {
-  if (lockedDown(target, state, now)) return 1;
+  if (backstopActive(now, target.driver)) return 1;
   return Math.min(frictionAt(nowMinOf(now), target.driver), WIND_DOWN_CEIL);
 }
 
-// ── Vice block (scheduled hosts block; on-demand Ulysses pact; root daemon enforces) ──
-
-/** The vice-block windows. Explicit config if any, else derived from the coding
- * night (driver windDown→reset). @param {Target} target @returns {ViceWindow[]} */
-export function viceWindows(target) {
-  const w = target.vice?.windows;
-  if (Array.isArray(w) && w.length) return w;
-  return [{ from: target.driver.windDown, to: target.driver.reset }];
-}
-
-/** Is now inside any scheduled vice window? @param {number} nowMin @param {Target} target */
-export function viceScheduledAt(nowMin, target) {
-  return viceWindows(target).some((win) => inWindow(nowMin, toMin(win.from), toMin(win.to)));
-}
-
-/** A spent skip is currently suppressing the block (lifted until reset). @param {State} s @param {number} now */
-export const viceSkipActive = (s, now) => now < (s.viceSkipUntilTs ?? 0);
-
-/** A manual pact (vice on / signoff) is holding the block up. @param {State} s @param {number} now */
-export const vicePactActive = (s, now) => now < (s.viceUntilTs ?? 0);
-
-/** Desired hosts state right now: should vices be blocked? A spent skip wins over
- * everything; else a manual pact or a scheduled window raises it.
- * @param {Target} target @param {State} state @param {number} now */
-export function viceShouldBlock(target, state, now) {
-  if (viceSkipActive(state, now)) return false;
-  if (vicePactActive(state, now)) return true;
-  return viceScheduledAt(nowMinOf(now), target);
-}
-
-/** Raise a manual pact: hold the block until this night's reset.
- * @param {State} state @param {number} now @param {Driver} driver @returns {State} */
-export function setVicePact(state, now, driver) {
-  return { ...state, viceUntilTs: nextResetTs(now, driver) };
-}
-
-/** Spend a skip credit to lift vices until reset (shares the coding credit pool).
- * Clears any manual pact so it can't re-raise. @param {State} state @param {number} viceSkipUntilTs */
-export function spendViceSkip(state, viceSkipUntilTs) {
-  if ((state.credits ?? 0) <= 0) return { spent: false, state };
-  return { spent: true, state: { ...state, credits: state.credits - 1, viceSkipUntilTs, viceUntilTs: 0 } };
-}
-
-// ── Credits + session ───────────────────────────────────────────
-
-/** Carry over leftover credits, add perMonth, cap at `cap`, on a month change.
- * @param {State} state @param {Target} target @param {string} mk @returns {State} */
-export function refillCredits(state, target, mk) {
-  if (state.creditsMonth === mk) return state;
-  const { perMonth, cap } = target.skipBudget;
-  const credits = Math.min(cap, (state.creditsMonth ? state.credits ?? 0 : 0) + perMonth);
-  return { ...state, credits, creditsMonth: mk };
-}
-
-/** @param {State} state @param {number} skipUntilTs */
-export function spendSkip(state, skipUntilTs) {
-  if ((state.credits ?? 0) <= 0) return { spent: false, state };
-  return { spent: true, state: { ...state, credits: state.credits - 1, skipUntilTs } };
-}
+// ── Session ─────────────────────────────────────────────────────
 
 /** @param {State} state @param {number} nowTs @param {Orient} orient @returns {State} */
 export function updateSession(state, nowTs, orient) {
@@ -244,7 +123,6 @@ export const unbrokenMin = (/** @type {State} */ s, nowTs) =>
 /** Which rule denies this tool now? null = allow.
  * @param {Target} target @param {Friction} f @param {string|undefined} tool @param {State} state @param {number} now @returns {Rule|null} */
 export function denyingRule(target, f, tool, state, now) {
-  if (skipActive(state, now)) return null;
   const rule = target.rules.find((r) =>
     r.notch === "block" && f >= r.engagesAt && (r.tools ?? []).includes(tool ?? "")) ?? null;
   if (!rule) return null;
@@ -267,36 +145,15 @@ export function isAllowedPath(filePath, allowPaths, home) {
   });
 }
 
-// ── Nightly outcomes + reflection ───────────────────────────────
-
-/** @param {State} state @param {number} now @param {Driver} driver @param {Night} patch @returns {State} */
-export function recordNight(state, now, driver, patch) {
-  const key = nightKey(now, driver);
-  const nights = { ...(state.nights || {}) };
-  nights[key] = { ...(nights[key] || {}), ...patch };
-  return { ...state, nights };
-}
-
-/** Last-N *observed* late nights (you were up coding past wind-down); held = no skip spent.
- * @param {State} state @param {Driver} driver @param {number} now @param {number} n */
-export function lastNNights(state, driver, now, n) {
-  const out = [];
-  for (let i = 1; i <= n; i++) {
-    const rec = state.nights?.[nightKey(now - i * 86_400_000, driver)];
-    if (rec?.observed) out.push({ held: !rec.skipped });
-  }
-  return out;
-}
-
 // ── Presentation (pure) ─────────────────────────────────────────
 
-/** @param {string} s @param {Target} target @param {State} state */
-export const fill = (s, target, state) =>
-  String(s).replaceAll("{reset}", target.driver.reset).replaceAll("{credits}", String(state.credits ?? 0));
+/** @param {string} s @param {Target} target */
+export const fill = (s, target) =>
+  String(s).replaceAll("{reset}", target.driver.reset);
 
-/** The PreToolUse deny reason. @param {Target} target @param {State} state */
-export const denyReason = (target, state) =>
-  fill(target.voice.lockdown, target, state) +
+/** The PreToolUse deny reason. @param {Target} target */
+export const denyReason = (target) =>
+  fill(target.voice.lockdown, target) +
   (target.voice.substitution ? " " + target.voice.substitution : "");
 
 /** The UserPromptSubmit orient line (empty during `day`).
@@ -310,9 +167,7 @@ export function renderOrient(target, phase, state, now) {
   const gran = phase === "lockdown" ? target.voice.granularity?.lockdown : target.voice.granularity?.windDown;
   const extra = [gran, target.voice.signoffNudge, target.voice.consequence, target.voice.identity].filter(Boolean).join(" ");
   const tail = `${bell}${extra ? " " + extra : ""}`;
-  const body = phase === "lockdown" && !skipActive(state, now)
-    ? denyReason(target, state)
-    : target.voice.windDownNudge;
+  const body = phase === "lockdown" ? denyReason(target) : target.voice.windDownNudge;
   return `[keel] ${body}${tail}`;
 }
 
@@ -337,18 +192,37 @@ export function ritualNudge(state, now, voice) {
   return { line, mark: dk };
 }
 
-/** Set the session intention (the focus the chat is guardrailed to).
- * Session-scoped — reset to "" at session-start (startup/clear). @param {State} state @param {string} text */
-export function setIntention(state, text) {
-  return { ...state, intention: String(text ?? "").trim() };
+/** The waking-day boundary in hours — the logical day flips at 04:00, not midnight,
+ * matching the morning ritual window. A 02:00 session still belongs to the prior day. */
+export const DAY_START_HOUR = 4;
+
+/** A logical "day" key for focus that rolls at DAY_START_HOUR, not midnight. Distinct from
+ * dayKey (calendar, used by the ritual nudge) so late-night work isn't a new day. @param {number} now */
+export const focusDayKey = (now) => dayKey(now - DAY_START_HOUR * 3600_000);
+
+/** Set the day's intention (the focus the chat is guardrailed to).
+ * Day-scoped — cleared on waking-day rollover (see rollIntentionDay), not session reset.
+ * @param {State} state @param {string} text @param {number} [now] stamps the owning day */
+export function setIntention(state, text, now) {
+  const intention = String(text ?? "").trim();
+  return { ...state, intention, intentionDay: intention && now != null ? focusDayKey(now) : state.intentionDay };
 }
 
-/** The active intention for this session, or "" if none set. @param {State} state */
+/** Clear the intention if it belongs to an earlier waking-day; otherwise keep it.
+ * Per-day semantics: survives session restarts/clears within a day, resets at the 04:00 boundary.
+ * @param {State} state @param {number} now @returns {State} */
+export function rollIntentionDay(state, now) {
+  const today = focusDayKey(now);
+  if (state.intentionDay === today) return state;
+  return { ...state, intention: "", intentionDay: today };
+}
+
+/** The active intention for today, or "" if none set. @param {State} state */
 export function activeIntention(state) {
   return state.intention || "";
 }
 
-/** The per-turn guardrail line — keeps the chat anchored to the session's declared focus.
+/** The per-turn guardrail line — keeps the chat anchored to the day's declared focus.
  * Empty when no active intention. @param {State} state @returns {string} */
 export function intentionLine(state) {
   const i = activeIntention(state);
@@ -393,18 +267,6 @@ export function activeGranularity(state) {
 export function granularityLine(state) {
   const g = activeGranularity(state);
   return `[keel] ▤ granularity: ${g} — ${GRANULARITY_LEVELS[g]} Zoom per-response on signal ("page it", "in a sentence").`;
-}
-
-/** The SessionStart reflection (empty until there are observed nights).
- * @param {State} state @param {Target} target @param {number} now @returns {string} */
-export function reflectionLine(state, target, now) {
-  const tpl = target.voice.reflection;
-  if (!tpl) return "";
-  const last = lastNNights(state, target.driver, now, 7);
-  if (!last.length) return "";
-  const held = last.filter((x) => x.held).length;
-  return fill(tpl, target, state)
-    .replaceAll("{held}", String(held)).replaceAll("{n}", String(last.length));
 }
 
 // ── Activity log (observability substrate — slice A) ────────────
@@ -547,9 +409,7 @@ export function renderRules(t, configured = {}) {
   for (const r of t.rules) {
     lines.push(`rule (${src("rules")}): ${r.notch} at f≥${r.engagesAt} · ${r.arming ?? "immediate"}${r.maxGraceMin ? ` (grace ${r.maxGraceMin}m)` : ""} · tools: ${r.tools.join(", ")}${r.allowPaths?.length ? ` · always-allowed paths: ${r.allowPaths.join(", ")}` : ""}`);
   }
-  lines.push(`skipBudget (${src("skipBudget")}): ${t.skipBudget.perMonth}/month, cap ${t.skipBudget.cap}`);
   lines.push(`orient (${src("orient")}): bell after ${t.orient.bellAfterMin}m · session gap ${t.orient.sessionGapMin}m`);
-  lines.push(`vice (${src("vice")}): ${t.vice.windows.length ? t.vice.windows.map((w) => `${w.from}→${w.to}`).join(", ") : "derived from driver night"}`);
   const setVoice = Object.entries(t.voice).filter(([, v]) => typeof v === "string" && v).map(([k]) => k);
   lines.push(`voice (${src("voice")}): ${setVoice.join(", ") || "(all silent)"}`);
   lines.push(`edit: ~/.keel/config.json — changes apply at the next hook fire, no reload.`);
