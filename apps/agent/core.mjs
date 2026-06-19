@@ -485,7 +485,8 @@ export function mergeLedger(ledger, verdicts) {
 // One self-authored list of domains replaces shield configs, the hosts
 // blocklist file, and per-domain sensor choices. Tiers:
 //   observe  → deep sensors on the browser surface (key actions)
-//   windowed → the vice-block schedule (hosts mechanism)
+//   windowed → INERT since vice was retired (2026-06-17); the curated list is
+//              kept for possible reuse but nothing reads it on the agent surface.
 // Neutral default: empty — keel never ships entries (the drogue's seed
 // blocklist is the lone, explicitly-consented exception).
 
@@ -508,7 +509,7 @@ export function watchlistLines(w) {
     return ["watchlist: empty — self-authored; add domains in ~/.keel/config.json (tiers: observe, windowed)"];
   }
   const observe = w.observe.length ? w.observe.join(", ") : "(none)";
-  const windowed = `${w.windowed.length} domain(s) under vice windows`;
+  const windowed = `${w.windowed.length} domain(s) (tier inert — vice retired)`;
   return [`watchlist: observe: ${observe} · windowed: ${windowed}`];
 }
 
