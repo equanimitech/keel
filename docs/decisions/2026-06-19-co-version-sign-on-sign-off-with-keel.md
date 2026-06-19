@@ -1,3 +1,13 @@
+---
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:9205c492789ee84f94f78c949d0aa63e0876c380b73e22beafbf648a07be41f5
+  docFilename: 2026-06-19-co-version-sign-on-sign-off-with-keel.md
+  stampedAt: 2026-06-19T11:10:59.882612Z
+  signature: ed25519:l85MI990vNYONJtDXzoByKFtCL+9XwQNLJzxt+icy2kpLkn4m7E2A03H0oJam3vU6Onxg9aCUIYR9SJ5u3lcBA==
+---
 # Co-version the sign-on / sign-off rituals with keel
 
 **Date:** 2026-06-19
