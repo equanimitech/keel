@@ -6,7 +6,14 @@ $signature:
   docHash: sha256:ce9bc600f56c48c645c65535578f5b5fcbca3c234d8b0bb966f4e37e3acc5087
   signedAt: 2026-06-24T16:49:20.089535Z
   signature: ed25519:z/mGp6RcgO4OU/7g7pGAdY4vDRkJqHYVZKmbU2Ii64DLJowqTKBcPBLD3xieRvFLWV7AQTmdFvFkSpKpjtBLAg==
-type: decision
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:ce9bc600f56c48c645c65535578f5b5fcbca3c234d8b0bb966f4e37e3acc5087
+  docFilename: 2026-06-24-rename-keel-s-friction-model-from-strategic-to-defensive-fri.md
+  stampedAt: 2026-06-24T16:51:10.349768Z
+  signature: ed25519:bfzcLNWxBZMUn1DkUIVBu26ohueEoN0yVsNAr1xTMvFFBTX1/refZt9UzNcyT3sR5t+PpJZaVGOSdWtpmREUAg==
 ---
 # Rename keel's friction model from "strategic friction" to "defensive friction"
 
