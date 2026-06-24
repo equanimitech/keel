@@ -6,7 +6,14 @@ $signature:
   docHash: sha256:87dbc300a4d693b3f85c02c66ad1fe9995987324257375b8861a22bfcc0be83b
   signedAt: 2026-06-14T19:28:55.009999Z
   signature: ed25519:XwPUomPJUx7WHE2P8akjn9hTDJ94o3qgoBb24N9qjklfncBnOtE4uoVO45lsEdEfcWZzzG3Bg7Wu1QSaI6uvCw==
-type: note
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:87dbc300a4d693b3f85c02c66ad1fe9995987324257375b8861a22bfcc0be83b
+  docFilename: 2026-06-14-ponytail-audit-over-engineering-cut-list.md
+  stampedAt: 2026-06-14T19:37:15.872930Z
+  signature: ed25519:LSJrtcVrU0erLBwlrh1nk9AjOn+kniCbkctripr3thDOz/1kGn0c/waKLVrdRyOkHs4IaBwu4F7lBUEK7+p7Dg==
 ---
 > Over-engineering audit (ponytail-audit, repo-wide). Complexity only. Correctness, security, and performance are out of scope and belong to a normal review pass. Lists findings; applies nothing.
 
