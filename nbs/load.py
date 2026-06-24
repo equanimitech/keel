@@ -72,6 +72,8 @@ def load(log_dir: str = LOG_DIR) -> pd.DataFrame:
                     "tab": p.get("tab"),
                     "seconds": p.get("seconds"),
                     "durationMs": e.get("durationMs"),
+                    "cwd": p.get("cwd"),
+                    "tool": p.get("tool_name"),
                 })
     df = pd.DataFrame(rows).dropna(subset=["ts"]).sort_values("ts").reset_index(drop=True)
     df["dt"] = pd.to_datetime(df["ts"], unit="ms")
@@ -161,6 +163,91 @@ def bouts(df: pd.DataFrame, gap_cap_ms: int = 5 * 60 * 1000,
     return out
 
 
+def agent_bouts(df, gap_cap_ms: int = 5 * 60 * 1000, min_events: int = 2) -> pd.DataFrame:
+    """Agent-surface deep-work bouts — the flood's grain (mirror of browser bouts()).
+
+    A bout = a contiguous run of agent activity within one session with no gap >
+    gap_cap_ms. Activity = the events that mark the model actually working
+    (dispatching tools, completing them, taking a prompt). turn_stop /
+    session_end are NOT activity — they mark the breakpoints between bouts.
+    Columns: focus_day, watch, sessionId, cwd, start, end, n_events, n_prompts,
+    n_tools, minutes. The long right tail of `minutes` is the flood.
+    """
+    ACT = {"tool_dispatched", "tool_completed", "tool_failed", "prompt", "subagent_stop"}
+    a = df[(df["surface"] == "agent") & (df["kind"].isin(ACT))].sort_values(["sessionId", "ts"])
+    rows = []
+
+    def flush(seg):
+        if len(seg) < min_events:
+            return
+        cwd = next((s.cwd for s in seg if s.cwd), None)
+        rows.append({
+            "focus_day": seg[0].focus_day, "watch": seg[0].watch, "sessionId": seg[0].sessionId,
+            "cwd": cwd, "start": seg[0].ts, "end": seg[-1].ts, "n_events": len(seg),
+            "n_prompts": sum(s.kind == "prompt" for s in seg),
+            "n_tools": sum(s.kind in ("tool_dispatched", "tool_completed", "tool_failed") for s in seg),
+        })
+
+    for _sid, g in a.groupby("sessionId", sort=False):
+        seg, prev = [], None
+        for r in g.itertuples():
+            if prev is not None and r.ts - prev > gap_cap_ms:
+                flush(seg)
+                seg = []
+            seg.append(r)
+            prev = r.ts
+        flush(seg)
+    out = pd.DataFrame(rows)
+    if len(out):
+        out["minutes"] = (out.end - out.start) / 60000
+    return out
+
+
+def agent_flood(df, gap_cap_ms: int = 5 * 60 * 1000, require_prompt: bool = True) -> pd.DataFrame:
+    """Wall-clock deep-work flood — agent_bouts unioned across concurrent sessions.
+
+    agent_bouts() segments *within* a session, so when several Claude sessions run
+    at once their bouts overlap and summing double-counts wall-clock time (≈95% over
+    the real total here). This unions overlapping/adjacent bouts on the wall clock so
+    occupancy is counted once. "based on user messages": require_prompt drops merged
+    intervals with no user `prompt` (autonomous/background sessions). `depth` = peak
+    concurrent sessions = the *multitasking* axis, NOT pure intensity: high depth is
+    the fragmentation the research flags (attention residue, ~23min recovery), unless
+    the departed session keeps grinding autonomously (then it's leverage). `minutes` =
+    wall-clock occupancy. Use THIS (not summed agent_bouts) for by-watch / by-hour /
+    circadian baselines; read `depth` alongside the user-message switch-rate to tell
+    solo-flow from stacked-juggle.
+    Columns: focus_day, watch, start, end, minutes, depth, n_bouts, n_prompts.
+    """
+    ab = agent_bouts(df)
+    if require_prompt:
+        ab = ab[ab.n_prompts > 0]
+    rows = []
+    for day, g in ab.groupby("focus_day"):
+        ivs = sorted(zip(g.start, g.end, g.n_prompts))
+        groups, cur, ce = [], [ivs[0]], ivs[0][1]
+        for s, e, p in ivs[1:]:
+            if s <= ce + gap_cap_ms:
+                cur.append((s, e, p)); ce = max(ce, e)
+            else:
+                groups.append(cur); cur, ce = [(s, e, p)], e
+        groups.append(cur)
+        for grp in groups:
+            cs = grp[0][0]
+            ge = max(e for _, e, _ in grp)
+            pts = sorted([(s, 1) for s, _, _ in grp] + [(e, -1) for _, e, _ in grp])
+            depth = mx = 0
+            for _, v in pts:
+                depth += v; mx = max(mx, depth)
+            rows.append({"focus_day": day, "start": cs, "end": ge, "minutes": (ge - cs) / 60000,
+                         "depth": mx, "n_bouts": len(grp), "n_prompts": sum(p for _, _, p in grp)})
+    out = pd.DataFrame(rows)
+    if len(out):
+        mod = pd.to_datetime(out.start, unit="ms").dt.hour * 60 + pd.to_datetime(out.start, unit="ms").dt.minute
+        out["watch"] = mod.map(_watch)
+    return out
+
+
 if __name__ == "__main__":
     df = load()
     assert len(df) > 0, "no events loaded — is the writer wired?"
@@ -175,3 +262,8 @@ if __name__ == "__main__":
     print(f"domain_time rows: {len(dt)} · bouts: {len(bt)} "
           f"(windowed={sum(bt.alert=='windowed')}, median={bt.minutes.median():.1f}m, "
           f"max={bt.minutes.max():.0f}m)")
+    ab = agent_bouts(df)
+    assert (ab.minutes >= 0).all(), "negative agent bout"
+    print(f"agent bouts: {len(ab)} (median={ab.minutes.median():.1f}m, "
+          f"p90={ab.minutes.quantile(.9):.0f}m, max={ab.minutes.max():.0f}m, "
+          f"flood>25m={sum(ab.minutes>25)})")
