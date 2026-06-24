@@ -1,7 +1,7 @@
 ---
 tag: pitch
 appetite: medium
-status: draft
+status: SUPERSEDED 2026-06-19 — see re-direction note below
 source: conversation 2026-06-04 — "keel's tides is relevant with zenborg no?"
 slice_id: A
 hard_dependency: none (Zenborg vault read-only; absent → clock fallback)
@@ -9,9 +9,19 @@ hard_dependency: none (Zenborg vault read-only; absent → clock fallback)
 
 # Pitch — Tides reads Zenborg, not a clock
 
-**Bet:** Feed the wind-down driver from Zenborg — the `NIGHT` phase band sets the bedtime window, tonight's allocated `NIGHT` moments grant a scoreless reprieve — and fall back to the hardcoded clock when Zenborg is absent.
+> **SUPERSEDED (2026-06-19).** keel will **not** couple to the Zenborg vault. The same
+> need is met by keeping keel self-contained: give `keel intention` **time blocks**
+> (an intention scoped to a `[from, to)` window). A time-windowed intention *is* the
+> tide signal — the morning ritual (and week-planning) already name the day's blocks,
+> so they just call `keel intention "<focus>" --block HH:MM-HH:MM`; keel never reads
+> the vault. This keeps the published plugin de-Rafa and dependency-free (the decision's
+> goal) while making the tide intention-driven. Direction lives in
+> [[keel-zenborg-intentions]] memory / the morning skill. The wall-cut context below
+> (park/skip/credits/vice retired, backstop-only) still holds.
 
-**Why it matters:** Kills the second bedtime clock (today tides hand-syncs `22:30/00:00/05:00` against Zenborg's `NIGHT` 23→7). Turns the strategy's reserved "intention seam" into the first live **Moments → Keel** edge of the Voltron thesis. On-intention late work flows; only undeclared drift gets braked.
+**Bet:** Feed the wind-down driver from Zenborg — the `NIGHT` phase band sets the bedtime window, tonight's allocated `NIGHT` moments **lower the night's friction** — and fall back to the hardcoded clock when Zenborg is absent.
+
+**Why it matters:** Kills the second bedtime clock (today tides hand-syncs `22:30/00:00/05:00` against Zenborg's `NIGHT` 23→7). Turns the strategy's reserved "intention seam" into the first live **Moments → Keel** edge of the Voltron thesis. On-intention late work flows clean; undeclared drift just meets more friction (coarser nudges), and the backstop remains the floor.
 
 ---
 
