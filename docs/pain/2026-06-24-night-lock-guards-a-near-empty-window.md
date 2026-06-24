@@ -6,7 +6,14 @@ $signature:
   docHash: sha256:1210660ff761463eae98b533c401d960f07b7689dd56bf25031f8dcce728400d
   signedAt: 2026-06-24T21:07:19.614693Z
   signature: ed25519:ahg4mgnICQayU5NjCZv4ut58MUOHFrGG8wCKDnux3vGRx/VLAoXMPnqHWKWzY1TRr3IT/tZcUOjsBTzWgQhAAQ==
-type: pain
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:1210660ff761463eae98b533c401d960f07b7689dd56bf25031f8dcce728400d
+  docFilename: 2026-06-24-night-lock-guards-a-near-empty-window.md
+  stampedAt: 2026-06-24T21:09:30.434964Z
+  signature: ed25519:tE+locW5GPoTWHZS6dFOo3U0wcT5+fMeAux4zNMakqdZ+AoKduLTxAcK7n9x1YwYhJvMy6fD9WarJn4ew0sQBA==
 ---
 ## The friction
 

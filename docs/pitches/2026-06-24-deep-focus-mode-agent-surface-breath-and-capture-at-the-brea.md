@@ -6,11 +6,14 @@ $signature:
   docHash: sha256:4a9aee67f378907701411edb69c69eb7794f3605ce9e4dca18fa32b5f135aa3b
   signedAt: 2026-06-24T21:09:42.067324Z
   signature: ed25519:BkJOe51LsPD5J+tuOm0ArIQ45dMcnrDb5/DaxCZKnDnyF9H3P5s/2LPGtlejoBtzFvTsYL+109gPyrhAIA22Bg==
-appetite: small
-source: docs/ideas/2026-06-24-deep-focus-mode-protect-a-single-stream-for-hard-problems.md
-status: draft
-tag: pitch
-type: pitch
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:4a9aee67f378907701411edb69c69eb7794f3605ce9e4dca18fa32b5f135aa3b
+  docFilename: 2026-06-24-deep-focus-mode-agent-surface-breath-and-capture-at-the-brea.md
+  stampedAt: 2026-06-24T21:16:05.871443Z
+  signature: ed25519:ITAnRP6Ui/PKxsUxQkwg74YQMzkXXVky6RLsydjaB8PfpmC70XybKK/2uEsGhhOOKGM6rA1MiZPp4Hnf1i0nCA==
 ---
 
 **Bet:** Ship an opt-in `keel focus` session mode that, at each turn boundary, points the AI-wait gap at a breath plus a park-the-idea nudge instead of the browser, and logs itself so we can measure the drift drop.

@@ -6,7 +6,14 @@ $signature:
   docHash: sha256:8a8795e8352dc27982ff51ec493ee61888aa9c9bb61dc0df4c458354418c828a
   signedAt: 2026-06-24T21:15:03.565935Z
   signature: ed25519:AifaMc7LEPqbEZLKk+LHz0oLuaacdxfsU+BA3pYNQVnw6ppmHJUAUNz1T1g3Hxwax7Lzw75K+UZk25D3b8luDw==
-type: idea
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:8a8795e8352dc27982ff51ec493ee61888aa9c9bb61dc0df4c458354418c828a
+  docFilename: 2026-06-24-focus-scoped-browser-friction-follow-up-to-deep-focus-mode.md
+  stampedAt: 2026-06-24T21:15:56.639269Z
+  signature: ed25519:I8tqkNvoCUxHXW6a6YJ+sTKtqtu08XBPsu61oXzZCPMpE+Jx7IlYHtCZFHgaHpBj9oBTBy3k9fmJ747I1ANPBA==
 ---
 ## The move
 
