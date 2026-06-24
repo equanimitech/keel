@@ -1,0 +1,12 @@
+[project]
+name = "keel-nbs"
+version = "0"
+description = "Private EDA over keel activity logs (local only)."
+requires-python = ">=3.11"
+dependencies = [
+    "pandas",
+    "matplotlib",
+    "jupyterlab",
+    "jupytext",
+    "ipykernel",
+]

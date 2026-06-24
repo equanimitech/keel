@@ -1,0 +1,11 @@
+# Private: real activity data must never leave this machine.
+# Code (*.py) is committable; anything that can embed real domains/apps is not.
+.ipynb_checkpoints/
+*.ipynb
+*.csv
+*.parquet
+*.html
+*.png
+*.svg
+__pycache__/
+.venv/
