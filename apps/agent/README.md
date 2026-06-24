@@ -1,10 +1,35 @@
-# keel-gate v0 — Claude Code focus gate
+# keel agent — Claude Code surface
 
-A pure Claude Code hook that **denies coding tool calls** (Edit/Write/Bash/…) once you're in lockdown — **breakpoint-armed** (engages at a turn boundary, never mid-turn), escapable only by a scarce **skip credit**. Lockdown is **sovereign**: it engages when you **sign off** (or park), or at a late **backstop** hour — the wall-clock ramp only escalates wind-down *nudges*, it never hard-locks on its own. Journal/ritual writes (`allowPaths`) stay exempt so closing the day is never blocked. Plus a meta-awareness bell and a scoreless daily reflection — all in **your own words**.
+**Keep your attention from fragmenting, yours and your agent's, locally.**
 
-No daemon, no build. One Node script + `~/.keel/config.json`. **Fail-open**: if anything errors, Claude keeps working.
+keel is a single Node script wired into Claude Code's hook system. It makes your attention visible (where your focus goes, privately, on your own device), holds a session to one declared focus, and gates coding once you've signed off for the day. No daemon, no build, **fail-open**: if a hook errors, Claude keeps working.
 
-It's the first instance of the keel strategy model: a **target** (`claude-code`) with a **wind-down driver** (→ friction `f`) and **friction rules** (Drogue renderers on the drag scale). See `docs/superpowers/specs/2026-06-01-keel-ai-gate-design.md`.
+## The goal: one drift, three timescales
+
+Fragmentation is the enemy. It's the same drift (attention pulled off its line) showing up at three scales. keel is one keel against all three:
+
+| Scale | What fragments | keel's answer |
+|---|---|---|
+| **Within a session** | your focus splinters across tools and tabs mid-task | a **session intention** holds the thread; a **granularity dial** holds response depth |
+| **Across sessions** | continuity is lost, every session restarts cold | a **local activity log** is the connective tissue, your own baseline over time |
+| **While AI works** | *two* things drift, not one | the **wind-down gate** keeps the *agent* on-thread (no 1am new-subsystem sprawl); the log keeps *you* honest about where you went while it generated |
+
+The third row is the one nobody else sits in. Calm-tech tools watch the human; agent tools watch the model; keel sits on the seam, in the hook layer, watching both.
+
+## What it does (observe-first)
+
+keel accumulates attention signal now; steering comes later, built on your own baselines (a separate P5 module, gated behind ~21 days of personal data). v0 is mostly **see**, a little **steer**.
+
+- **Activity log** (`keel log`, plus `SessionStart` / `UserPromptSubmit` hooks) writes every session event to `~/.keel/log/` as plain JSONL. Domains and timings, never prompts or content.
+- **Session intention** (`keel intention "<focus>"`) names the session's focus. It surfaces in the statusline HUD each turn and holds the conversation to that thread. The agent infers and sets it silently if you don't. Resets on a fresh session or `/clear`, persists across resume/compact.
+- **Granularity dial** (`keel granularity <level>`) sets how deep responses go this session. Floor is `tldr`. Levels: `sentence` (L1, claim only), `tldr` (L2, claim + mechanism), `page` (L3, worked example), `report` (L5, citations + edge cases).
+- **Wind-down gate** (`PreToolUse` hook) denies Edit/Write/Bash once you've signed off, parked, or passed a backstop hour. **Breakpoint-armed** (engages at a turn boundary, never mid-edit), escapable only by a scarce **skip credit**. Conversation and journal/ritual writes (`allowPaths`) stay open, so closing the day is never blocked.
+
+The gate is the surprise that made keel worth shipping: built to stop *you* coding past midnight, it ends up disciplining the *model*. Under the gate Claude declines to start new subsystems at 1am, decomposes instead, and tells you to bank it for morning. "It's late, wrap up" turns out to be an alignment primitive, a governor on bias-to-action exactly when judgment is worst, for the human and the agent both.
+
+## Privacy posture (load-bearing)
+
+Everything stays on your machine. Events write to `~/.keel/log/`. Payloads carry domains and timings, never full URLs, prompts, or content. Nothing leaves the device.
 
 ## Install (one time)
 
@@ -37,39 +62,26 @@ Merge into `~/.claude/settings.json` (create if absent):
 }
 ```
 
-> Note: the three `.mjs` files import each other, so symlink all three into `~/.keel` (the install does this). Alternatively, point the hook `command` at the repo path directly (`node <repo>/apps/agent/keel.mjs …`) and skip the symlinks.
+> The three `.mjs` files import each other, so symlink all three into `~/.keel` (the install does this). Alternatively, point the hook `command` at the repo path directly and skip the symlinks.
 
 ## Make it yours
 
 Edit the `claude-code` target in `~/.keel/config.json`:
-- **`driver`** — `windDown` / `hardStop` / `reset` (local `HH:MM`; the night wraps midnight), plus `backstop` — the late hour an un-signed-off night hard-locks anyway (set `""` for pure sovereign, no clock lockdown).
-- **`rules`** — what blocks: `tools`, `engagesAt` (the friction threshold), `arming` (`breakpoint` | `immediate`), `maxGraceMin`, and `allowPaths` — write targets exempt even under lockdown (default `~/journals`, `~/.keel`; matches a path or any descendant).
+- **`driver`** — `windDown` / `hardStop` / `reset` (local `HH:MM`, the night wraps midnight), plus `backstop`, the late hour an un-signed-off night locks anyway (set `""` for pure sovereign, no clock lockdown).
+- **`rules`** — what blocks: `tools`, `engagesAt` (the friction threshold), `arming` (`breakpoint` | `immediate`), `maxGraceMin`, and `allowPaths` (write targets exempt even under lockdown, default `~/journals`, `~/.keel`).
 - **`skipBudget`** — `perMonth` + `cap` (credits carry over, capped).
-- **`voice`** — **your words** for `windDownNudge`, `lockdown`, `substitution`, and opt-in `consequence` / `identity` (empty = off). `{reset}` and `{credits}` interpolate. This is the point — keel says what *you'd* say.
+- **`voice`** — **your words** for the nudges and the lockdown line. This is the point: keel says what *you'd* say.
 
 ## Use
 
-- After you **sign off** (or park), or past the **backstop**, coding tools are denied until `reset`. Conversation still works — and so do journal/ritual writes (`allowPaths`). The clock before lockdown only nudges.
+- After you **sign off** (or `park`), or past the **backstop**, coding tools are denied until `reset`. Conversation still works, and so do journal/ritual writes.
 - **Override** a night you judge worth it: `node ~/.keel/keel.mjs skip` (spends a credit). At 0 credits it holds until reset.
-- `node ~/.keel/keel.mjs status` — current `f`, phase, credits.
+- `keel status` — current friction, phase, credits. `keel intention` / `keel granularity` — see or set the session dials.
 - **Remove the gate:** delete the `hooks` block from `~/.claude/settings.json`.
 
-## Vice block (scheduled site lock)
+## Advanced: blocklist drogue
 
-A sibling Ulysses pact for vice sites (`vice-blocklist.txt`), enforced by an `/etc/hosts` block. Unlike the coding gate (pure hook, no privilege), the hosts block needs root — so it's enforced by a small **root LaunchDaemon** that reconciles `/etc/hosts` to keel's desired state every few minutes. That reconcile loop is the teeth: a manual `off` mid-window gets **re-asserted** within a tick.
-
-Desired state = `viceShouldBlock`: a spent skip lifts everything; else a manual pact (`vice on` / `signoff`) or a scheduled window raises it.
-
-- **Schedule** — `vice.windows` in config (`[{ "from": "23:00", "to": "05:00" }]`, wraps midnight). Empty ⇒ derived from the coding night (`driver.windDown→reset`). `reassertEveryMin` sets the daemon tick.
-- **Commands** — `keel vice <on|off|skip|status|panic>`. `on`/`panic` raise a pact held to reset; `skip` spends a credit (shared with coding) to lift until reset; `off` drops a manual pact (refused if a window still bites — use `skip`).
-- **signoff** raises vices alongside the coding lock — one seal closes both.
-- **Enforcement install (one time, root):**
-  ```bash
-  osascript -e 'do shell script "/Users/rafa/.keel/vice-install.sh" with administrator privileges'
-  ```
-  Deploys `vice-block.sh` root-owned, installs the daemon + a passwordless-sudo rule scoped to that one script (so `keel vice` applies instantly). Reversible: `sudo ~/.keel/vice-uninstall.sh`.
-
-Without the install, `keel vice on/off` still work (GUI auth per call); the daemon is what adds the *schedule* and *self-heal*.
+A sibling commitment device (`keel vice <on|off|skip|status>`) blocks vice sites via an `/etc/hosts` lock, raised alongside the coding gate on `signoff`. It needs a one-time root install (a small LaunchDaemon that reconciles `/etc/hosts` to keel's desired state, so a manual `off` mid-window self-heals). Optional and off by default. See `vice-install.sh`.
 
 ## Dev
 
@@ -83,4 +95,4 @@ Pure domain lives in `core.mjs` (the part that later lifts into `@keel/domain`);
 
 ## Not in v0 (later)
 
-Breakpoint-arming on *desktop-OS* signals (app switch/idle — needs the observer), the Tauri daemon, the focus MCP, the visual `dim`/`blur` notches (no overlay on the Claude surface yet), the shared `Friction`/`frictionCurve` core (v0 inlines a linear ramp).
+The P5 steering module (interventions on personal baselines, including the AI-wait-gap intervention that fills the third row of the table above), breakpoint-arming on desktop-OS signals (app switch/idle), the Tauri daemon, the focus MCP, and the shared `Friction` core (v0 inlines a linear ramp).
