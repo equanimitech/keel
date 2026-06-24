@@ -6,6 +6,7 @@ import {
   mergeTarget, emptyState, frictionNow,
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
   setIntention, activeIntention, rollIntentionDay, focusDayKey,
+  setFocus, claimFocus, focusBlocks, focusLine,
 } from "./core.mjs";
 
 // Watches with night@01:00 + a 90m lead reproduce the old 23:30→01:00 ramp, 01:00→05:00 lock.
@@ -101,6 +102,30 @@ test("updateSession continues within gap, resets after gap", () => {
   s = updateSession(s, big, orient);
   assert.equal(s.sessionStartTs, big);
   assert.equal(unbrokenMin({ sessionStartTs: big }, big + 90 * 60_000), 90);
+});
+
+test("focus: claim-on-first-prompt, owner works, other sessions blocked, off releases", () => {
+  let s = setFocus(emptyState(), true, 1000);
+  assert.equal(s.focus, true);
+  assert.equal(s.focusSession, "");                 // unclaimed on enable
+  assert.equal(focusBlocks(s, "B"), false);         // unclaimed → nothing blocked yet
+  s = claimFocus(s, "A");                           // first prompt claims the owner
+  assert.equal(s.focusSession, "A");
+  s = claimFocus(s, "B");                           // a claimed owner is never stolen
+  assert.equal(s.focusSession, "A");
+  assert.equal(focusBlocks(s, "A"), false);         // owner works freely
+  assert.equal(focusBlocks(s, "B"), true);          // other sessions are held
+  assert.equal(focusBlocks(s, ""), false);          // no session id → never block
+  s = setFocus(s, false, 2000);                     // off clears the flag + owner
+  assert.equal(s.focus, false);
+  assert.equal(focusBlocks(s, "B"), false);
+});
+
+test("focus: breath line for owner, held-note for others, empty when off", () => {
+  assert.equal(focusLine(emptyState(), "A"), "");
+  const s = claimFocus(setFocus(emptyState(), true, 0), "A");
+  assert.match(focusLine(s, "A"), /breathe the AI gap/);
+  assert.match(focusLine(s, "B"), /held in another session/);
 });
 
 const now = 1_000_000_000_000;

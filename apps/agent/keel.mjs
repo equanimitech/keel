@@ -9,6 +9,7 @@ import {
   denyReason, renderOrient, ritualNudge, focusDayKey,
   setIntention, rollIntentionDay, activeIntention, activeWatch, intentionLine,
   setGranularity, normalizeGranularity, activeGranularity, granularityLine, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
+  setFocus, focusLine, claimFocus, focusBlocks, FOCUS_DENY,
   isAllowedPath,
   buildEvent, capPayload, summarizeEvents, matchDispatch, targetHash, renderRules, consentLines,
   watchlistLines, desktopSensorLines,
@@ -77,18 +78,25 @@ async function handlePreTool(now) {
   const f = frictionNow(target, now);
   const input = await readStdin();
   const rule = denyingRule(target, f, input?.tool_name, state, now);
-  const allowed = !rule || isAllowedPath(input?.tool_input?.file_path, rule.allowPaths, homedir());
+  const filePath = input?.tool_input?.file_path;
+  const nightDenied = !!rule && !isAllowedPath(filePath, rule.allowPaths, homedir());
+  // Single-stream commitment: a non-owner session's tools are denied while focus is active.
+  // Journal + ~/.keel stay open so capture and sign-off are never trapped.
+  const focusDenied = focusBlocks(state, input?.session_id)
+    && !isAllowedPath(filePath, ["~/journals", "~/.keel"], homedir());
+  const allowed = !nightDenied && !focusDenied;
   // Rules observability: every gate decision is auditable from the log alone.
   logHookEvent("tool_dispatched", now, input, { extra: {
     keel_denied: !allowed, keel_friction: Number(f.toFixed(3)), keel_phase: phaseOf(f),
     ...(rule?.notch ? { keel_rule_notch: rule.notch } : {}),
+    ...(focusDenied ? { keel_focus_block: true } : {}),
   } });
   if (allowed) return emit(null); // allow (silent)
   return emit({
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: denyReason(target, state),
+      permissionDecisionReason: focusDenied ? FOCUS_DENY : denyReason(target),
     },
   });
 }
@@ -113,8 +121,12 @@ async function handleUserSubmit(now) {
     state.inferNudgedTs = state.sessionStartTs;
     nudge = "<keel: today's intention is unset. Infer it from the conversation so far and set it silently — `keel intention \"<focus>\"`. Do not announce; it surfaces in the statusline HUD. If you genuinely cannot infer it, leave it.>";
   }
+  // First prompt while focus is on + unclaimed → this session becomes the focus owner.
+  state = claimFocus(state, input?.session_id);
   saveState(state);
-  return emitText(nudge);
+  // Deep-focus cue rides the same turn-boundary channel — breath in the owner session, a
+  // held-elsewhere note in blocked ones. Empty unless `keel focus` is on.
+  return emitText([nudge, focusLine(state, input?.session_id)].filter(Boolean).join("\n"));
 }
 
 async function handleSessionStart(now) {
@@ -142,6 +154,8 @@ async function handleSessionStart(now) {
   // per-session focus is already covered by Claude's own session goals. Granularity is
   // a per-session dial: a fresh session (startup/clear) resets it to the floor (tldr).
   state = rollIntentionDay(state, now);
+  // Granularity is per-session (resets to the floor on a fresh session); focus is a standing
+  // commitment that survives session restarts — it clears only on explicit `keel focus off`.
   if (input?.source === "startup" || input?.source === "clear") state = { ...state, granularity: "" };
   saveState(state);
   return emitText([...consent, nudge?.line, intentionLine(state, now, target.watches), granularityLine(state)].filter(Boolean).join("\n"));
@@ -220,6 +234,46 @@ function cmdGranularity(arg) {
   console.log(`keel: granularity set — ${level}: ${GRANULARITY_LEVELS[level]} Held for this session; surfaced in the HUD. \`keel granularity reset\` returns to ${DEFAULT_GRANULARITY}.`);
 }
 
+function logFocusEvent(kind, now) {
+  try { appendEvent(LOG_DIR, buildEvent({ id: randomUUID(), kind, ts: now, sessionId: "", payload: { source: "cli" } })); }
+  catch { /* fail-open */ }
+}
+
+// `keel focus "<hard problem>"` — the deep gear of intention: sets the current watch's
+// intention AND flips the breath/self-ending flag. `keel focus on` reuses the current
+// intention; `keel focus off` drops the gear but keeps the intention. focus_on/focus_off
+// land in the log so the gap-fill EDA can segment focus periods.
+function cmdFocus(arg, now) {
+  const raw = String(arg ?? "").trim();
+  const low = raw.toLowerCase();
+  const state = loadState();
+  const target = loadTarget();
+  if (!raw) {
+    const cur = activeIntention(state, now, target.watches);
+    console.log(state.focus
+      ? `keel: ◉ focus on${cur ? ` — "${cur}"` : ""}. \`keel focus off\` to close.`
+      : "keel: focus off. `keel focus \"<hard problem>\"` to go deep, or `keel focus on` for the current intention.");
+    return;
+  }
+  if (low === "off" || low === "stop" || low === "clear") {
+    saveState(setFocus(state, false, now));
+    logFocusEvent("focus_off", now);
+    console.log("keel: focus off — stream closed. (intention kept for the watch.)");
+    return;
+  }
+  let s = state, label;
+  if (low === "on" || low === "start") {
+    label = activeIntention(state, now, target.watches);
+    if (!label) { console.log("keel: name what you're going deep on — `keel focus \"<hard problem>\"`."); return; }
+  } else {
+    label = raw;                                  // the hard problem → set it as the watch intention
+    s = setIntention(state, activeWatch(now, target.watches), raw, now);
+  }
+  saveState(setFocus(s, true, now));
+  logFocusEvent("focus_on", now);
+  console.log(`keel: ◉ focus on — one stream on "${label}". Other sessions are held; this one's the owner once you prompt. Breath on the AI gap. \`keel focus off\` to release.`);
+}
+
 // ── HUD (for the Claude Code statusLine) ──────────────────────
 function sessionCount() {  // approximate # of concurrent Claude Code sessions
   try {  // no shell: execFile with an arg array. pgrep exits 1 if none → caught.
@@ -255,6 +309,7 @@ function cmdHud(now) {
   // Always-on indicators: the current watch's intention (when set) + the session granularity.
   const inten = activeIntention(state, now, target.watches);
   if (inten) parts.push(`◎ ${inten.length > 24 ? inten.slice(0, 23) + "…" : inten}`);
+  if (state.focus) parts.push("◉ focus");
   parts.push(`▤ ${activeGranularity(state)}`);
 
   process.stdout.write(parts.join("  ·  "));
@@ -349,10 +404,11 @@ async function main() {
   if (cmd === "signon") return cmdSignon(now);
   if (cmd === "intention") return cmdIntention(process.argv.slice(3).join(" "), now);
   if (cmd === "granularity" || cmd === "gran") return cmdGranularity(sub);
+  if (cmd === "focus") return cmdFocus(process.argv.slice(3).join(" "), now);
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
   if (cmd === "watchlist" && sub === "scan") return cmdWatchlistScan();
-  console.log("usage: keel <hook pre-tool|user-submit|session-start | signon | signoff | intention [<watch>] [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | rules | log status | status | watchlist scan>");
+  console.log("usage: keel <hook pre-tool|user-submit|session-start | signon | signoff | intention [<watch>] [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | focus [\"<hard problem>\"|on|off] | rules | log status | status | watchlist scan>");
 }
 
 main().catch(() => process.exit(0)); // fail-open

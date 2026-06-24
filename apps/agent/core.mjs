@@ -11,7 +11,7 @@
 /** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, morningNudge: string, weeklyNudge: string, granularity: Granularity }} Voice */
 /** @typedef {Record<string, string>} Watches  name → start time "HH:MM" */
 /** @typedef {{ rules: Rule[], orient: Orient, voice: Voice, watches: Watches, windDown: string }} Target */
-/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastSignOnDay: string, inferNudgedTs: number, watchIntentions: Record<string, string>, intentionDay: string, granularity: string, lastRuleHash: string, consentShownTs: number }} State */
+/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastSignOnDay: string, inferNudgedTs: number, watchIntentions: Record<string, string>, intentionDay: string, granularity: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number }} State */
 
 /** Named time-of-day watches (intention blocks) → start time. The active watch is the
  * latest start ≤ now, wrapping past midnight to the last watch. The `night` watch is the
@@ -49,7 +49,8 @@ export const DEFAULT_TARGET = {
 /** @returns {State} */
 export const emptyState = () => ({
   sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, lastSignOnDay: "", inferNudgedTs: 0,
-  watchIntentions: {}, intentionDay: "", granularity: "", lastRuleHash: "", consentShownTs: 0,
+  watchIntentions: {}, intentionDay: "", granularity: "", focus: false, focusTs: 0, focusSession: "",
+  lastRuleHash: "", consentShownTs: 0,
 });
 
 /** Merge a partial target config over the defaults. @param {any} t @returns {Target} */
@@ -304,6 +305,49 @@ export function activeGranularity(state) {
 export function granularityLine(state) {
   const g = activeGranularity(state);
   return `[keel] ▤ granularity: ${g} — ${GRANULARITY_LEVELS[g]} Zoom per-response on signal ("page it", "in a sentence").`;
+}
+
+// ── Deep-focus mode (single-stream commitment, opt-in, owner-claimed) ──
+// Focus is the deep gear of `intention`, not a second concept: `keel focus "<problem>"`
+// sets the watch intention (which already holds-the-thread + captures-drift) and flips this
+// flag. It does two things intention can't: adds a breath on the AI-wait gap, and holds you to
+// ONE stream — tool calls in any session other than the focus owner are denied. A standing
+// commitment (a user-invoked Ulysses pact): it survives session restarts and clears only on
+// explicit `keel focus off`, never on idle. The CLI can't know which session you meant, so the
+// owner is whichever session prompts first after enable (claimFocus); others are blocked.
+
+/** Deny reason shown when a non-owner session tries a tool under active focus. */
+export const FOCUS_DENY = "◉ keel focus — held to one stream. Focus is active in another session; work there, or `keel focus off` to release. (journal + ~/.keel stay open.)";
+
+/** Set the deep-focus flag. Enabling leaves the owner UNCLAIMED ("") — the next prompting
+ * session claims it (claimFocus). Disabling clears owner + stamp. `focusTs` stamps when it
+ * engaged (HUD/"since"). @param {State} state @param {boolean} on @param {number} now */
+export function setFocus(state, on, now) {
+  return { ...state, focus: !!on, focusTs: on ? now : 0, focusSession: "" };
+}
+
+/** Claim the focus owner for a session on its first prompt while focus is on and unclaimed.
+ * No-op otherwise (idempotent — a claimed owner is never stolen). @param {State} state @param {string} sessionId */
+export function claimFocus(state, sessionId) {
+  return state.focus && !state.focusSession && sessionId
+    ? { ...state, focusSession: sessionId } : state;
+}
+
+/** Does active focus block this session's tools? True only when focus is on, an owner is
+ * claimed, and this isn't it. Unclaimed focus blocks nothing yet. @param {State} state @param {string|undefined} sessionId */
+export function focusBlocks(state, sessionId) {
+  return !!(state.focus && state.focusSession && sessionId && sessionId !== state.focusSession);
+}
+
+/** The per-turn deep-focus line. In the owner (or not-yet-claimed) session: a breath on the
+ * AI gap. In a blocked session: a note that the stream is held elsewhere. Empty unless focus
+ * is on. Scoreless by design (a streak would be engagement, not equanimity); the capture
+ * machinery is intention's, this only adds the breath. @param {State} state @param {string|undefined} sessionId @returns {string} */
+export function focusLine(state, sessionId) {
+  if (!state.focus) return "";
+  if (focusBlocks(state, sessionId))
+    return "[keel] ◉ focus is held in another session — one stream. `keel focus off` to release.";
+  return "[keel] ◉ focus — breathe the AI gap; hold this stream, park strays with /idea.";
 }
 
 // ── Activity log (observability substrate — slice A) ────────────
