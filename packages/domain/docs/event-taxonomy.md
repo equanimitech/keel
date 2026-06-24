@@ -40,7 +40,10 @@ Rules:
   `input_activity` (one 30s rollup carrying per-3s-bin counts:
   `keyDowns`/`mouseDowns`/`scrolls`/`mouseMoves`; counts only, never
   keycodes or content; fully-idle windows are skipped, ≤2.9k events/day).
-- **browser** (`apps/browser`): `writer_started`, `tab_activated` (payload
+- **browser** (`apps/browser`): `writer_started`, `tab_opened` (payload `tab`,
+  plus `domain` when the new tab already has a web URL; the open bracket of a
+  tab's lifecycle — pairs with `tab_closed` and makes tab concurrency, e.g.
+  "how many video tabs open at once", computable), `tab_activated` (payload
   `domain`), `tab_closed` (payload `domain`; a dismissal that also brackets a
   background tab no focus span saw), `navigation_committed` (payload
   `domain`), `focus_start`/`focus_end` (browser holds OS focus),

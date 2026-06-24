@@ -25,6 +25,7 @@ import {
   shouldLogNavigation,
   shouldLogRoute,
   shouldLogTabClose,
+  tabOpenPayload,
 } from "./events";
 import { tabUuid, type TabMap } from "./tabs";
 import { appendEvent, countEvents, deleteOldestEvents } from "./log";
@@ -75,8 +76,30 @@ export function startActivityWriter(): void {
   // Retention guard: cap the store at MAX_LOG_EVENTS on startup.
   void runRetentionGuard(write);
 
-  // ── Tab activation ────────────────────────────────────────────
+  // ── Tab lifecycle (open / activate / close) ───────────────────
   const lastDomainByTab = new Map<number, string>();
+
+  // A new tab is the open bracket of a tab's lifecycle. onCreated fires
+  // before any navigation, so a web URL is usually absent (chrome://newtab
+  // or a pending nav); the tab uuid alone makes tab concurrency computable.
+  browser.tabs.onCreated.addListener(async (tab) => {
+    if (tab.id === undefined) {
+      return; // No id — nothing to track this tab by.
+    }
+    try {
+      const url = tab.url ?? tab.pendingUrl;
+      const domain = url === undefined ? null : domainFromUrl(url);
+      const map = await tabMapItem.getValue();
+      const { uuid, map: next } = tabUuid(map, tab.id, () => crypto.randomUUID());
+      if (next !== map) await tabMapItem.setValue(next);
+      write("tab_opened", tabOpenPayload(uuid, domain));
+      if (domain !== null) {
+        lastDomainByTab.set(tab.id, domain);
+      }
+    } catch {
+      // storage/tab vanished — fail-open
+    }
+  });
 
   browser.tabs.onActivated.addListener(async ({ tabId }) => {
     try {

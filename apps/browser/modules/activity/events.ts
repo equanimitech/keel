@@ -122,6 +122,22 @@ export function shouldLogTabClose(domain: string | null): domain is string {
 }
 
 /**
+ * Shape the `tab_opened` payload — the open bracket of a tab's lifecycle.
+ *
+ * Unlike `tab_closed`, this always logs (the `tab` uuid alone makes tab
+ * concurrency computable, e.g. "how many video tabs open at once"). A
+ * freshly-created tab usually has no web URL yet (chrome://newtab, or a
+ * pending navigation), so `domain` is included only when one is already
+ * known — the tab id is the load-bearing field.
+ */
+export function tabOpenPayload(
+  tab: string,
+  domain: string | null
+): Readonly<Record<string, unknown>> {
+  return domain === null ? { tab } : { domain, tab };
+}
+
+/**
  * Outcome of feeding one observation into a span (start/end + durationMs
  * pattern — see packages/domain/docs/event-taxonomy.md).
  *

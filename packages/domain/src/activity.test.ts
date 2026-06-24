@@ -32,6 +32,13 @@ describe("canonicalKind (read-side alias map for pre-taxonomy logs)", () => {
     expect(canonicalKind("tab_activated")).toBe("tab_activated");
   });
 
+  it("passes the tab lifecycle + video play-state kinds through untouched", () => {
+    expect(canonicalKind("tab_opened")).toBe("tab_opened");
+    expect(canonicalKind("tab_closed")).toBe("tab_closed");
+    expect(canonicalKind("video_paused")).toBe("video_paused");
+    expect(canonicalKind("video_resumed")).toBe("video_resumed");
+  });
+
   it("never maps onto a key of the alias table (no chains)", () => {
     for (const target of Object.values(LEGACY_KIND_ALIASES)) {
       expect(LEGACY_KIND_ALIASES[target]).toBeUndefined();
