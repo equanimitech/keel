@@ -2,7 +2,11 @@
 
 The structural contracts that any LLM-generated intervention must satisfy. These are the vocabulary the LLM composes from, the shapes the validator checks, and the runtime types the interpreter dispatches on.
 
-Revised after the shield audit (`shield-audit-vs-contracts.md`) and smoke test (`spec-smoke-test.md`). The original 5-primitive sketch was derived from the chess shield alone and undercounted. The full shield surface requires **7 foundational primitives**, a Rule wrapper, and a small set of shared concepts (templates, conditions, reactive bindings, data references).
+> **Status: live.** This is what `packages/domain/src/rules.ts` implements, and
+> what the friction interpreter (`apps/browser/modules/friction/`) executes. The
+> shields it was originally derived from are gone; the contracts outlived them.
+
+Revised after the shield audit (`docs/archive/shield-audit-vs-contracts.md`) and smoke test (`docs/archive/spec-smoke-test.md`). The original 5-primitive sketch was derived from the chess shield alone and undercounted. The full shield surface requires **7 foundational primitives**, a Rule wrapper, and a small set of shared concepts (templates, conditions, reactive bindings, data references).
 
 ## Layers
 
@@ -443,7 +447,7 @@ type ConditionExpr =
 
 - **How many primitives:** 7 foundational, ~5 intent aliases that desugar to them.
 - **Where the validator works:** on the desugared Rule spec, at the foundational primitive layer.
-- **How existing shields fit:** audited in `shield-audit-vs-contracts.md`; two hand-written specs (LinkedIn, YouTube shorts) confirmed the contracts in `spec-smoke-test.md`.
+- **How existing shields fit:** audited in `docs/archive/shield-audit-vs-contracts.md`; two hand-written specs (LinkedIn, YouTube shorts) confirmed the contracts in `docs/archive/spec-smoke-test.md`. (Both archived — the shields were retired 2026-06-12.)
 - **What "primitives as contracts" means:** typed spec interfaces + a per-primitive constraint set + a refused BCT/PDP list + a runtime dispatcher that knows how to execute each kind.
 
 Next: migrate `linkedin-feed-hide` from its current hand-coded implementation to the Rule+spec format as a working proof.

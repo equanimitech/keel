@@ -9,14 +9,15 @@ observability substrate (roadmap slice B).
 Append-only JSONL, one event per line, mirroring `@keel/domain` `ActivityEvent`
 (`{ id, surface: "desktop", kind, ts, sessionId, payload, durationMs? }`):
 
-- `app_focus` — the frontmost app changed (app name, window title capped at
+- `app_switched` — the frontmost app changed (app name, window title capped at
   256 chars, full-screen flag). Polled every ~1.5s, deduped: only written when
   the app or title actually changed.
 - `idle_start` / `idle_end` — no input for ≥ 120s opens an idle span
   (`idle_start.ts` is backdated to when input stopped); the first activity
   after closes it (`idle_end` carries `durationMs`).
-- `logger_started` / `logger_paused` / `logger_resumed` — the writer's own
-  lifecycle, so gaps are attributable.
+- `writer_started` / `writer_paused` / `writer_resumed` — the writer's own
+  lifecycle, so gaps are attributable. (The `logger_*` spelling is the legacy
+  alias; `canonicalKind` in `@keel/domain` folds it into `writer_*`.)
 
 ## Privacy posture
 
