@@ -3,6 +3,12 @@
 Private EDA helper — reads ~/.keel/log/*.jsonl locally, never sends data out.
 Mirrors keel's own time model: focus-day rolls at 04:00 (core.mjs DAY_START_HOUR),
 watches morning/afternoon/evening/night (core.mjs DEFAULT_WATCHES).
+
+The watchlist is read from ~/.keel/config.json at runtime and is NEVER hardcoded
+here — this file is committed to a public repo, and a user's watchlist is among
+the most personal data keel holds. See
+docs/ideas/2026-06-26-guard-against-leaking-personal-info-when-open-sourcing.md.
+Same rule applies to anything else derived from a real log: keep it out of source.
 """
 from __future__ import annotations
 import json, glob, os
@@ -10,23 +16,29 @@ from datetime import timedelta
 import pandas as pd
 
 LOG_DIR = os.path.expanduser("~/.keel/log")
+CONFIG = os.path.expanduser("~/.keel/config.json")
 DAY_START_HOUR = 4  # focus-day boundary (keel core.mjs)
 WATCHES = {"morning": 9 * 60, "afternoon": 13 * 60, "evening": 19 * 60, "night": 1 * 60 + 30}
 
-# Configured high-alert domains (from ~/.keel/config.json watchlist, 2026-06-24).
-# windowed = the drift set keel windows/intervenes on; observe = wider watch.
-WINDOWED = {
-    "youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be",
-    "chess.com", "lichess.org", "linkedin.com",
-    "pornhub.com", "xvideos.com", "xhamster.com", "xnxx.com",
-    "redtube.com", "youporn.com", "spankbang.com", "onlyfans.com",
-}
-OBSERVE = {
-    "youtube.com", "chess.com", "linkedin.com", "news.ycombinator.com",
-    "nytimes.com", "netflix.com", "disneyplus.com", "web.whatsapp.com",
-    "reddit.com", "instagram.com", "futemax.news", "soccerstreams.news",
-    "multicanaishd.today", "sporticos.com", "app.envoituresimone.com",
-}
+
+def watchlist(config_path: str = CONFIG) -> tuple[set[str], set[str]]:
+    """(windowed, observe) domain sets from the local keel config.
+
+    windowed = the drift set keel windows/intervenes on; observe = wider watch.
+    Entries may carry a path ("example.com/feed"); only the host is kept, since
+    the activity log records bare domains. Missing config yields empty sets, so
+    alert_class degrades to "other" rather than guessing.
+    """
+    try:
+        with open(config_path) as f:
+            wl = json.load(f).get("watchlist", {})
+    except (OSError, ValueError):
+        return set(), set()
+    host = lambda entries: {e.split("/")[0] for e in entries or []}
+    return host(wl.get("windowed")), host(wl.get("observe"))
+
+
+WINDOWED, OBSERVE = watchlist()
 
 
 def alert_class(domain) -> str:

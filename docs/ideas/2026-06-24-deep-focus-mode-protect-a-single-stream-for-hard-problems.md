@@ -14,7 +14,7 @@ Throughput-multitasking (fire a session, hop to another while it grinds) is real
 
 ## Why it is needed (from the 2026-06-24 EDA)
 
-Single-context flow is ~0 today (dwell median = 1 message). The AI gap is filled with browser drift (61h browser vs 0.1h offline). When you would want to think deeply, the browser-tab reflex pulls you out. The mode exists to make the stream survivable.
+Single-context flow is ~0 today — typical dwell is a single message before switching. The AI gap fills overwhelmingly with browser drift, with genuinely offline time near zero. When you would want to think deeply, the browser-tab reflex pulls you out. The mode exists to make the stream survivable. (Figures in the private EDA note, `~/.keel/2026-06-24-flood-and-tide-eda.md`.)
 
 ## Three moves
 
