@@ -32,6 +32,22 @@ pnpm typecheck            # Typecheck all packages
 
 **Do not run dev commands.** The user runs them manually.
 
+### Tests
+
+There is no root `test` script — run per package:
+
+```bash
+pnpm -r test                                  # everything (tray needs a Rust toolchain)
+pnpm --filter @keel/domain test               # vitest
+pnpm --filter @keel/browser test              # vitest
+pnpm --filter @keel/agent test                # node --test (plain .mjs)
+pnpm --filter @keel/tray test                 # cargo test (src-tauri)
+
+# single file — pass the path through to the package's test script
+pnpm --filter @keel/domain test src/bouts.test.ts
+pnpm --filter @keel/agent test store.test.mjs
+```
+
 ## Shared Domain (`@keel/domain`)
 
 Pure types. No runtime dependencies. The TypeScript surfaces import from this package.
@@ -60,6 +76,14 @@ Dependencies flow inward: Domain -> Application -> Infrastructure -> UI.
 - **`packages/domain`**: the ActivityEvent log substrate (`activity.ts`) + the read-side derivations built on it — `bouts.ts` (bouts, runs), `tide.ts` (what your attention is actually doing), `areas.ts`, `route.ts` — plus `rules.ts`, the 7 primitive contracts (`docs/primitive-contracts.md`), and the event-taxonomy contract (`packages/domain/docs/event-taxonomy.md`).
 - **`apps/browser`**: activity writer (coarse events) + watchlist-gated per-domain sensors (key-action completions) + `modules/friction/` (the gate, the cooldown, the policy) + the blocklist drogue (commitment device)
 - **`apps/tray`**: macOS menubar app (Tauri) — the desktop activity-log writer. (The frozen `apps/desktop` compass was removed 2026-06-13; archived at tag `desktop-archive-2026-06-13`, reusable gems mapped in `docs/decisions/2026-06-13-remove-desktop-preserve-compass-gems.md`.)
+
+**Cross-surface transport:** the browser extension relays events (`modules/relay`) to `apps/agent/native-host.mjs` — a command-less, append-only, schema-validating native-messaging host that writes to `~/.keel/log/`. Chrome frames messages with a uint32 LE length prefix, 1 MB max; responses are chunked to stay inside it.
+
+## Privacy posture (load-bearing, not aspirational)
+
+Everything stays on-device. Payloads carry **domains and timings — never full URLs, prompts, or page content.** Window titles are capped at 256 chars. Browser events live in extension-local IndexedDB until exported; agent/tray events write to `~/.keel/log/` as JSONL. Treat any change that widens a payload as a design decision, not an implementation detail.
+
+`packages/domain/docs/event-taxonomy.md` is the writers' contract: every `ActivityEvent.kind` is a **span** (`_start`/`_end`), a **switch** (`_switched`/`_activated`), or a **completion** (past-tense). Kinds are an open set that accretes per surface — never centralize them into an enum. `durationMs` appears only when the writer observed the interval's start; never fabricate it across a restart or pause.
 
 ## Interventions: retired, then returned
 
