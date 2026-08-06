@@ -31,10 +31,13 @@ import { tabUuid, type TabMap } from "./tabs";
 import { appendEvent, countEvents, deleteOldestEvents } from "./log";
 import {
   isArmQuery,
+  isGateQuery,
   sensorAllowed,
   validateSensorMessage,
 } from "../sensors/events";
 import { observeDomains } from "../watchlist/store";
+import { dwellGates } from "../friction/policy/store";
+import { evaluateGate, gateFor } from "../friction/gate/decide";
 import type { Runtime } from "wxt/browser";
 
 type WriteFn = (
@@ -191,8 +194,42 @@ export function startActivityWriter(): void {
     if (isArmQuery(message)) {
       return observeDomains
         .getValue()
-        .then((observe) => ({ observed: sensorAllowed(domain, observe) }))
-        .catch(() => ({ observed: false }));
+        .then(async (observe) => ({
+          observed: sensorAllowed(domain, observe),
+          gate: domain === null ? null : gateFor(await dwellGates.getValue(), domain),
+        }))
+        .catch(() => ({ observed: false, gate: null }));
+    }
+
+    // "Close the tab" from a gate. The page cannot close a tab it did not
+    // open, so the background does it.
+    if (
+      typeof message === "object" &&
+      message !== null &&
+      (message as Record<string, unknown>).type === "keel-gate-leave"
+    ) {
+      const tabId = sender.tab?.id;
+      if (tabId !== undefined) {
+        void browser.tabs.remove(tabId);
+      }
+      return;
+    }
+
+    // Gate poll. The decision — including recording that the gate fired — is
+    // made here rather than in the page, because a content script can be
+    // reloaded at will and one that could decline to report a firing would
+    // earn a free pass by refreshing.
+    if (isGateQuery(message)) {
+      if (domain === null) {
+        return Promise.resolve({ fire: false });
+      }
+      return dwellGates
+        .getValue()
+        .then((gates) => {
+          const gate = gateFor(gates, domain);
+          return gate === null ? { fire: false } : evaluateGate(gate);
+        })
+        .catch(() => ({ fire: false }));
     }
 
     const validated = validateSensorMessage(message);

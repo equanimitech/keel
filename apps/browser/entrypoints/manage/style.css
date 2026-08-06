@@ -1,3 +1,48 @@
+/*
+ * Zenborg design grammar (zenborg/docs/design/design-grammar.md): stone tones
+ * only. Colour is reserved for AREA ATTRIBUTION — here, the dot beside an area
+ * heading. Flat: no gradients, no shadows.
+ */
+:root {
+  --stone-50: #fafaf9;
+  --stone-100: #f5f5f4;
+  --stone-200: #e7e5e4;
+  --stone-400: #a8a29e;
+  --stone-500: #78716c;
+  --stone-900: #1c1917;
+  --stone-950: #0c0a09;
+
+  --paper: var(--stone-50);
+  --ink: var(--stone-900);
+  --quiet: var(--stone-500);
+  --rule: var(--stone-200);
+  --ease-phi: cubic-bezier(0.618, 0, 0.382, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: var(--stone-950);
+    --ink: var(--stone-100);
+    --quiet: var(--stone-400);
+    --rule: #1f1d1b;
+  }
+}
+
+/* The area dot: the only colour on this page, and it names its area. */
+.area-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 7px;
+  vertical-align: 1px;
+}
+
+.area-section-head h2 {
+  display: flex;
+  align-items: center;
+}
+
 /* ── Reset & base ─────────────────────────────────────────────── */
 *,
 *::before,
@@ -10,499 +55,182 @@
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "Helvetica Neue", sans-serif;
-  background: #0f172a;
-  color: #e2e8f0;
+  background: var(--paper);
+  color: var(--ink);
   min-height: 100vh;
 }
 
 /* ── Page layout ──────────────────────────────────────────────── */
-.manage-page {
-  max-width: 560px;
+.areas-page {
+  max-width: 640px;
   margin: 0 auto;
-  padding: 40px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  padding: 40px 24px 64px;
 }
 
-header {
-  text-align: center;
+.areas-page header {
+  margin-bottom: 28px;
 }
 
-h1 {
+.areas-page h1 {
   font-size: 24px;
-  font-weight: 700;
-  color: #f8fafc;
-  letter-spacing: -0.02em;
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .subtitle {
-  font-size: 14px;
-  color: #64748b;
-  margin-top: 4px;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--quiet);
+  max-width: 46ch;
 }
 
-/* ── Domain group ────────────────────────────────────────────── */
-.domain-group {
-  background: #1e293b;
-  border-radius: 12px;
-  padding: 16px 20px;
+.areas-empty {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--quiet);
+  padding: 24px 0;
+}
+
+/* ── Area sections ────────────────────────────────────────────── */
+.area-section {
+  margin-bottom: 26px;
+}
+
+.area-section-head {
   display: flex;
-  flex-direction: column;
-  gap: 14px;
-  transition: gap 0.25s ease;
-}
-
-.domain-group.collapsed {
-  gap: 0;
-}
-
-.domain-header {
-  display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rule);
 }
 
-.domain-header-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  user-select: none;
-}
-
-.chevron {
-  font-size: 12px;
-  color: #475569;
-  transition: transform 0.2s ease;
-  display: inline-block;
-  width: 14px;
-}
-
-.domain-group:not(.collapsed) .chevron {
-  transform: rotate(90deg);
-}
-
-.domain-label {
-  font-size: 15px;
-  font-weight: 600;
-  color: #94a3b8;
-  text-transform: lowercase;
-}
-
-.active-count {
-  font-size: 12px;
-  font-weight: 500;
-  color: #475569;
-  background: #0f172a;
-  padding: 2px 8px;
-  border-radius: 10px;
-  transition: all 0.2s ease;
-}
-
-.active-count.all-active {
-  color: #4ade80;
-  background: rgba(74, 222, 128, 0.1);
-}
-
-/* ── Collapsible body ─────────────────────────────────────────── */
-.domain-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow: hidden;
-  max-height: 800px;
-  opacity: 1;
-  transition: max-height 0.3s ease, opacity 0.2s ease;
-}
-
-.domain-group.collapsed .domain-body {
-  max-height: 0;
-  opacity: 0;
-}
-
-/* ── Shield row ──────────────────────────────────────────────── */
-.shield-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0 8px 16px;
-  border-left: 2px solid #334155;
-}
-
-.shield-info {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-  flex: 1;
-}
-
-.shield-name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.shield-name {
+.area-section-head h2 {
   font-size: 14px;
-  font-weight: 500;
-  color: #e2e8f0;
-}
-
-.kind-badge {
-  font-size: 10px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 2px 6px;
-  border-radius: 4px;
 }
 
-.kind-badge.shield {
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.1);
-}
-
-.kind-badge.signal {
-  color: #c084fc;
-  background: rgba(192, 132, 252, 0.1);
-}
-
-.shield-desc {
+.area-section-count {
   font-size: 12px;
-  color: #64748b;
-}
-
-/* ── Settings panel (nested under intervention toggle) ────────── */
-.settings-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-left: 16px;
-  padding: 8px 0 4px 12px;
-  border-left: 2px solid #334155;
-  overflow: hidden;
-  max-height: 200px;
-  opacity: 1;
-  transition: max-height 0.25s ease, opacity 0.2s ease, margin 0.25s ease,
-    padding 0.25s ease;
-}
-
-.settings-panel.hidden {
-  max-height: 0;
-  opacity: 0;
-  margin: 0 0 0 16px;
-  padding: 0 0 0 12px;
-}
-
-/* ── Settings row (e.g. position picker) ──────────────────────── */
-.settings-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 0;
-}
-
-.settings-label {
-  font-size: 12px;
-  color: #64748b;
-}
-
-.position-picker {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-}
-
-.pos-btn {
-  width: 28px;
-  height: 28px;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  background: #0f172a;
-  color: #64748b;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s ease;
-}
-
-.pos-btn:hover {
-  border-color: #475569;
-  color: #94a3b8;
-}
-
-.pos-btn.active {
-  border-color: #c084fc;
-  color: #c084fc;
-  background: rgba(192, 132, 252, 0.08);
-}
-
-/* ── Time range picker ────────────────────────────────────────── */
-.time-range-picker {
-  display: flex;
-  gap: 12px;
-  align-items: flex-end;
-}
-
-.number-field {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.number-label {
-  font-size: 10px;
-  color: #475569;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.number-input {
-  width: 64px;
-  height: 28px;
-  border: 1px solid #334155;
-  border-radius: 6px;
-  background: #0f172a;
-  color: #e2e8f0;
-  font-size: 13px;
-  font-family: "SF Mono", "Fira Code", monospace;
-  text-align: center;
-  padding: 0 4px;
-  transition: border-color 0.15s ease;
-}
-
-.number-input:focus {
-  outline: none;
-  border-color: #c084fc;
-}
-
-.number-input::-webkit-inner-spin-button,
-.number-input::-webkit-outer-spin-button {
-  opacity: 1;
-}
-
-/* ── Toggle switch ────────────────────────────────────────────── */
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-  flex-shrink: 0;
-  margin-left: 12px;
-}
-
-.switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  cursor: pointer;
-  inset: 0;
-  background: #334155;
-  border-radius: 24px;
-  transition: background 0.2s ease;
-}
-
-.slider::before {
-  content: "";
-  position: absolute;
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 3px;
-  background: #e2e8f0;
-  border-radius: 50%;
-  transition: transform 0.2s ease;
-}
-
-input:checked + .slider {
-  background: #4ade80;
-}
-
-input:checked + .slider::before {
-  transform: translateX(20px);
-}
-
-/* ── Tab navigation ──────────────────────────────────────────── */
-.tab-nav {
-  display: flex;
-  gap: 4px;
-  background: #1e293b;
-  padding: 4px;
-  border-radius: 10px;
-}
-
-.tab-btn {
-  flex: 1;
-  padding: 8px 16px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: #64748b;
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.tab-btn:hover {
-  color: #94a3b8;
-}
-
-.tab-btn.active {
-  background: #334155;
-  color: #e2e8f0;
-}
-
-.tab-content {
-  display: none;
-}
-
-.tab-content.active {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-/* ── Budget cards ────────────────────────────────────────────── */
-.budget-intro {
-  font-size: 13px;
-  color: #64748b;
-  text-align: center;
-  font-style: italic;
-}
-
-.budget-card {
-  background: #1e293b;
-  border-radius: 12px;
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.budget-card-header {
-  font-size: 15px;
-  font-weight: 600;
-  color: #94a3b8;
-  text-transform: lowercase;
-}
-
-.budget-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 0 6px 16px;
-  border-left: 2px solid #334155;
-}
-
-.budget-label {
-  font-size: 13px;
-  color: #e2e8f0;
-}
-
-.budget-input-group {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.budget-unit {
-  font-size: 11px;
-  color: #475569;
-  min-width: 36px;
-}
-
-/* ── Blocklist tab ───────────────────────────────────────────── */
-
-.blocklist-add {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-
-.blocklist-input {
-  flex: 1;
-  width: auto;
-  min-width: 0;
-}
-
-.blocklist-add-btn {
-  appearance: none;
-  border: none;
-  background: #a855f7;
-  color: #fff;
-  font: inherit;
-  font-weight: 600;
-  font-size: 13px;
-  padding: 0 16px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.blocklist-add-btn:hover {
-  background: #9333ea;
-}
-
-.blocklist-err {
-  display: block;
-  min-height: 16px;
-  color: #dc2626;
-  font-size: 12px;
-  margin-bottom: 10px;
-}
-
-.blocklist-items {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.blocklist-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-}
-
-.blocklist-domain {
-  flex: 1;
-  font-size: 14px;
+  color: var(--quiet);
   font-variant-numeric: tabular-nums;
 }
 
-.blocklist-tag {
-  font-size: 11px;
-  color: #94a3b8;
+/* Unsorted is the work to do, so it reads as a prompt rather than a group. */
+.area-section.is-unsorted .area-section-head h2 {
+  color: var(--quiet);
 }
 
-.blocklist-remove {
-  appearance: none;
-  border: 1px solid #e2e8f0;
-  background: transparent;
-  color: #64748b;
+.area-list {
+  list-style: none;
+}
+
+/* ── Rows ─────────────────────────────────────────────────────── */
+.area-row {
+  display: grid;
+  grid-template-columns: 16px 1fr auto 148px;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 2px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.area-row:last-child {
+  border-bottom: none;
+}
+
+.area-row.is-path {
+  padding-left: 26px;
+  grid-template-columns: 16px 1fr auto 148px;
+}
+
+/* An inventory row is a site you have sorted but not recently visited. It
+   should read as quieter than a row reporting real activity, so a scan
+   separates "sorted" from "where my attention went". */
+.area-row.is-inventory .area-row-name {
+  color: var(--quiet);
+}
+
+.area-row.is-inventory .area-row-icon {
+  opacity: 0.55;
+}
+
+/* Two numbers, two windows. Visits lead (all-time inventory), dwell follows
+   (recent, measured). Tabular so columns line up down the list. */
+.area-row-stats {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--quiet);
+  white-space: nowrap;
+}
+
+.area-row-visits {
+  opacity: 0.7;
+}
+
+.area-row-dwell.is-quiet {
+  opacity: 0.45;
+  font-variant-numeric: normal;
+}
+
+.areas-legend {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--quiet);
+  margin-bottom: 20px;
+  max-width: 60ch;
+}
+
+.areas-legend-warn {
+  color: var(--ink);
+}
+
+.area-row.is-path .area-row-name {
+  color: var(--quiet);
+  font-size: 12px;
+}
+
+.area-row-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+}
+
+.area-row-icon.is-blank {
+  visibility: hidden;
+}
+
+.area-row-name {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Dwell is the evidence the sorting is based on — present, never shouting. */
+.area-row-dwell {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--quiet);
+}
+
+.area-row-select {
   font: inherit;
   font-size: 12px;
-  padding: 4px 10px;
+  padding: 4px 6px;
   border-radius: 6px;
+  border: 1px solid var(--rule);
+  background: transparent;
+  color: var(--ink);
   cursor: pointer;
 }
 
-.blocklist-remove:hover {
-  border-color: #dc2626;
-  color: #dc2626;
+.area-row-select:hover {
+  border-color: var(--stone-400);
 }
-
-/* ── Activity log export ─────────────────────────────────────────── */
 
 .log-export {
   display: flex;

@@ -17,9 +17,14 @@
  * swallowed — a silently-failing blocker is worse than no blocker.
  */
 
-import { effectiveDomains } from "./store";
+import { effectiveDomains, normalizeDomain } from "./store";
+import { cooldownDomains } from "../../friction/cooldown/store";
+import { standingDomains } from "../../friction/policy/store";
 
 const BLOCK_RULE_ID = 1;
+// Cooldowns get their own rule id so arming and lapsing never disturb the
+// permanent blocklist — an expiring cooldown removes only its own rule.
+const COOLDOWN_RULE_ID = 2;
 
 // All resource types, main_frame + sub_frame included, so a blocked domain is
 // stopped whether navigated to directly or embedded.
@@ -67,31 +72,59 @@ export async function syncBlocklistRules(): Promise<void> {
     return;
   }
 
-  const domains = await effectiveDomains();
+  // Standing blocks now come from ~/.keel/rules via the relay. The built-in
+  // seed is unioned in rather than replaced, so a host that is unreachable,
+  // mid-deploy, or has no rules dir yet can never silently lift a standing
+  // block. Migration removes the seed only once the pulled set is verified.
+  const declared = await standingDomains.getValue();
+  const domains = [...new Set([...(await effectiveDomains()), ...declared])];
 
-  const addRules: DnrRule[] =
-    domains.length === 0
-      ? []
-      : [
-          {
-            id: BLOCK_RULE_ID,
-            priority: 1,
-            action: { type: "block" },
-            condition: {
-              requestDomains: domains,
-              resourceTypes: ALL_RESOURCE_TYPES,
-            },
-          },
-        ];
+  // Cooldowns are time-bound: included only while their stamp holds. When one
+  // lapses the rule is simply not re-added and the sites come back — nothing
+  // needs to actively unblock.
+  //
+  // A single malformed entry makes DNR reject the whole rule, which would fail
+  // *open* and silently unblock everything. Normalize and drop the rest.
+  const cooling = [
+    ...new Set(
+      (await cooldownDomains()).map(normalizeDomain).filter((d): d is string => d !== null)
+    ),
+  ];
+
+  const addRules: DnrRule[] = [];
+  if (domains.length > 0) {
+    addRules.push({
+      id: BLOCK_RULE_ID,
+      priority: 1,
+      action: { type: "block" },
+      condition: {
+        requestDomains: domains,
+        resourceTypes: ALL_RESOURCE_TYPES,
+      },
+    });
+  }
+  if (cooling.length > 0) {
+    addRules.push({
+      id: COOLDOWN_RULE_ID,
+      priority: 1,
+      action: { type: "block" },
+      condition: {
+        requestDomains: cooling,
+        resourceTypes: ALL_RESOURCE_TYPES,
+      },
+    });
+  }
 
   try {
     await dnr.updateDynamicRules({
-      removeRuleIds: [BLOCK_RULE_ID],
+      removeRuleIds: [BLOCK_RULE_ID, COOLDOWN_RULE_ID],
       addRules,
     });
     console.info(
-      `[keel blocklist] synced ${domains.length} blocked domain(s)`,
-      domains
+      `[keel blocklist] synced ${domains.length} blocked domain(s)` +
+        (cooling.length > 0 ? ` + ${cooling.length} under cooldown` : ""),
+      domains,
+      cooling
     );
   } catch (err) {
     console.error("[keel blocklist] updateDynamicRules failed:", err);

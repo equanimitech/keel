@@ -21,6 +21,52 @@ export { createActivityEvent, LEGACY_KIND_ALIASES, canonicalKind } from "./activ
 // ── Route Registry ─────────────────────────────────────────────
 export { ROUTE_REGISTRY, normalizeRoute } from "./route.js";
 
+// ── Bouts (read-side behavioral unit; the one dwell methodology) ─
+export type { Bout } from "./bouts.js";
+export { bouts, BOUT_GAP_MS, SEGMENT_CAP_MS } from "./bouts.js";
+
+// ── Tides (observational reading over bouts — never a protocol) ──
+export type {
+  DomainClass,
+  DomainClassifier,
+  TideLabel,
+  Absorption,
+  TideThresholds,
+  TideReading,
+} from "./tide.js";
+export { tide, classifierFromLedger, DEFAULT_THRESHOLDS } from "./tide.js";
+
+// ── Rules (friction authoring unit; primitive-contracts.md) ──────
+export type {
+  RuleId,
+  Rule,
+  AmbientRule,
+  SelfArmedRule,
+  PrimitiveSpec,
+  AmbientPrimitive,
+  GateSpec,
+  GateTrigger,
+  GateFriction,
+  CooldownSpec,
+  CooldownTrigger,
+  Enforcement,
+  TransformSpec,
+  ObserveSpec,
+  ScheduleSpec,
+  InterceptSpec,
+  ActuateSpec,
+  Template,
+  ReactiveBinding,
+  ConditionExpr,
+  DataReference,
+  SelectorChain,
+  BehavioralMechanism,
+  FadeEligibility,
+  Validated,
+  RuleWarning,
+} from "./rules.js";
+export { createRule, createRuleId, warningsFor, cooldownDuration } from "./rules.js";
+
 // ── Value Objects ───────────────────────────────────────────────
 export type { Duration, Domain, AppName } from "./value-objects.js";
 export {

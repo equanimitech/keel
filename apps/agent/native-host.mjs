@@ -3,7 +3,7 @@
 // unprivileged writer. Chrome frames messages as a uint32 little-endian length
 // prefix followed by UTF-8 JSON. Max 1 MB/message (Chrome limit).
 
-import { appendBrowserEvents, loadWatchlist } from "./store.mjs";
+import { appendBrowserEvents, loadWatchlist, loadAreas, loadAreaMap, saveAreaMap, loadBlockDomains, loadBreakTarget, loadDwellGates, loadLedger } from "./store.mjs";
 
 const MAX_MESSAGE_BYTES = 1024 * 1024;
 
@@ -56,6 +56,17 @@ function isValidEvent(e) {
 export function validateInbound(msg) {
   if (typeof msg !== "object" || msg === null) return null;
   if (msg.type === "request_observe") return { type: "request_observe" };
+  if (msg.type === "request_policy") return { type: "request_policy" };
+  // Area assignment from the Areas page. Both fields must be plain, bounded
+  // strings; the host writes them into area-map.json, so an unchecked value
+  // would end up as a key in a file every surface reads.
+  if (msg.type === "set_area") {
+    const domain = typeof msg.domain === "string" ? msg.domain.trim().toLowerCase() : "";
+    const areaId = typeof msg.areaId === "string" ? msg.areaId.trim() : "";
+    if (!domain || domain.length > 253 || !/^[a-z0-9.\-/]+$/.test(domain)) return null;
+    if (areaId.length > 64 || !/^[a-z0-9\-]*$/i.test(areaId)) return null;
+    return { type: "set_area", domain, areaId };
+  }
   if (msg.type === "events") {
     if (!Array.isArray(msg.events)) return null;
     const events = msg.events.filter(isValidEvent).slice(0, MAX_EVENTS_PER_MESSAGE);
@@ -107,6 +118,33 @@ export function runHost(stdin = process.stdin, stdout = process.stdout) {
         reply({ type: "ack", ids: appendBrowserEvents(msg.events) });
       } else if (msg.type === "request_observe") {
         reply({ type: "observe", domains: loadWatchlist().observe });
+      } else if (msg.type === "request_policy") {
+        // Policy pull: what the extension needs to enforce, derived from
+        // ~/.keel/rules/*.json plus the ledger classification. Domains only —
+        // the full RuleSpec stays host-side until the interpreter needs it.
+        const { standing, armable } = loadBlockDomains();
+        const ledger = loadLedger();
+        const observe = Object.keys(ledger).filter((d) => ledger[d] === "observe");
+        reply({
+          type: "policy",
+          standing,
+          armable,
+          observe,
+          gates: loadDwellGates(),
+          break: loadBreakTarget(),
+          areas: loadAreas(),
+          areaMap: loadAreaMap(),
+        });
+      } else if (msg.type === "set_area") {
+        // Empty areaId un-assigns, so a mistake is undoable in one gesture.
+        const map = loadAreaMap();
+        if (msg.areaId === "") {
+          delete map[msg.domain];
+        } else {
+          map[msg.domain] = msg.areaId;
+        }
+        saveAreaMap(map);
+        reply({ type: "area_set", domain: msg.domain, areaId: msg.areaId });
       }
     }
   });

@@ -5,9 +5,15 @@
 Part of the [keel monorepo](../../CLAUDE.md). Run from root with `pnpm dev:browser` or locally with `pnpm dev`.
 
 The shield/signal/budget intervention layer was retired on 2026-06-12
-(`docs/decisions/2026-06-12-retire-the-intervention-layer-….md`). This surface
-is pure observability until interventions return as a separate module (P5),
-measured against the baselines this writer accumulates.
+(`docs/decisions/2026-06-12-retire-the-intervention-layer-….md`). Interventions
+returned on **2026-08-05** as the friction interpreter, built on `RuleSpec`
+(`docs/primitive-contracts.md`) and the accumulated baselines — not as the old
+shield layer.
+
+**The invariant, enforced in `@keel/domain` types, not at runtime:** a tide
+(ambient observation) may arm a `gate`; it may never arm a `cooldown`.
+`AmbientRule.primitives` is `Exclude<PrimitiveSpec, CooldownSpec>`, so an
+imposed lock cannot be constructed. Locks are self-invoked only.
 
 ---
 
@@ -16,8 +22,8 @@ measured against the baselines this writer accumulates.
 ```
 apps/browser/
 ├── entrypoints/
-│   ├── background.ts                # SW — activity writer + drogue DNR sync
-│   ├── popup/                       # Status (event count, watchlist size) + panic button
+│   ├── background.ts                # SW — activity writer + DNR sync + cooldown lapse alarm
+│   ├── popup/                       # Status (event count, watchlist size) + cooldown button
 │   ├── manage/                      # Watchlist + drogue blocklist + log export
 │   ├── block/                       # Drogue block page
 │   └── sensor.content/              # ONE generic sensor, all pages, arm-gated
@@ -29,8 +35,16 @@ apps/browser/
 │   │   ├── adapters.ts              # Site-specific probes as DATA — the only place a domain may appear
 │   │   └── send.ts                  # Content-script channel
 │   ├── watchlist/                   # observe-tier mirror (chrome.storage)
+│   ├── friction/cooldown/           # state.ts (pure) + store.ts (chrome) + arm.ts (the one gesture)
 │   └── drogues/blocklist/           # Commitment device (seed + user, DNR) — the survivor
 ```
+
+`friction/cooldown/state.ts` holds the behavioural rule: **arming is
+write-forward-only.** Re-arming may push the stamp out, never pull it in, and
+there is deliberately no `disarm` — the unlock path is `wait`. Adding a lift
+would restore the symmetry the design exists to remove. Every surface that
+offers the lock (popup, keyboard, later the tray) arms through `arm.ts`, so
+that rule has exactly one place to be got wrong.
 
 Sensors are **type-based, never company-based**: the generic senses (video =
 `<video>` playback, feed = article/listitem impressions + the industry

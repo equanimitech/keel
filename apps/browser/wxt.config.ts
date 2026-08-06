@@ -11,6 +11,14 @@ export default defineConfig({
   // (harmless at runtime). A global vite override would break desktop (vite@7).
   vite: () => ({
     plugins: [tailwindcss()] as never,
+    build: {
+      // Extension pages load from disk, so a modulepreload hides no network
+      // round-trip — it buys nothing. Chromium also resolves the preload in a
+      // different "world" than the module import, so every one of them logs a
+      // cross-world mismatch plus an unused-preload warning, burying real
+      // errors in the console. Off is both quieter and no slower.
+      modulePreload: false,
+    },
     // Pin the dep-optimizer to source entrypoints. Without this, Vite's dev
     // scanner also globs the build output (outDir "dist") and ENOENTs on stale
     // dist/*.html mid-rebuild (regression from adding @tailwindcss/vite).
@@ -43,7 +51,27 @@ export default defineConfig({
     //     allowed_origins. It relays domains and timings to ~/.keel/log, never
     //     page content or URLs, and grants no web access. It is the relay that
     //     lets the browser writer reach the shared substrate.
-    permissions: ["storage", "tabs", "activeTab", "declarativeNetRequest", "idle", "alarms", "nativeMessaging"],
+    //   • favicon reads Chromium's OWN icon cache via /_favicon/. No network
+    //     request, no host access — the alternative (a third-party favicon
+    //     service) would ship every domain you visit to someone else, which is
+    //     the one thing this manifest exists to prevent.
+    //   • history is the LARGEST permission here: read access to every URL ever
+    //     visited. It exists so the Areas page can show a real inventory of
+    //     sites to sort, including everything from before keel was installed —
+    //     keel's own log only knows what it has observed. What makes it
+    //     acceptable is that a URL never leaves the reader: every result is
+    //     reduced to a bare host inside modules/friction/areas/history.ts, and
+    //     only hosts are returned, stored or logged. Same rule as the writer:
+    //     domains only, never full URLs. Read-only; keel never deletes history.
+    permissions: ["storage", "tabs", "activeTab", "declarativeNetRequest", "idle", "alarms", "nativeMessaging", "favicon", "history"],
+    // A keyboard path to the cooldown, so reaching for the lock costs less
+    // than reaching for the temptation. No popup to open, no menu to find.
+    commands: {
+      cooldown: {
+        suggested_key: { default: "Ctrl+Shift+K", mac: "Command+Shift+K" },
+        description: "Lock the watched domains for 2h",
+      },
+    },
     // Single shared instance in incognito so the porn Drogue's block holds
     // there too (where porn is most often browsed). The user must still flip
     // "Allow in incognito" once — see README. Shared storage = one source of

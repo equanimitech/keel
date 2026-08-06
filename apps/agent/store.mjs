@@ -1,7 +1,7 @@
 // @ts-check
 // keel agent store — the only I/O. Config + state repository over ~/.keel, plus stdin.
 
-import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, renameSync, statSync } from "node:fs";
+import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, renameSync, statSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mergeTarget, mergeWatchlist, mergeDesktopSensors, emptyState, logFileName, browserLogFileName, eventLine } from "./core.mjs";
@@ -83,6 +83,170 @@ export function loadSnapshot() {
 export function saveSnapshot(snap) {
   if (!existsSync(KEEL_DIR)) mkdirSync(KEEL_DIR, { recursive: true });
   writeJsonAtomic(SNAPSHOT_PATH, snap);
+}
+
+// ── Rules (~/.keel/rules/*.json) ────────────────────────────────
+// One RuleSpec per file. The source of truth for policy: MCP authors here,
+// the tray reads it directly, the extension pulls it over the relay. Replaces
+// the three legacy lists (config.watchlist.windowed, the drogue seed, and
+// vice-blocklist.txt), which were the same concept in three grammars.
+export const RULES_DIR = join(KEEL_DIR, "rules");
+
+/** Every declared rule, newest-name-first for stable ordering.
+ * @returns {any[]} */
+export function loadRules() {
+  try {
+    return readdirSync(RULES_DIR)
+      .filter((f) => f.endsWith(".json"))
+      .sort()
+      .map((f) => {
+        try { return JSON.parse(readFileSync(join(RULES_DIR, f), "utf8")); } catch { return null; }
+      })
+      .filter((r) => r !== null);
+  } catch {
+    return []; // No rules dir yet — fail open, never fail closed on policy.
+  }
+}
+
+/** Domains under enabled rules carrying a browser-enforced cooldown.
+ * Standing cooldowns are always on; timed ones are armed per-surface, so this
+ * returns the *candidate* set and the arming state decides what actually holds.
+ * @returns {{ standing: string[], armable: string[] }} */
+export function loadBlockDomains() {
+  const standing = new Set();
+  const armable = new Set();
+  for (const rule of loadRules()) {
+    if (rule?.defaultEnabled === false) continue;
+    for (const p of rule?.primitives ?? []) {
+      if (p?.kind !== "cooldown") continue;
+      if ((p.enforcement?.at ?? "browser") !== "browser") continue;
+      const target = p.duration && "standing" in p.duration ? standing : armable;
+      for (const d of resolveRuleDomains(rule)) target.add(d);
+    }
+  }
+  return { standing: [...standing], armable: [...armable] };
+}
+
+// ── Areas (kairos shared kernel) ────────────────────────────────
+// Areas are the ONE concept keel shares with the other instruments, so they
+// live in the kairos kernel rather than here: `$KAIROS_HOME/areas.json`.
+// Contract + schema: equanimitech/kairos/kernel/areas.md.
+//
+// keel is a READER. Zenborg is the editor — areas are created, renamed and
+// archived there, because that is where the garden is tended. keel never
+// writes this file; a second writer is how the list forks.
+//
+// keel's own domain→area map stays keel's business, and stays local.
+export const KAIROS_DIR = process.env.KAIROS_HOME || join(homedir(), ".kairos");
+export const AREAS_PATH = join(KAIROS_DIR, "areas.json");
+const LEGACY_AREAS_PATH = join(KEEL_DIR, "areas.json");
+export const AREA_MAP_PATH = join(KEEL_DIR, "area-map.json");
+
+/** Areas from the kernel. Falls back to keel's pre-kairos copy so an
+ * un-migrated machine keeps working, and fails soft to `[]` — an instrument
+ * must stay usable for someone who has never set areas up.
+ * @returns {{id: string, name: string, emoji: string, tags: string[]}[]} */
+export function loadAreas() {
+  for (const path of [AREAS_PATH, LEGACY_AREAS_PATH]) {
+    try { return JSON.parse(readFileSync(path, "utf8")); } catch { /* next */ }
+  }
+  return [];
+}
+
+/** Domain (or domain/path) → areaId.
+ * @returns {Record<string, string>} */
+export function loadAreaMap() {
+  try { return JSON.parse(readFileSync(AREA_MAP_PATH, "utf8")); } catch { return {}; }
+}
+
+/** @param {Record<string, string>} map */
+export function saveAreaMap(map) {
+  if (!existsSync(KEEL_DIR)) mkdirSync(KEEL_DIR, { recursive: true });
+  writeJsonAtomic(AREA_MAP_PATH, map);
+}
+
+/**
+ * Seed the kairos kernel from a zenborg vault.
+ *
+ * A migration step, not a steady state. The end state is zenborg writing
+ * `$KAIROS_HOME/areas.json` directly; until that lands, the vault is still the
+ * true source and this re-seeds the kernel from it. Areas created in zenborg
+ * will not reach readers until this runs again — the one live gap in the
+ * migration (kairos/kernel/areas.md).
+ *
+ * Archived areas are dropped rather than flagged, per the contract: a reader
+ * should never have to know an area was retired.
+ *
+ * @param {string} vaultDir @returns {number} count seeded
+ */
+export function seedAreasFromZenborg(vaultDir = join(homedir(), ".zenborg")) {
+  /** @type {any} */
+  let raw;
+  try { raw = JSON.parse(readFileSync(join(vaultDir, "areas.json"), "utf8")); } catch { return 0; }
+  // The vault keys collections by id; tolerate both that and a plain array.
+  const list = Array.isArray(raw) ? raw : Object.values(raw);
+  const areas = list
+    .filter((a) => a && a.id && a.name && a.isArchived !== true)
+    .map((a) => ({ id: a.id, name: a.name, emoji: a.emoji ?? "", color: a.color ?? "", tags: a.tags ?? [] }));
+  if (!existsSync(KAIROS_DIR)) mkdirSync(KAIROS_DIR, { recursive: true });
+  writeJsonAtomic(AREAS_PATH, areas);
+  return areas.length;
+}
+
+/** Resolve a rule's areas to the domains currently sitting in them, unioned
+ * with any domains it names directly. Area membership is looked up at serve
+ * time, so a rule stays correct as the map grows.
+ * @param {any} rule @returns {string[]} */
+export function resolveRuleDomains(rule) {
+  const map = loadAreaMap();
+  const out = new Set(rule?.domains ?? []);
+  for (const areaId of rule?.areas ?? []) {
+    for (const [domain, id] of Object.entries(map)) {
+      if (id === areaId) out.add(domain);
+    }
+  }
+  return [...out];
+}
+
+/** What the big red button means right now: the areas it pauses and their
+ * current domains. Null when no break rule is declared.
+ * @returns {{areas: {name: string, emoji: string}[], domains: string[], durationMs: number} | null} */
+export function loadBreakTarget() {
+  const areas = loadAreas();
+  for (const rule of loadRules()) {
+    if (rule?.id !== "content-break" || rule?.defaultEnabled === false) continue;
+    const cooldown = (rule.primitives ?? []).find((p) => p?.kind === "cooldown");
+    if (!cooldown) continue;
+    return {
+      areas: (rule.areas ?? [])
+        .map((id) => areas.find((a) => a.id === id))
+        .filter(Boolean)
+        .map((a) => ({ name: a.name, emoji: a.emoji, color: a.color ?? "" })),
+      domains: resolveRuleDomains(rule),
+      durationMs: (cooldown.duration?.baseSeconds ?? 7200) * 1000,
+    };
+  }
+  return null;
+}
+
+/** Dwell gates declared by enabled rules — what the extension needs to fire an
+ * interstitial every N minutes of attended time.
+ * @returns {{ruleId: string, domains: string[], everyMinutes: number, prompt: string}[]} */
+export function loadDwellGates() {
+  const out = [];
+  for (const rule of loadRules()) {
+    if (rule?.defaultEnabled === false) continue;
+    for (const p of rule?.primitives ?? []) {
+      if (p?.kind !== "gate" || p?.trigger?.type !== "dwell") continue;
+      out.push({
+        ruleId: rule.id,
+        domains: resolveRuleDomains(rule),
+        everyMinutes: p.trigger.everyMinutes,
+        prompt: p.frictionType?.prompt ?? "Still what you came for?",
+      });
+    }
+  }
+  return out;
 }
 
 /** Atomically set watchlist.observe in config.json, preserving everything else.

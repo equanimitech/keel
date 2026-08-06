@@ -15,7 +15,10 @@
       "Bash(node:*)",
       "Bash(find /Users/rafa/Developer/mindful-tech/equanimi -name tsconfig*.json -o -name wxt.config.ts -o -name vite.config.ts -o -name tauri.conf.json)",
       "Bash(find /Users/rafa/Developer/mindful-tech/equanimi -maxdepth 1 -type f \\\\\\(-name *.md -o -name *.json -o -name .*rc* \\\\\\))",
-      "Bash(grep -r @equanimi /Users/rafa/Developer/mindful-tech/equanimi --include=*.json --include=*.ts --include=*.tsx --include=*.toml)"
+      "Bash(grep -r @equanimi /Users/rafa/Developer/mindful-tech/equanimi --include=*.json --include=*.ts --include=*.tsx --include=*.toml)",
+      "mcp__zenborg__list_areas",
+      "mcp__things-mcp__get_areas",
+      "mcp__things-mcp__add_todo"
     ]
   }
 }

@@ -48,7 +48,12 @@ Rules:
   background tab no focus span saw), `navigation_committed` (payload
   `domain`), `focus_start`/`focus_end` (browser holds OS focus),
   `idle_start`/`idle_end` (chrome.idle; locked counts as idle), `log_pruned`,
-  `panic_pressed` (popup self-report), and — observe tier only — the sensor
+  `cooldown_armed` (payload `source`: popup | keyboard | tray, `durationMs`,
+  `domainCount` — every arming is recorded, because the arm-rate against
+  watched-dwell is what shows whether the lock has become a coping ritual),
+  `panic_pressed` (**retired 2026-08-05** — the popup button now arms a real
+  cooldown rather than only labelling the moment; kept here because historical
+  logs carry it), and — observe tier only — the sensor
   completions `video_started`, `video_ended`, `post_seen`, `game_finished`,
   plus the debounced watch-span pair `video_paused`/`video_resumed` (settles
   past ~2.5s so ad breaks and scrubs do not register).

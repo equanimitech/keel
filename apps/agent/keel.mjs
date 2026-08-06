@@ -405,6 +405,7 @@ async function main() {
   if (cmd === "intention") return cmdIntention(process.argv.slice(3).join(" "), now);
   if (cmd === "granularity" || cmd === "gran") return cmdGranularity(sub);
   if (cmd === "focus") return cmdFocus(process.argv.slice(3).join(" "), now);
+  if (cmd === "arm") return cmdFocus(process.argv.slice(3).join(" ") || "on", now);  // skill entry: empty label → on, no shell expansion needed
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
   if (cmd === "watchlist" && sub === "scan") return cmdWatchlistScan();

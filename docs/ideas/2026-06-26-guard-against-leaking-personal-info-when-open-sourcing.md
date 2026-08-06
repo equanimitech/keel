@@ -6,7 +6,14 @@ $signature:
   docHash: sha256:ab1c7578f96adb889e9fc81cc0ae952d83091f772e0f15b7196f93186b672d63
   signedAt: 2026-06-26T08:48:17.573220Z
   signature: ed25519:C9Ay0l/T223XIpx1hb5TqG7Lg74vwOkz3tFVxuahfNUKQJdWxRQHoJnK1qevvky9Umw2THVS/wr/bvKAjTR7BA==
-type: idea
+$attestation:
+  $type: tech.equanimi.secretariat.stamp
+  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
+  act: attest
+  docHash: sha256:ab1c7578f96adb889e9fc81cc0ae952d83091f772e0f15b7196f93186b672d63
+  docFilename: 2026-06-26-guard-against-leaking-personal-info-when-open-sourcing.md
+  stampedAt: 2026-06-26T08:55:01.064278Z
+  signature: ed25519:yeWdF5jsvM0L63BDMEX2aExY70+l/JTx9IqWZiRknxxLLbYrSFVuw4YdRGFmaJO2nVrDhIZABfoszhEk7cZsBQ==
 ---
 # Guard: open-source docs must never leak personal/private info
 

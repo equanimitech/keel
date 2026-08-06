@@ -8,6 +8,51 @@
 /* Scan the shared component library so its utilities build here */
 @source "../../../../packages/ui/src";
 
+/*
+ * Zenborg's design grammar (zenborg/docs/design/design-grammar.md).
+ *
+ * Two rules do most of the work:
+ *   1. Stone tones only — colour is reserved for AREA ATTRIBUTION. If something
+ *      here is coloured, you must be able to name which area it belongs to.
+ *      The break button is red because 🍁 Entertainement is red, not because
+ *      "destructive".
+ *   2. Flat. No gradients, no shadows. Off-white, stone, graphite, black.
+ *
+ * Proportions and motion follow φ: transitions at 1.618s decay, easing
+ * cubic-bezier(0.618, 0, 0.382, 1).
+ */
+
+:root {
+  --stone-50: #fafaf9;
+  --stone-100: #f5f5f4;
+  --stone-200: #e7e5e4;
+  --stone-400: #a8a29e;
+  --stone-500: #78716c;
+  --stone-700: #44403c;
+  --stone-800: #292524;
+  --stone-900: #1c1917;
+  --stone-950: #0c0a09;
+
+  --paper: var(--stone-50);
+  --ink: var(--stone-900);
+  --quiet: var(--stone-500);
+  --rule: var(--stone-200);
+
+  /* Area accent, set at runtime from the kernel's `color`. Stone until then. */
+  --area: var(--stone-800);
+
+  --ease-phi: cubic-bezier(0.618, 0, 0.382, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: var(--stone-950);
+    --ink: var(--stone-100);
+    --quiet: var(--stone-400);
+    --rule: #1f1d1b;
+  }
+}
+
 html {
   min-width: 320px;
 }
@@ -15,122 +60,120 @@ html {
 body {
   margin: 0;
   font-family: var(--font-sans);
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--paper);
+  color: var(--ink);
   -webkit-font-smoothing: antialiased;
 }
 
+/* Margin = 1/φ² of the field. Breathing room is a principle, not a taste. */
 .popup-root {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  min-width: 280px;
-}
-
-.popup-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  gap: 20px;
+  padding: 26px 22px 20px;
+  min-width: 300px;
 }
 
 .popup-header h1 {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: lowercase;
+  color: var(--quiet);
 }
 
-.popup-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding-top: 12px;
+/* ── The one gesture ─────────────────────────────────────────── */
+.popup-break {
+  height: 68px;
+  width: 100%;
+  border: none;
+  border-radius: 3px;
+  background: var(--area);
+  color: var(--stone-50);
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  transition: filter 240ms var(--ease-phi);
 }
 
-.popup-stat {
-  display: flex;
-  flex-direction: column;
+.popup-break:hover {
+  filter: brightness(1.08);
 }
 
-.popup-stat-value {
-  font-size: 22px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+.popup-break:disabled {
+  background: var(--stone-200);
+  color: var(--quiet);
+  cursor: default;
 }
 
-.popup-stat-label {
+@media (prefers-color-scheme: dark) {
+  .popup-break:disabled {
+    background: #1f1d1b;
+  }
+}
+
+.popup-break-sub {
+  margin: -10px 0 0;
   font-size: 12px;
-  color: var(--muted-foreground);
+  line-height: 1.5;
+  text-align: center;
+  color: var(--quiet);
 }
 
-.popup-header-meta {
+/* ── Resting ─────────────────────────────────────────────────── */
+/* Factual. No countdown ticking — a timer makes waiting the activity. */
+.popup-resting {
   display: flex;
+  flex-direction: column;
+  gap: 3px;
   align-items: center;
-  gap: 8px;
+  padding: 22px 8px 16px;
 }
 
-.popup-version {
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-foreground);
-}
-
-.popup-today-label {
-  font-size: 12px;
-  color: var(--muted-foreground);
-}
-
-.popup-today {
-  display: flex;
-  gap: 20px;
-}
-
-.popup-today-item {
-  display: flex;
-  flex-direction: column;
-}
-
-.popup-subtotals {
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted-foreground);
-  padding-top: 2px;
-}
-
-.popup-domains {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.popup-domains-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--muted-foreground);
-}
-
-.popup-domain-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.popup-domain-chip {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: var(--radius, 8px);
-  background: var(--muted);
-  color: var(--foreground);
-}
-
-.popup-domains-empty {
+.popup-resting-title {
   margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.popup-resting-until {
+  margin: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--quiet);
+}
+
+.popup-resting-areas {
+  margin: 10px 0 0;
   font-size: 12px;
-  color: var(--muted-foreground);
+  color: var(--quiet);
+}
+
+/* ── Quiet affordances ───────────────────────────────────────── */
+.popup-areas-link {
+  background: none;
+  border: none;
+  border-top: 1px solid var(--rule);
+  padding: 14px 0 0;
+  font: inherit;
+  font-size: 13px;
+  color: var(--quiet);
+  cursor: pointer;
+  text-align: center;
+  transition: color 240ms var(--ease-phi);
+}
+
+.popup-areas-link:hover {
+  color: var(--ink);
 }
 
 .popup-note {
   margin: 0;
-  font-size: 12px;
-  color: var(--muted-foreground);
+  font-size: 11px;
+  text-align: center;
+  color: var(--quiet);
+  opacity: 0.75;
 }

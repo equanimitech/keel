@@ -84,6 +84,16 @@ export function isArmQuery(msg: unknown): boolean {
   );
 }
 
+/** The gate poll: a content script on a gated domain asking whether the
+ * stopping cue is due. Answered from the background's own dwell reading. */
+export function isGateQuery(msg: unknown): boolean {
+  return (
+    typeof msg === "object" &&
+    msg !== null &&
+    (msg as Record<string, unknown>).type === "keel-gate-check"
+  );
+}
+
 /**
  * Reduce a media time (seconds — possibly NaN before metadata loads, or
  * negative/Infinity on a detached element) to a finite, non-negative
