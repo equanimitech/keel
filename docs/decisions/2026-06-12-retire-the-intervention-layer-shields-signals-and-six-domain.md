@@ -22,7 +22,7 @@ $attestation:
 
 ## Decision
 
-keel retires its entire intervention layer now: the 9 browser shields and 2 signals (`apps/browser/modules/shields/`, `modules/signals/`, their content-script activations, and the budget UI), and six `@keel/domain` modules — `intervention.ts`, `behavior.ts`, `trigger.ts`, `budget.ts`, `drift.ts`, `session.ts` (~400 of 571 lines). The criterion is **observe vs act**: machinery that acts on attention retires; machinery that observes stays. Commitment devices survive as a distinct category — keel-gate and the porn drogue are explicitly-consented precommitment, not attention interventions. Decided by Rafa, 2026-06-12.
+keel retires its entire intervention layer now: the 9 browser shields and 2 signals (`apps/browser/modules/shields/`, `modules/signals/`, their content-script activations, and the budget UI), and six `@keel/domain` modules — `intervention.ts`, `behavior.ts`, `trigger.ts`, `budget.ts`, `drift.ts`, `session.ts` (~400 of 571 lines). The criterion is **observe vs act**: machinery that acts on attention retires; machinery that observes stays. Commitment devices survive as a distinct category — keel-gate and the porn drogue are explicitly-consented precommitment, not attention interventions. Decided by the operator, 2026-06-12.
 
 ## Rationale
 
@@ -43,7 +43,7 @@ The observability-first directive (stamped roadmap, 2026-06-12) makes interventi
 
 ## Obituary — per-mechanism trace + effectiveness testimony
 
-Testimony is Rafa's, 2026-06-12, anecdotal and pre-baseline — recorded as **P5 re-entry priors**, not conclusions.
+Testimony is the operator's, 2026-06-12, anecdotal and pre-baseline — recorded as **P5 re-entry priors**, not conclusions.
 
 | Mechanism | Domain | Code class | Notch | Testimony |
 |---|---|---|---|---|

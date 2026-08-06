@@ -262,7 +262,7 @@ describe("route helpers", () => {
     });
   });
   it("routeFor returns null route for an unregistered host", () => {
-    expect(routeFor("https://github.com/rafa/keel")).toEqual({
+    expect(routeFor("https://github.com/acme/keel")).toEqual({
       domain: "github.com",
       route: null,
     });

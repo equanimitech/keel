@@ -23,7 +23,7 @@
 - All of `docs/**` and `apps/browser/docs/**` (historical specs, plans, sessions).
 - `apps/browser/PITCH.md`, `apps/browser/PROMPT.md`, `PITCH-equanimi-unification.md`, `ROADMAP-equanimi-unification.md` (historical pitch/roadmap prose).
 - `PITCH-equanimi-unification.md` / `ROADMAP-equanimi-unification.md` prose mentions of `monotask` / `equinami` (historical — these are the only `equinami` survivors after the rename; the Tauri identity itself **is** in scope, Tasks 5–7).
-- The repo directory path `/Users/rafa/Developer/equanimitech/keel` (company dir; manual if ever wanted).
+- The repo directory path `/Users/operator/Developer/equanimitech/keel` (company dir; manual if ever wanted).
 - The global `~/.claude/CLAUDE.md` "EquanimiTech" principle reference.
 
 ## Pre-flight note — coexisting uncommitted slice-A edits

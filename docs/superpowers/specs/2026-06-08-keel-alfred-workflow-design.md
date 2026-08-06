@@ -35,7 +35,7 @@ and raw `node ~/.keel/keel.mjs …`. Alfred gives a calm, global, discoverable s
   handles privilege), **not** the stale `sudo vice-block.sh` aliases.
 - **Source of truth:** the bundle lives in the keel repo (`packages/keel-alfred/`),
   installed into Alfred by a script — matching keel's source-in-repo pattern.
-- **Audience:** built for Rafa now, but with a **generalization seam** — the menu is
+- **Audience:** built for the operator now, but with a **generalization seam** — the menu is
   a declarative item-table and the environment knobs are variables at the top of the
   scripts. Going generic later (externalize the table to a config file + a README) is
   cheap and additive. No speculative config engine now (YAGNI; matches the

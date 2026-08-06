@@ -63,7 +63,7 @@ The atom is a **durationful event**, not an on-change ping. keel's current Rust 
   "ts": "2026-06-01T23:41:07Z",   // ISO-8601 UTC, start of the event
   "duration_s": 184.2,             // dwell, seconds
   "watcher": "window",             // provenance (AW lesson #5)
-  "host": "rafa-mbp",              // provenance — multi-device clean later
+  "host": "operator-mbp",              // provenance — multi-device clean later
   "data": { "app": "Cursor", "title": "tides-design.md — keel" }
 }
 ```

@@ -108,7 +108,7 @@ describe("normalizeRoute", () => {
   });
 
   it("returns null for a host with no registry entry", () => {
-    expect(normalizeRoute("github.com", "/rafa/keel")).toBeNull();
+    expect(normalizeRoute("github.com", "/acme/keel")).toBeNull();
   });
 
   it("exposes the registry for reuse", () => {
@@ -207,7 +207,7 @@ describe("route helpers", () => {
   });
 
   it("routeFor returns null route for an unregistered host", () => {
-    expect(routeFor("https://github.com/rafa/keel")).toEqual({
+    expect(routeFor("https://github.com/acme/keel")).toEqual({
       domain: "github.com",
       route: null,
     });

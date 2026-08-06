@@ -12,7 +12,7 @@ $attestation:
 
 * The intervention point: AI-wait gaps (agent working ≥30s–2min). Day-1 log data: \~10 min of such gaps in a 41-min window — both peak compulsion-vulnerability and peak receptivity. The wheel turns the gap from a doomscroll on-ramp into an embodied micro-break.
 
-* The mechanic: spin a wheel over a *personal* menu of off-screen micro-activities. Rafa's list (2026-06-12, verbatim):
+* The mechanic: spin a wheel over a *personal* menu of off-screen micro-activities. The operator's list (2026-06-12, verbatim):
 
   * keepie upies (embaixadinha)
 

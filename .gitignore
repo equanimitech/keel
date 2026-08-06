@@ -7,6 +7,15 @@ web-ext.config.ts
 # Extension signing key (private) — public key lives in wxt.config.ts manifest.key
 .keys/
 
+# Local, machine-specific and personal — this repo is public.
+# settings.local.json carries absolute home paths; worktrees are agent scratch.
+.claude/settings.local.json
+.claude/worktrees/
+# Single-subject behavioural analyses — evidence for the essays, kept out of
+# the public repo. Live in secretariat / ~/.keel instead.
+docs/drafts/
+docs/references/2026-08-05-ai-wait-gap-evidence.md
+
 apps/**/node_modules/
 packages/**/node_modules/
 

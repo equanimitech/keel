@@ -1,7 +1,7 @@
 # Spec: Chess.com Interventions & Cross-Domain Budgeting
 
 **Status**: Draft
-**Author**: Rafa + Claude
+**Author**: The operator + Claude
 **Date**: 2026-02-10
 **Depends on**: 001-modular-architecture-refactor, 002-youtube-shields
 

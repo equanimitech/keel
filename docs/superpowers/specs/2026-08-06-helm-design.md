@@ -323,6 +323,6 @@ ingestion actually help?" with data rather than conviction.
    rather than weedy dwell alone. Deferred: dwell is the simpler signal and the
    tide's thresholds are themselves provisional. Revisit once both have baselines.
 2. When calendar ingestion lands (§4.6), whether an all-day or multi-hour event
-   should be a heading at all. A three-hour "Marseille" event is a location, not
+   should be a heading at all. A three-hour "offsite" event is a location, not
    an intention, and would hold a heading over blocks that deserve their own.
    Not blocking: v1 has no calendar source.

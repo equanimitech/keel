@@ -329,6 +329,6 @@ No fp-ts, all readonly, factory functions (not shown but trivial to add per-type
 ## Open questions
 
 1. How does `AttentionState` persist across tabs? Single source of truth in the extension background script, or per-tab with reconciliation?
-2. Are Shields shareable as-is (JSON export), or do we need a portable IR that strips local ids? (Matters for the "Rafa's anti-Shorts pack" future.)
+2. Are Shields shareable as-is (JSON export), or do we need a portable IR that strips local ids? (Matters for the "the operator's anti-Shorts pack" future.)
 3. Cross-surface communication: how does the browser extension know about active moments / boundaries from the MCP/web app?
 4. Garden-native name for time boundaries (the "Tide" concept). Seasons? Daylight? Or just "boundaries"?

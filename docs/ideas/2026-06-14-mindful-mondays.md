@@ -1,6 +1,6 @@
 # Mindful Mondays — a day-scoped intervention regime
 
-A weekly reset day: remove dopamine triggers (digital first, eventually physical) and prevent in-depth implementation. Rafa's idea, 2026-06-14.
+A weekly reset day: remove dopamine triggers (digital first, eventually physical) and prevent in-depth implementation. The operator's idea, 2026-06-14.
 
 ## Fit with the intervention model
 

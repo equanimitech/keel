@@ -19,6 +19,6 @@ $attestation:
 
 Before open-sourcing keel (or any repo), ensure docs AND code carry no personal data: the watchlist domains in `nbs/load.py`, doc content referencing personal drift patterns, real numbers, etc.
 
-Want a commit-time / pre-publish guard (a PII scan or a de-Rafa pass on docs). The `.ipynb` is already gitignored — extend that same vigilance to committed docs.
+Want a commit-time / pre-publish guard (a PII scan or a de-the operator pass on docs). The `.ipynb` is already gitignored — extend that same vigilance to committed docs.
 
 _Dispatched from Things inbox by /triage on 2026-06-26._
