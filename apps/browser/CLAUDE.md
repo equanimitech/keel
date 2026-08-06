@@ -31,7 +31,7 @@ apps/browser/
 │   ├── activity/                    # Writer: events.ts (pure) + writer.ts (chrome.*) + log.ts (IndexedDB)
 │   ├── sensors/
 │   │   ├── events.ts                # Pure: kind allowlist, payload caps, observe gate, arm query
-│   │   ├── senses/                  # TYPE-based detection: video.ts, feed.ts, game.ts
+│   │   ├── senses/                  # TYPE-based detection: video.ts, feed.ts, shopping.ts, game.ts
 │   │   ├── adapters.ts              # Site-specific probes as DATA — the only place a domain may appear
 │   │   └── send.ts                  # Content-script channel
 │   ├── watchlist/                   # observe-tier mirror (chrome.storage)
@@ -48,8 +48,9 @@ that rule has exactly one place to be got wrong.
 
 Sensors are **type-based, never company-based**: the generic senses (video =
 `<video>` playback, feed = article/listitem impressions + the industry
-sponsored-disclosure labels) self-select by what an observed page exhibits, on
-ANY watchlist domain. Site adapters exist only where a key action has no
+sponsored-disclosure labels, shopping = schema.org Product microdata or the
+universal commerce card shape — image + link + price inside a bounded region)
+self-select by what an observed page exhibits, on ANY watchlist domain. Site adapters exist only where a key action has no
 generic DOM shape (a finished game) and live in `adapters.ts` as data. The
 sensor content script runs on all pages but does NOTHING (no observers) unless
 the background's arm handshake confirms the domain is on the observe tier.

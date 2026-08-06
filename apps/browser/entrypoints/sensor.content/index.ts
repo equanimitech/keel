@@ -4,8 +4,8 @@
  * On load it asks the background whether this domain is on the
  * watchlist's observe tier (the arm handshake). If not, it does
  * NOTHING — no observers, no listeners. If observed, it arms the
- * generic senses (video, feed — they self-select by what the page
- * exhibits) plus the game sense where a site adapter exists.
+ * generic senses (video, feed, shopping — they self-select by what the
+ * page exhibits) plus the game sense where a site adapter exists.
  *
  * No company names here: domains are user-authored watchlist entries;
  * site-specific probes are data in modules/sensors/adapters.ts.
@@ -14,6 +14,7 @@
 import { siteAdapterFor } from "@/modules/sensors/adapters";
 import { armFeedSense } from "@/modules/sensors/senses/feed";
 import { armGameSense } from "@/modules/sensors/senses/game";
+import { armShoppingSense } from "@/modules/sensors/senses/shopping";
 import { armVideoSense } from "@/modules/sensors/senses/video";
 import { armDwellGate } from "@/modules/friction/gate/arm";
 
@@ -46,6 +47,7 @@ export default defineContentScript({
 
     armVideoSense();
     armFeedSense();
+    armShoppingSense();
 
     const adapter = siteAdapterFor(window.location.hostname.replace(/^www\./, ""));
     if (adapter !== null) {

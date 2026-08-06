@@ -22,6 +22,7 @@ export const SENSOR_KINDS = [
   "video_resumed",
   "post_seen",
   "game_finished",
+  "product_seen",
 ] as const;
 
 export type SensorKind = (typeof SENSOR_KINDS)[number];

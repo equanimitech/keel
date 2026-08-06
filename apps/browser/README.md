@@ -27,7 +27,7 @@ Dev: `pnpm dev` (hot-reload, fresh profile). Built with [WXT](https://wxt.dev).
 ## What it logs
 
 - **Coarse events** (every site): `tab_activated`, `navigation_committed`, `focus_start` / `focus_end`, `idle_start` / `idle_end`.
-- **Sensor completions** (observe tier only): `video_started` / `video_ended`, `post_seen`, `game_finished` — domain + capped scalars, gated behind the watchlist and the hostile-page boundary (see `modules/sensors/`).
+- **Sensor completions** (observe tier only): `video_started` / `video_ended`, `post_seen`, `product_seen`, `game_finished` — domain + capped scalars, gated behind the watchlist and the hostile-page boundary (see `modules/sensors/`).
 
 Everything lands in extension-local IndexedDB; the manage page exports it as JSONL on demand. The popup mirrors today's tally and which domains are deep-sensed.
 

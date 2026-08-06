@@ -153,6 +153,7 @@ describe("SENSOR_KINDS", () => {
     expect([...SENSOR_KINDS].sort()).toEqual([
       "game_finished",
       "post_seen",
+      "product_seen",
       "video_ended",
       "video_paused",
       "video_resumed",

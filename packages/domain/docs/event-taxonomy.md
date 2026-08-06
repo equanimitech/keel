@@ -13,7 +13,7 @@ conforms to one of three patterns. Stamped basis:
 |---|---|---|---|
 | **Span** | `<state>_start` / `<state>_end`; `durationMs` on the end event when the start was observed | `idle_start`/`idle_end`, `focus_start`/`focus_end`, `session_start`/`session_end`, `video_paused`/`video_resumed` (brackets the paused interval; lets active-watch time exclude pauses) | AFK bracketing (ActivityWatch); interval substrate for resumption lag (Iqbal & Bailey 2006) |
 | **Switch** | `<thing>_switched` / `<thing>_activated`; payload carries the *new* target; `durationMs` may close the previous span | `app_switched`, `tab_activated` | Switch events — fragmentation metrics (Mark CHI 2014); coarse breakpoints (Adamczyk & Bailey 2004) |
-| **Completion** | past-tense action end | `navigation_committed`, `tool_completed`, `video_ended`, `post_seen`, `tab_closed` (a dismissal) | Action completions = breakpoint candidates ("never clock-based", OASIS) |
+| **Completion** | past-tense action end | `navigation_committed`, `tool_completed`, `video_ended`, `post_seen`, `product_seen`, `tab_closed` (a dismissal) | Action completions = breakpoint candidates ("never clock-based", OASIS) |
 
 Rules:
 
@@ -55,8 +55,18 @@ Rules:
   cooldown rather than only labelling the moment; kept here because historical
   logs carry it), and — observe tier only — the sensor
   completions `video_started`, `video_ended`, `post_seen`, `game_finished`,
-  plus the debounced watch-span pair `video_paused`/`video_resumed` (settles
-  past ~2.5s so ad breaks and scrubs do not register).
+  `product_seen` (payload `tier`: microdata | layout — which generic
+  detection recognised the card; one event per product card that held ≥50%
+  visibility past a ~0.7s settle window, deduped per card and capped at 120
+  per page so an infinite-scroll grid cannot flood the log; never a product
+  name, price, image, or URL), plus the debounced watch-span pair
+  `video_paused`/`video_resumed` (settles past ~2.5s so ad breaks and scrubs
+  do not register).
+
+The per-area key-action metric each sensor exists to produce: minutes watched
+(video), posts seen (feed), games played (game), **products seen** (shopping).
+These supersede raw dwell time — dwell says an hour passed, `product_seen`
+says how much shopping happened in it.
 
 Architecture note (OASIS mapping): the desktop observer emits the global
 *switch stream* (application-independent layer); each per-app surface
