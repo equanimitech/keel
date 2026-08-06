@@ -11,7 +11,7 @@
     (`docs/decisions/2026-06-17-tides-friction-dial-intervention-model.md`).
     Renaming the session dial to "depth" splits one concept across two words.
   - `granularity` is welded to the **semantic-zoom** ladder (L0–L5) it controls;
-    the published plugin is meant to be de-Rafa / legible to strangers, and
+    the published plugin is meant to be de-the operator / legible to strangers, and
     over-theming a response-depth knob taxes the newcomer more than it charms.
 - Rule of thumb surfaced here: nautical for the *driver/instrument* layer (tide,
   heading, drift, ebb/flood — the poetic core); plain words for the *control

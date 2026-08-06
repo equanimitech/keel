@@ -1,7 +1,7 @@
 # Exploration: Consumption Pressure & Dopamine Lockdown
 
 **Status**: Exploration (pre-spec)
-**Author**: Rafa + Claude
+**Author**: The operator + Claude
 **Date**: 2026-02-10
 **Context**: Personal tool — no external structure, solo founder lifestyle
 

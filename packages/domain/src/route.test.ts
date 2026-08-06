@@ -19,7 +19,7 @@ describe("normalizeRoute", () => {
     expect(normalizeRoute("youtube.com", "/shorts/x?t=1")).toBe("/shorts");
   });
   it("returns null for a host with no registry entry", () => {
-    expect(normalizeRoute("github.com", "/rafa/keel")).toBeNull();
+    expect(normalizeRoute("github.com", "/acme/keel")).toBeNull();
   });
   it("does not leak user-identifying @handle segments", () => {
     expect(normalizeRoute("youtube.com", "/@SomeCreator")).toBeNull();

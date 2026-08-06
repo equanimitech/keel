@@ -12,7 +12,7 @@ keel-gate is **already 80% generalizable** — the pure domain in `core.mjs` is 
 
 ## 1. Inventory of the overfit
 
-Coarse → subtle. Where keel quietly assumes *Rafa*.
+Coarse → subtle. Where keel quietly assumes *the operator*.
 
 ### Structural (cheap to fix, mechanical)
 - **Single hardcoded target id.** `TARGET_ID = "claude-code"` (store.mjs:10); `loadTarget(id = TARGET_ID)` (store.mjs:15); `cmdStatus` prints `keel[${TARGET_ID}]` (keel.mjs:77). The config schema *already* supports `targets: { <id>: … }` (store.mjs:18) — the map is multi-target, the reader is single-target.
@@ -26,11 +26,11 @@ Coarse → subtle. Where keel quietly assumes *Rafa*.
   - **quota / budget:** friction rises with *cumulative usage today*, not wall-clock time (anti-doomscroll, "2h of coding then stop").
   - **anti-binge:** friction rises with *unbroken session length* (the data for this already exists — `unbrokenMin`, core.mjs:164 — but only feeds the cosmetic "bell", not the curve).
 - **Lockdown vocabulary bakes in "night".** `Phase` is `"day"|"wind_down"|"lockdown"` (core.mjs:4); `nightKey`/`recordNight`/`lastNNights`/`nextResetTs` (core.mjs:91-201) all assume a once-per-*night* cycle keyed to a `reset` hour. A pomodoro or quota driver has no "night" — the period is the wrong unit. `reflectionLine` ("wound down on your own N of the last M late night(s)", core.mjs:313) is sleep-shaming copy hardcoded into the *domain*, not the voice config.
-- **Skip-credit moral framing.** `perMonth: 2, cap: 3` (core.mjs:24) and "spend a skip if it's truly worth it" (core.mjs:27) encode *one person's* chosen scarcity and *one person's* relationship to override-guilt. Defensible as Rafa's contract with himself; coercive if shipped as a default to someone whose self-relationship differs.
+- **Skip-credit moral framing.** `perMonth: 2, cap: 3` (core.mjs:24) and "spend a skip if it's truly worth it" (core.mjs:27) encode *one person's* chosen scarcity and *one person's* relationship to override-guilt. Defensible as the operator's contract with themselves; coercive if shipped as a default to someone whose self-relationship differs.
 
 ### Copy / locale (tuned to one voice)
-- **Voice defaults are Rafa's words.** `DEFAULT_TARGET.voice` (core.mjs:25-35) — "Winding down — favor landing open work", "Instead: jot tomorrow's first task, then sleep." Config-overridable (the README calls this "the point", README.md:48), but the *defaults a new user inherits* are sleep-specific.
-- **Ritual nudges are Rafa's command surface.** `ritualNudge` (core.mjs:242-251) hardcodes `/weekly-review` and `/morning` — slash commands that only exist in *Rafa's* Claude setup. A new user gets a nudge to run a command they don't have.
+- **Voice defaults are the operator's words.** `DEFAULT_TARGET.voice` (core.mjs:25-35) — "Winding down — favor landing open work", "Instead: jot tomorrow's first task, then sleep." Config-overridable (the README calls this "the point", README.md:48), but the *defaults a new user inherits* are sleep-specific.
+- **Ritual nudges are the operator's command surface.** `ritualNudge` (core.mjs:242-251) hardcodes `/weekly-review` and `/morning` — slash commands that only exist in *the operator's* Claude setup. A new user gets a nudge to run a command they don't have.
 - **English-only, hardcoded strings.** Every emitted line is an English literal in `core.mjs`. No i18n seam.
 - **Timezone/locale assumptions.** `nowMinOf`/`dayKey` use local `getHours()`/`getDate()` (core.mjs:87, 232-235) — correct for one machine in one tz, but `monthKey` uses **UTC** `toISOString().slice(0,7)` (core.mjs:88) for credit refill while everything else is local. Latent bug at month boundaries near midnight; harmless for one user in one tz, a real cross-user inconsistency.
 - **Morning window 04:00–14:00 hardcoded** (core.mjs:246) — a night-owl's "morning", not config.
@@ -39,7 +39,7 @@ Coarse → subtle. Where keel quietly assumes *Rafa*.
 
 ## 2. Essence vs. accident
 
-| | **Essence (generalizable core)** | **Accident (Rafa-specific)** |
+| | **Essence (generalizable core)** | **Accident (operator-specific)** |
 |---|---|---|
 | **Curve** | A `Friction ∈ [0,1]` derived from context | The *specific* wind-down ramp shape; times 23:00/01:00/05:00 |
 | **Gate** | "at friction ≥ threshold, deny these tools" — `denyingRule` (core.mjs:171) | The exact tool list `[Edit,Write,Bash,…]` (coding-specific) |
@@ -66,7 +66,7 @@ Make `kind` real: a `frictionForDriver(driver, state, now)` dispatch in `core.mj
 - **Watch:** the `Period`/`night` coupling. Quota and pomodoro break `nightKey`. Introduce `periodKey(driver, now)` / `nextResetTs(driver, now)` as driver-aware (wind-down → night; pomodoro → cycle; quota → calendar day). This is the real refactor inside this rung.
 
 ### (b) Config-profile presets — **XS effort, high adoption value**
-Ship `config.samples/` with `wind-down.json`, `focus-hours.json`, `pomodoro.json`, `doomscroll-quota.json` — each a complete `target` with its own voice. A new user copies a preset instead of authoring one. Pairs naturally with (a); presets are how non-Rafa users *discover* the driver kinds exist.
+Ship `config.samples/` with `wind-down.json`, `focus-hours.json`, `pomodoro.json`, `doomscroll-quota.json` — each a complete `target` with its own voice. A new user copies a preset instead of authoring one. Pairs naturally with (a); presets are how non-operator users *discover* the driver kinds exist.
 - **Unlocks:** onboarding for someone who isn't a config author. Turns "make it yours" (README.md:42) from a chore into a pick-a-template.
 
 ### (c) Multi-principal / multi-target reader — **S effort**
@@ -108,12 +108,12 @@ The tests pin *behavior* but not the *boundaries that a refactor will move*. Bef
 
 This is an **equanimitech** product (root README: "Sovereignty → Awareness → Equanimity"). The risks are mostly *value* risks, not technical ones.
 
-- **Coercion creep.** A wind-down gate Rafa imposed *on himself* is sovereign. The same gate shipped with a default a *manager* or a *habit-app* sets *for someone else* is the opposite — engagement-shaped control. **Guard:** sovereignty must survive multi-user. The skip credit, `park`, `unpark`, and "remove the gate: delete the hooks block" (README.md:55) are the sovereignty primitives — any generalization must keep the override *at least as easy as the gate*. Never add a driver kind whose override is harder than its block.
+- **Coercion creep.** A wind-down gate the operator imposed *on themselves* is sovereign. The same gate shipped with a default a *manager* or a *habit-app* sets *for someone else* is the opposite — engagement-shaped control. **Guard:** sovereignty must survive multi-user. The skip credit, `park`, `unpark`, and "remove the gate: delete the hooks block" (README.md:55) are the sovereignty primitives — any generalization must keep the override *at least as easy as the gate*. Never add a driver kind whose override is harder than its block.
 - **Multi-machine sync becomes surveillance.** Rung (d) (state-across-devices) is one schema change away from "your friction history lives on someone's server." For an equanimitech tool this is a bright line: sync must be local-first / user-owned, never a telemetry channel. Defer (d) precisely because getting it wrong is worse than not having it.
 - **Presets encode a stranger's morality.** A `pomodoro.json` preset's skip-budget and voice are *someone's* opinion about how strict to be. Shipping presets is good for adoption (rung b) but each one is a values statement. **Guard:** presets should default to *generous* overrides (easy to skip, no shaming voice) and let the user *tighten*, never start coercive.
 - **Domain extraction freezes the overfit.** Extracting `@keel/domain` (rung e) *before* the curve/period abstractions are right would canonize the night-only model in the shared package both surfaces depend on. Sequence matters: generalize the model, *then* extract.
 - **Reflection copy is sleep-shaming in the domain layer.** `reflectionLine` (core.mjs:313) hardcodes "late night" / "wound down" framing into pure logic. For a generalized tool this both breaks (wrong for pomodoro) *and* risks the engagement-shaped guilt-loop equanimitech explicitly rejects. Move all evaluative copy into `voice` before generalizing.
-- **YAGNI / single-user-of-one.** The honest base-rate caution: keel has exactly one user and the wind-down driver works. Generalizing is speculative until a *second real user with a different driver* exists. The cheapest validation isn't a refactor — it's running rung (b) (a `focus-hours.json` preset *Rafa himself* could use during the day) to test whether the multi-driver model even holds up in his own hands before building for strangers.
+- **YAGNI / single-user-of-one.** The honest base-rate caution: keel has exactly one user and the wind-down driver works. Generalizing is speculative until a *second real user with a different driver* exists. The cheapest validation isn't a refactor — it's running rung (b) (a `focus-hours.json` preset *the operator themselves* could use during the day) to test whether the multi-driver model even holds up in their own hands before building for strangers.
 
 ---
 
@@ -124,8 +124,8 @@ This is an **equanimitech** product (root README: "Sovereignty → Awareness →
 - `driver.kind` seam (declared, unread): `core.mjs:8, 20`
 - Night/period coupling: `core.mjs:91-99` (`nextResetTs`/`nightKey`), `184-201` (record/last-N nights)
 - Sleep copy in domain: `core.mjs:313` (`reflectionLine`)
-- Voice defaults (Rafa's words): `core.mjs:25-35`
-- Ritual nudge → Rafa's commands: `core.mjs:242-251`
+- Voice defaults (the operator's words): `core.mjs:25-35`
+- Ritual nudge → the operator's commands: `core.mjs:242-251`
 - Locale: local tz `core.mjs:87, 232-235` vs UTC `core.mjs:88`; morning window `core.mjs:246`
 - Override sovereignty primitives: `keel.mjs:56-105` (skip/park/unpark/signoff)
 - Fail-open contract: `keel.mjs:15-16, 163`

@@ -14,7 +14,7 @@ hard_dependency: none (Zenborg vault read-only; absent → clock fallback)
 > (an intention scoped to a `[from, to)` window). A time-windowed intention *is* the
 > tide signal — the morning ritual (and week-planning) already name the day's blocks,
 > so they just call `keel intention "<focus>" --block HH:MM-HH:MM`; keel never reads
-> the vault. This keeps the published plugin de-Rafa and dependency-free (the decision's
+> the vault. This keeps the published plugin de-the operator and dependency-free (the decision's
 > goal) while making the tide intention-driven. Direction lives in
 > [[keel-zenborg-intentions]] memory / the morning skill. The wall-cut context below
 > (park/skip/credits/vice retired, backstop-only) still holds.
@@ -27,7 +27,7 @@ hard_dependency: none (Zenborg vault read-only; absent → clock fallback)
 
 ## Boundaries
 
-**JBTD:** As the keel daemon on Rafa's behalf, when it's late and I'm still at the keyboard, I want wind-down to read my *declared* intention — Zenborg's night band + tonight's `NIGHT` moments — not a guessed clock, so a night I declared a work-night flows and only undeclared drift brakes. Baseline today: `frictionAt` runs off a static `{windDown:"22:30", hardStop:"00:00", reset:"05:00"}` (`config.sample.json`); same wall whether or not tonight was declared, and a bedtime clock that must be hand-synced with `phaseConfigs` `NIGHT`.
+**JBTD:** As the keel daemon on the operator's behalf, when it's late and I'm still at the keyboard, I want wind-down to read my *declared* intention — Zenborg's night band + tonight's `NIGHT` moments — not a guessed clock, so a night I declared a work-night flows and only undeclared drift brakes. Baseline today: `frictionAt` runs off a static `{windDown:"22:30", hardStop:"00:00", reset:"05:00"}` (`config.sample.json`); same wall whether or not tonight was declared, and a bedtime clock that must be hand-synced with `phaseConfigs` `NIGHT`.
 
 **Out:**
 - Semantic match of frontmost app ↔ moment text. Presence of a `NIGHT` moment = grant. No NLP.

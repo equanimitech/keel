@@ -2,7 +2,7 @@
 name = "keel-tray"
 version = "0.1.0"
 description = "keel tray — menubar-only desktop attention logger"
-authors = ["Rafa Ballestiero"]
+authors = ["equanimitech"]
 edition = "2021"
 
 [lib]

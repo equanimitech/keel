@@ -66,7 +66,7 @@ class TestHelpers(unittest.TestCase):
         self.assertEqual(normalize_route("youtube.com", "/watch"), "/watch")
         self.assertIsNone(normalize_route("youtube.com", "/"))
         self.assertIsNone(normalize_route("youtube.com", "/@creator"))   # privacy: no handles
-        self.assertIsNone(normalize_route("github.com", "/rafa/keel"))   # off-registry
+        self.assertIsNone(normalize_route("github.com", "/acme/keel"))   # off-registry
 
 if __name__ == "__main__":
     unittest.main()
@@ -154,7 +154,7 @@ def normalize_route(host, pathname):
 
 - [ ] **Step 5: Commit:**
 ```bash
-cd /Users/rafa/Developer/equanimitech/keel
+cd /Users/operator/Developer/equanimitech/keel
 git add apps/agent/watchlist_scan.py apps/agent/test_watchlist_scan.py
 git commit -m "feat(agent): watchlist scan host/route classification helpers"
 ```
@@ -251,7 +251,7 @@ def drift_ratio(timestamps, now, window_days=14):
 
 - [ ] **Step 5: Commit:**
 ```bash
-cd /Users/rafa/Developer/equanimitech/keel
+cd /Users/operator/Developer/equanimitech/keel
 git add apps/agent/watchlist_scan.py apps/agent/test_watchlist_scan.py
 git commit -m "feat(agent): watchlist scan lens functions (compulsion/binge/drift)"
 ```
@@ -358,7 +358,7 @@ def aggregate_keys(db_path, now, ledger):
 
 - [ ] **Step 5: Commit:**
 ```bash
-cd /Users/rafa/Developer/equanimitech/keel
+cd /Users/operator/Developer/equanimitech/keel
 git add apps/agent/watchlist_scan.py apps/agent/test_watchlist_scan.py
 git commit -m "feat(agent): watchlist scan reader + per-key aggregation"
 ```
@@ -440,7 +440,7 @@ def build_slate(keys, now, snapshot, min_visits=12):
 
 - [ ] **Step 5: Commit:**
 ```bash
-cd /Users/rafa/Developer/equanimitech/keel
+cd /Users/operator/Developer/equanimitech/keel
 git add apps/agent/watchlist_scan.py apps/agent/test_watchlist_scan.py
 git commit -m "feat(agent): watchlist scan slate builder + composite ranking"
 ```
@@ -498,14 +498,14 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Manual smoke against the real Brave DB:**
 ```bash
-cd /Users/rafa/Developer/equanimitech/keel/apps/agent
+cd /Users/operator/Developer/equanimitech/keel/apps/agent
 python3 watchlist_scan.py | python3 -m json.tool | head -40
 ```
 Expected: a JSON slate with `candidates` (youtube.com/shorts, netflix.com, linkedin.com, etc.) ranked, each with `scores`/`evidence`/`suggested_tier`, plus `_snapshot`. Confirm work/infra hosts (github, clerk) are absent. Capture the top ~5 keys.
 
 - [ ] **Step 3: Commit:**
 ```bash
-cd /Users/rafa/Developer/equanimitech/keel
+cd /Users/operator/Developer/equanimitech/keel
 git add apps/agent/watchlist_scan.py
 git commit -m "feat(agent): watchlist scan CLI entry (emit slate JSON)"
 ```
@@ -598,7 +598,7 @@ export function writeObserveList(observe) {
 
 - [ ] **Step 6: Commit:**
 ```bash
-cd /Users/rafa/Developer/equanimitech/keel
+cd /Users/operator/Developer/equanimitech/keel
 git add apps/agent/core.mjs apps/agent/store.mjs apps/agent/watchlist-store.test.mjs
 git commit -m "feat(agent): watchlist ledger/snapshot store + observe-list writer + verdict merge"
 ```
@@ -673,7 +673,7 @@ In `main()`, add the dispatch alongside the other `if (cmd === ...)` lines:
 
 - [ ] **Step 3: Manual end-to-end run:**
 ```bash
-cd /Users/rafa/Developer/equanimitech/keel
+cd /Users/operator/Developer/equanimitech/keel
 node apps/agent/keel.mjs watchlist scan
 ```
 Adjudicate a couple of candidates (`o`/`b`/`s`), then verify:
@@ -684,7 +684,7 @@ Then re-run and confirm `benign`-marked keys do NOT reappear (ledger suppression
 
 - [ ] **Step 4: Commit:**
 ```bash
-cd /Users/rafa/Developer/equanimitech/keel
+cd /Users/operator/Developer/equanimitech/keel
 git add apps/agent/keel.mjs
 git commit -m "feat(agent): keel watchlist scan command + adjudication TUI"
 ```

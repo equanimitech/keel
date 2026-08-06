@@ -5,7 +5,7 @@ import {
   emptyState, isAllowedPath,
 } from "./core.mjs";
 
-const HOME = "/Users/rafa";
+const HOME = "/Users/operator";
 const ALLOW = ["~/journals", "~/.keel"];
 
 // Unified lockdown model (decision 2026-06-17): the one hard lock is the `night` watch.
@@ -53,14 +53,14 @@ test("day is silent: no pressure, no lock", () => {
 
 test("isAllowedPath: journal + ritual writes are exempt, code writes are not", () => {
   // the journal the sign-off / wind-down / log skills write to
-  assert.equal(isAllowedPath("/Users/rafa/journals/2026-06-08.md", ALLOW, HOME), true);
-  assert.equal(isAllowedPath("/Users/rafa/.keel/state.json", ALLOW, HOME), true);
-  assert.equal(isAllowedPath("/Users/rafa/journals", ALLOW, HOME), true);     // the dir itself
+  assert.equal(isAllowedPath("/Users/operator/journals/2026-06-08.md", ALLOW, HOME), true);
+  assert.equal(isAllowedPath("/Users/operator/.keel/state.json", ALLOW, HOME), true);
+  assert.equal(isAllowedPath("/Users/operator/journals", ALLOW, HOME), true);     // the dir itself
   // a repo code file is NOT exempt — lockdown still bites
-  assert.equal(isAllowedPath("/Users/rafa/Developer/themia/minerva/x.ts", ALLOW, HOME), false);
+  assert.equal(isAllowedPath("/Users/operator/Developer/themia/minerva/x.ts", ALLOW, HOME), false);
   // prefix-spoof guard: ~/journals-evil must not match ~/journals
-  assert.equal(isAllowedPath("/Users/rafa/journals-evil/x.md", ALLOW, HOME), false);
+  assert.equal(isAllowedPath("/Users/operator/journals-evil/x.md", ALLOW, HOME), false);
   // no path (e.g. a Bash command) or empty allow-list → not exempt
   assert.equal(isAllowedPath(undefined, ALLOW, HOME), false);
-  assert.equal(isAllowedPath("/Users/rafa/journals/x.md", [], HOME), false);
+  assert.equal(isAllowedPath("/Users/operator/journals/x.md", [], HOME), false);
 });

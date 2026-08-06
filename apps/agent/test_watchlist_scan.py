@@ -49,7 +49,7 @@ class TestHelpers(unittest.TestCase):
         self.assertEqual(normalize_route("youtube.com", "/watch"), "/watch")
         self.assertIsNone(normalize_route("youtube.com", "/"))
         self.assertIsNone(normalize_route("youtube.com", "/@creator"))   # privacy: no handles
-        self.assertIsNone(normalize_route("github.com", "/rafa/keel"))   # off-registry
+        self.assertIsNone(normalize_route("github.com", "/acme/keel"))   # off-registry
 
 class TestLenses(unittest.TestCase):
     def test_quick_return_rate(self):

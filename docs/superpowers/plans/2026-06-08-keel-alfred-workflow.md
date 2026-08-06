@@ -239,7 +239,7 @@ git commit -m "feat(keel-alfred): arg-prefix dispatcher (run.sh)"
 <dict>
   <key>bundleid</key><string>pro.themia.keel</string>
   <key>name</key><string>keel</string>
-  <key>createdby</key><string>Rafa</string>
+  <key>createdby</key><string>the operator</string>
   <key>description</key><string>keel ritual launcher — rituals to Claude, instant keel actions to notifications</string>
   <key>webaddress</key><string></string>
   <key>readme</key><string>Type `keel` to open the ritual menu.</string>

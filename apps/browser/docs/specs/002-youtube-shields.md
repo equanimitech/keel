@@ -1,7 +1,7 @@
 # Spec: YouTube Intervention Suite
 
 **Status**: Draft
-**Author**: Rafa + Claude
+**Author**: The operator + Claude
 **Date**: 2026-02-10
 **Depends on**: 001-modular-architecture-refactor
 

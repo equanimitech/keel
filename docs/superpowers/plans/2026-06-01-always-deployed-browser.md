@@ -180,7 +180,7 @@ Run from repo root:
 pnpm deploy:browser
 ```
 
-Expected: build exits 0 and the final lines include `Load unpacked from: /Users/rafa/Developer/equanimitech/keel/apps/browser/dist/chrome-mv3`.
+Expected: build exits 0 and the final lines include `Load unpacked from: /Users/operator/Developer/equanimitech/keel/apps/browser/dist/chrome-mv3`.
 
 - [ ] **Step 4: Confirm the build output directory exists**
 

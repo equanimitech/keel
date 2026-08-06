@@ -24,7 +24,7 @@ $attestation:
 
 ## Boundaries
 
-**JBTD:** As Rafa working a hard problem in one session, I want the wait-for-AI gap to cue a breath and catch my off-thread ideas, and the mode to fade when the stream ends, so that I stay in the stream instead of tabbing to YouTube and never leave a stale mode running. Baseline today: the gap drains silently into the browser (88% of gaps over 10min).
+**JBTD:** As the operator working a hard problem in one session, I want the wait-for-AI gap to cue a breath and catch my off-thread ideas, and the mode to fade when the stream ends, so that I stay in the stream instead of tabbing to YouTube and never leave a stale mode running. Baseline today: the gap drains silently into the browser (88% of gaps over 10min).
 
 **Out:**
 - Fixed timer / countdown / pomodoro end-time. Reintroduces the clock the tides-friction-dial decision retired; the data shows no natural fixed length (0/278 bouts near 90min).

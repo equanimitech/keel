@@ -1,6 +1,6 @@
 # Shields → sensors restart (directive, 2026-06-12)
 
-Rafa's call: **remove/disable all 11 shields** and restart the browser surface as pure observability — the shield machinery (content scripts watching video state, post-game loops, feeds) becomes *per-domain sensors*:
+The operator's call: **remove/disable all 11 shields** and restart the browser surface as pure observability — the shield machinery (content scripts watching video state, post-game loops, feeds) becomes *per-domain sensors*:
 
 - opens per day (domain session starts)
 - session durations

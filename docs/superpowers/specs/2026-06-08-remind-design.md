@@ -151,7 +151,7 @@ Mirrors the `intention` / `appetite` keel-wrapper skills.
 
 ## Reframe — ref-first (2026-06-08, post-approval) — RESCOPE BEFORE BUILDING
 
-Rafa: *"most of my reminders are just the secretariat envelopes written to docs."* This flips the
+The operator: *"most of my reminders are just the secretariat envelopes written to docs."* This flips the
 center of gravity. The dominant case is **resurfacing already-stamped envelopes**, not authoring
 free-text. Before implementing, rework the spec so:
 

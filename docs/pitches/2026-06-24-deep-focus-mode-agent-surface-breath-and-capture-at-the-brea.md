@@ -24,7 +24,7 @@ $attestation:
 
 ## Boundaries
 
-**JBTD:** As Rafa working a hard problem in one session, I want the wait-for-AI gap to cue a breath and catch my off-thread ideas, so that I stay in the stream instead of tabbing to YouTube. Baseline today: the gap drains silently into the browser (88% of gaps over 10min).
+**JBTD:** As the operator working a hard problem in one session, I want the wait-for-AI gap to cue a breath and catch my off-thread ideas, so that I stay in the stream instead of tabbing to YouTube. Baseline today: the gap drains silently into the browser (88% of gaps over 10min).
 
 **Out:**
 - Browser-tab suppression (browser surface; later slice).

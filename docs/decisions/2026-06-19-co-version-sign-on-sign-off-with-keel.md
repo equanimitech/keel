@@ -11,11 +11,11 @@ $attestation:
 # Co-version the sign-on / sign-off rituals with keel
 
 **Date:** 2026-06-19
-**Context:** `keel` (and Rafa's personal `~/.claude/skills/` ritual layer)
+**Context:** `keel` (and the operator's personal `~/.claude/skills/` ritual layer)
 
 ## Decision
 
-The `sign-on` (day-open) and `sign-off` (day-close) rituals will eventually ship **with keel** rather than living only in a user's personal skill directory — but as a **two-layer split**: keel ships the *generic ritual shape* (the open/close skeleton + the `keel signon`/`signoff` wiring + the nudge contract), while the *personal instance* (Rafa's `#data/#ux/#offer` verticals, Zenborg areas, Linear, journal paths — all Themia-specific) stays in `~/.claude/skills/` as the instantiation. Not done now; recorded as the target architecture and its trigger.
+The `sign-on` (day-open) and `sign-off` (day-close) rituals will eventually ship **with keel** rather than living only in a user's personal skill directory — but as a **two-layer split**: keel ships the *generic ritual shape* (the open/close skeleton + the `keel signon`/`signoff` wiring + the nudge contract), while the *personal instance* (the operator's `#data/#ux/#offer` verticals, Zenborg areas, Linear, journal paths — all Themia-specific) stays in `~/.claude/skills/` as the instantiation. Not done now; recorded as the target architecture and its trigger.
 
 ## Rationale
 
@@ -24,7 +24,7 @@ keel already owns half of it: the session-start hook, the persistent `⊙ sign-o
 The argument is **drift**. On 2026-06-19 the keel nudge config still pointed at `/morning` and `/weekly-review` for days after those skills were renamed/deleted (→ `sign-on`, merged into `week-review`), because the keel-side contract and the skill-side rituals version independently. Co-locating the generic ritual + the keel mechanism in one repo makes the contract change in lockstep, killing that class of bug.
 
 Alternatives rejected:
-- **Bundle Rafa's full personal sign-on into keel** — rejected: it hardcodes Themia/Zenborg/Linear specifics that no other keel user shares. keel must ship the *shape*, not one user's instantiation.
+- **Bundle the operator's full personal sign-on into keel** — rejected: it hardcodes Themia/Zenborg/Linear specifics that no other keel user shares. keel must ship the *shape*, not one user's instantiation.
 - **Keep everything in `~/.claude/skills/` forever** — rejected: guarantees recurring keel↔skill drift, and gives a second keel user no rituals out of the box.
 
 This preserves the existing invariant (keel = trigger/mechanism, skill = ritual) — the two are *co-versioned*, not collapsed.
@@ -33,5 +33,5 @@ This preserves the existing invariant (keel = trigger/mechanism, skill = ritual)
 
 - **Distribution vehicle:** keel-as-a-Claude-Code-plugin (ships skills + the hook config together).
 - **Trigger to actually do it:** the first **second keel user**, or the next time keel↔skill drift bites — whichever comes first. Not worth the plugin scaffolding at n=1.
-- When built, the generic `sign-on`/`sign-off` skeletons move into the keel repo; Rafa's personal versions become thin overrides/extensions (verticals, areas, Linear, journal).
+- When built, the generic `sign-on`/`sign-off` skeletons move into the keel repo; the operator's personal versions become thin overrides/extensions (verticals, areas, Linear, journal).
 - Pairs with the persist-until-signed-on nudge landed this session (`ritualNudge` keyed off `lastSignOnDay`, `keel signon` marker, `⊙ sign-on` HUD chip).

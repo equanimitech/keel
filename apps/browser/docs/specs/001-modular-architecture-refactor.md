@@ -1,7 +1,7 @@
 # Spec: Modular Architecture Refactor
 
 **Status**: Draft
-**Author**: Rafa + Claude
+**Author**: The operator + Claude
 **Date**: 2026-02-10
 
 ---
@@ -375,7 +375,7 @@ async function updateBadgeForTab(tabId: number, url: string): Promise<void> {
 ## Success Metrics
 
 - **Zero regression**: YouTube Shorts shield passes all existing manual test cases after refactor.
-- **Module extensibility**: A new dummy shield can be added in < 15 minutes by someone unfamiliar with the codebase (measured by Rafa doing it).
+- **Module extensibility**: A new dummy shield can be added in < 15 minutes by someone unfamiliar with the codebase (measured by the operator doing it).
 - **Code reduction**: Shared infrastructure (popup, background) does not grow linearly with shield count — adding a shield adds 0 lines to popup/main.ts and background.ts.
 
 ## Decisions (Resolved)
@@ -390,7 +390,7 @@ async function updateBadgeForTab(tabId: number, url: string): Promise<void> {
 
 ## Open Questions
 
-1. **Icon design** — What visual symbol represents Equanimi at 16px? Options: shield outline, balanced circle, lotus, simple "E" mark. → Rafa to decide.
+1. **Icon design** — What visual symbol represents Equanimi at 16px? Options: shield outline, balanced circle, lotus, simple "E" mark. → the operator to decide.
 
 2. **Should future shields show in popup before implementation?** — If chess.com and LinkedIn shields don't have content scripts yet, should their definitions appear in the registry as "coming soon"? → Product decision. Recommendation: no — only register shields that have working content scripts.
 

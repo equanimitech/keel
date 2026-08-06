@@ -38,7 +38,7 @@ Claim discipline: flow theory is the organizing narrative only. The same researc
 
 - **Simplicity:** park, skip, credits, vice, and the root daemon are cut. Less code, less concept.
 - **Updateable:** no root install means keel becomes a pure-hook plugin, one-command installable from the marketplace already scaffolded.
-- **Self-contained (no Zenborg in v1):** the tide reads keel-native signals only. The Zenborg seam (`2026-06-04-tides-zenborg-seam.md`, the Moments -> Keel edge) is deferred to a later optional integration, so the published plugin stays generic (de-Rafa) and dependency-free.
+- **Self-contained (no Zenborg in v1):** the tide reads keel-native signals only. The Zenborg seam (`2026-06-04-tides-zenborg-seam.md`, the Moments -> Keel edge) is deferred to a later optional integration, so the published plugin stays generic (de-the operator) and dependency-free.
 - **Sequencing:** decision (this doc) -> implement the agent-surface rewrite -> *then* the essay + Show HN. The repo must embody catch-and-steer before the public prose claims it; publishing the "no walls" essay against a repo that still hard-blocks would be equanimitech-washing.
 - **Off the table:** leading the launch with "the gate." keel leads with observe + tide + dial.
 - **Downstream:** the agent README (rewritten 2026-06-16) needs another pass to lead dial-not-gate; the `vice-*` files archive at a tag alongside the desktop gems.

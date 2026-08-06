@@ -21,7 +21,7 @@ re-linking in the same change and verifying liveness via `keel log status`.
 ## Consequences
 
 - Surfaces now sit uniformly in `apps/` (agent / browser / desktop) per the grammar.
-- Dev-mode deploy remains `~/.keel` symlinks (Rafa's machine); distribution is the
+- Dev-mode deploy remains `~/.keel` symlinks (the operator's machine); distribution is the
   plugin, which carries `hooks/hooks.json` with `${CLAUDE_PLUGIN_ROOT}` paths.
 - The stamped decision is otherwise unchanged; this note records only the
   schedule change of its rename clause.
