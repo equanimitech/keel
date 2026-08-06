@@ -68,9 +68,15 @@ export const areaMap = storage.defineItem<Record<string, string>>("local:policy:
 /**
  * Replace the mirror from a host policy pull.
  *
- * An empty payload is ignored rather than written: the host answering with
- * nothing (no rules dir yet, a read error, a partial deploy) must not silently
- * lift a standing block.
+ * Absent fields are left alone; explicitly-empty ones are written. The dead-host
+ * case is already covered upstream — `replacePolicy` is only ever called from a
+ * well-formed `type: "policy"` message, so an unreachable or erroring host never
+ * reaches this function at all and the previous mirror simply persists.
+ *
+ * This used to additionally ignore empty arrays. That was belt over braces, and
+ * it made a *deliberate* lift impossible: disabling the only standing rule makes
+ * the host send `standing: []`, which was then discarded, so the block held with
+ * no rule behind it and no way to see why.
  */
 export async function replacePolicy(policy: {
   readonly standing?: readonly string[];
@@ -80,10 +86,10 @@ export async function replacePolicy(policy: {
   readonly areas?: readonly AreaInfo[];
   readonly areaMap?: Readonly<Record<string, string>>;
 }): Promise<void> {
-  if (policy.standing !== undefined && policy.standing.length > 0) {
+  if (policy.standing !== undefined) {
     await standingDomains.setValue([...policy.standing]);
   }
-  if (policy.armable !== undefined && policy.armable.length > 0) {
+  if (policy.armable !== undefined) {
     await armableDomains.setValue([...policy.armable]);
   }
   // Gates are replaced wholesale including the empty case — unlike a standing

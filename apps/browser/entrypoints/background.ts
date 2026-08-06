@@ -1,8 +1,8 @@
 import { browser } from "wxt/browser";
 import { startActivityWriter } from "@/modules/activity/writer";
-import { userBlockedDomains } from "@/modules/drogues/blocklist/store";
 import { syncBlocklistRules } from "@/modules/drogues/blocklist/sync";
 import { cooldownNextLapse, cooldowns } from "@/modules/friction/cooldown/store";
+import { standingDomains } from "@/modules/friction/policy/store";
 import { armBreak } from "@/modules/friction/cooldown/arm";
 import { flushToHost } from "@/modules/relay/client";
 
@@ -39,10 +39,10 @@ export default defineBackground(() => {
   // Registered synchronously so MV3 event wakeups re-attach listeners.
   startActivityWriter();
 
-  // chrome.storage.local is the source of truth for the drogue; project
-  // it onto DNR dynamic rules on startup and on every change.
+  // ~/.keel/rules is the source of truth for the drogue, mirrored by the relay;
+  // project that mirror onto DNR dynamic rules on startup and on every change.
   void syncBlocklistRules();
-  userBlockedDomains.watch(() => void syncBlocklistRules());
+  standingDomains.watch(() => void syncBlocklistRules());
 
   // Any cooldown change re-projects the rules and re-arms the lapse alarm.
   void scheduleCooldownLapse();

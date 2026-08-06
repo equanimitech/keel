@@ -1,7 +1,8 @@
 /**
  * Sync the effective blocklist → declarativeNetRequest *dynamic* rules.
  *
- * chrome.storage.local is the source of truth; this projects it onto a single
+ * `~/.keel/rules/*.json` is the source of truth, mirrored into
+ * chrome.storage.local by the relay; this projects that mirror onto a single
  * idempotent `block` rule. Re-running replaces it, so it stays in sync after any
  * add/remove with no leftover state.
  *
@@ -17,7 +18,7 @@
  * swallowed — a silently-failing blocker is worse than no blocker.
  */
 
-import { effectiveDomains, normalizeDomain } from "./store";
+import { normalizeDomain } from "../../domains";
 import { cooldownDomains } from "../../friction/cooldown/store";
 import { standingDomains } from "../../friction/policy/store";
 
@@ -72,12 +73,18 @@ export async function syncBlocklistRules(): Promise<void> {
     return;
   }
 
-  // Standing blocks now come from ~/.keel/rules via the relay. The built-in
-  // seed is unioned in rather than replaced, so a host that is unreachable,
-  // mid-deploy, or has no rules dir yet can never silently lift a standing
-  // block. Migration removes the seed only once the pulled set is verified.
-  const declared = await standingDomains.getValue();
-  const domains = [...new Set([...(await effectiveDomains()), ...declared])];
+  // Standing blocks come from ~/.keel/rules via the relay — the single source.
+  // The build-time seed and the user-editable chrome.storage list that used to
+  // be unioned in here were removed on 2026-08-06: three sources meant a domain
+  // could be blocked from a place you weren't looking, so removing one took an
+  // edit in three files.
+  //
+  // The belt they provided is gone, and the honest statement of what replaced
+  // it: `replacePolicy` refuses to write an empty policy, so once a pull has
+  // landed the mirror persists across restarts and a dead host cannot lift a
+  // standing block. The uncovered case is a *fresh* profile that has never
+  // pulled — there, nothing is blocked until the relay first answers.
+  const domains = await standingDomains.getValue();
 
   // Cooldowns are time-bound: included only while their stamp holds. When one
   // lapses the rule is simply not re-added and the sites come back — nothing

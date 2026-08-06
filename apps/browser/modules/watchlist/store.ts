@@ -7,12 +7,13 @@
  * relay exists. Domains here get DEEP sensors (key-action completions);
  * everything else gets coarse activity-writer logging only.
  *
- * Self-authored like the voice: keel never ships entries (the drogue's
- * seed blocklist is the lone, explicitly-consented exception).
+ * Self-authored like the voice: keel never ships entries. The one standing
+ * exception is explicitly-consented and now lives in `~/.keel/rules/*.json`,
+ * not in any shipped code.
  */
 
 import { storage } from "wxt/storage";
-import { normalizeDomain } from "../drogues/blocklist/store";
+import { normalizeDomain } from "../domains";
 
 /** Observe-tier domains (normalized registrable hosts). */
 export const observeDomains = storage.defineItem<string[]>(

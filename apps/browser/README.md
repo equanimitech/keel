@@ -57,19 +57,23 @@ load-unpacked + the stable extension `key`.
 A **simple, user-owned blocker**. Each domain is a full-drag target — notch
 `block`, friction `f = 1`, **no skip** — enforced at the network layer
 (`declarativeNetRequest` dynamic rules) so the page never loads, in normal and
-incognito windows alike. Two ways to define it, mirroring "me *or* Claude":
+incognito windows alike.
 
-- **You** — the **Blocklist** tab in the manage page. Type a domain, hit Block.
-  Remove any you added. State lives in `chrome.storage.local` (local-first).
-- **Claude / code** — a gitignored seed file (`modules/drogues/blocklist/seed.local.ts`,
-  copy from `seed.local.example.ts`). Edit + rebuild. Kept out of the repo so no
-  personal domains are ever committed. The effective blocklist is `unique(seed ∪ yours)`.
+**One source: `~/.keel/rules/*.json`.** A rule carrying a `standing` cooldown
+contributes its domains; the relay mirrors them into `chrome.storage.local`, and
+`modules/drogues/blocklist/sync.ts` projects that mirror onto DNR. Nothing is
+blocked from anywhere else.
 
-**Holistic Control — by design, not by black box.** Every block is a domain
-*you or Claude chose* and can read in the list. User-added domains are removable
-in one click. Seed domains are removable too — but in code (`seed.ts` + rebuild):
-**compassionate friction**, a door you open with deliberate effort, never a
-locked one. The friction is the point; the fact that you *can* is the sovereignty.
+Until 2026-08-06 there were three sources — a gitignored build-time seed, a
+`chrome.storage` list you edited in a manage tab, and the rules file — unioned
+together. Adding a domain took one edit; *removing* one took three, in places
+you had to remember existed. The seed and the storage list are gone.
+
+**Holistic Control — by design, not by black box.** Every block is a domain you
+chose, readable in one plain JSON file you own. Removing one means editing that
+file and reloading the extension: **compassionate friction**, a door you open
+with deliberate effort, never a locked one. The friction is the point; the fact
+that you *can* is the sovereignty.
 
 ## Incognito
 
