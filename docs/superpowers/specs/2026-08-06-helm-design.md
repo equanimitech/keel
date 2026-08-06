@@ -144,16 +144,18 @@ watch `activeWatch(now, target.watches)` resolves:
 {
   "heading": {
     "text": "keel — land what's in flight",
-    "watch": "morning",
-    "startedAt": 1786000000000
+    "startedAt": 1786000000000,
+    "endsAt": 1786021200000
   }
 }
 ```
 
-`null` when no heading stands for the current watch. `startedAt` is today's
-epoch ms for that watch's configured start time (`watches.morning: "07:00"`),
-and it is what scopes drift — see §4.5. The pull mechanism, the native host and
-the relay all already exist; this is a field, not a channel.
+`null` when no heading stands. `startedAt`/`endsAt` bound the drift window
+(§4.5). For a watch they are today's epoch ms of its configured start
+(`watches.morning: "07:00"`) and of the next watch's start. The pull mechanism,
+the native host and the relay all already exist; this is a field, not a channel.
+
+**The shape is deliberately not watch-specific** — see §4.6.
 
 ### 4.4 `apps/browser` — consume it
 
@@ -195,6 +197,49 @@ unchanged — only the helm's drift window is watch-scoped.
 zero and the helm goes quiet until the floor is met again inside the new watch.
 That is correct — a new heading is a fresh commitment, not a continuation of the
 morning's ledger.
+
+## 4.6 Aimed at the calendar
+
+The 2026-08-03 kairos direction names the pivot: *the tool demands input it
+should derive*. `state.watchIntentions` is that demanded input — it only exists
+if you remember to run `keel intention`. It is the v1 source because it ships
+today at zero cost, **not because it is the right one.**
+
+```
+v1   keel intention "…"            typed     ← exists
+v2   the calendar event you're in  derived   ← EventKit sidecar, same field
+```
+
+The helm never learns which. `HelmReading.heading` is a string that arrived
+through the policy pull, so calendar ingestion is a change of *source*, not of
+consumer. Three constraints keep that true, and they are the reason for the
+shape above:
+
+1. **No `watch` field in the contract.** A watch is a fixed phase band; a
+   calendar event has arbitrary bounds. `startedAt`/`endsAt` describes both.
+   Naming the watch here would make v2 a contract change.
+2. **`endsAt` is load-bearing, not decoration.** With watches there is always a
+   heading slot, so a null heading only means "none set". With a calendar there
+   are **gaps** — and in a gap the helm must go quiet rather than inherit the
+   previous block's heading. `endsAt` is what makes a gap representable.
+3. **Only `accepted` moments may become headings.** A `tentative` moment is a
+   guess the machine made from an ingested trace. Arming friction off a guess is
+   precisely what would make the helm feel imposed rather than yours, and it
+   would put the ingestion layer's mistakes between you and your browser. The
+   accept step is the consent, and it must precede any friction.
+
+No `source` field: v1 and v2 say the same thing to the user ("you meant X"), and
+a field the copy does not read is speculative. Add it when the copy needs it.
+
+**Ordering.** This builds the consumer before the good source, deliberately.
+The helm is what makes calendar ingestion worth building — today the calendar
+direction feeds a planning surface; with the helm, an ingested event becomes the
+thing that protects the block it describes.
+
+**Known v1 limitation, stated plainly:** `intention` sets are not logged (the
+agent log carries 15 event kinds, none of them intention), so we cannot yet say
+how often a heading actually stands. Until that is measured, the helm's firing
+frequency in real use is unknown. See §7.
 
 ## 5. Invariants held
 
@@ -243,10 +288,18 @@ so the watch-roll reset in §4.5 is verified rather than assumed.
 ## 7. Scope
 
 **In:** `helm.ts` + tests, the `heading` field end to end, the one gate branch,
-the overlay copy.
+the overlay copy, and **an `intention_set` event** written when a heading is
+declared or cleared.
+
+That last one is not scope creep — it is three lines in `cmdIntention`, and
+without it the helm ships with its own trigger unobserved. The observe-first
+directive applies to the helm exactly as it applies to everything else: log the
+signal now, model it later. It is also the only way to answer "would calendar
+ingestion actually help?" with data rather than conviction.
 
 **Out, deliberately:**
 - Any semantic reading of the heading (that is the AI helm, a later layer).
+- Calendar ingestion itself (§4.6 makes it a source swap; it is its own build).
 - Reading zenborg's vault. The heading comes from keel's own state; zenborg is
   a possible future *source* of it, not a dependency. This preserves what the
   2026-06-17 decision protected — the published plugin stays dependency-free.
@@ -261,3 +314,7 @@ the overlay copy.
 2. Whether the helm should also read the *tide label* (`drifting` / `restless`)
    rather than weedy dwell alone. Deferred: dwell is the simpler signal and the
    tide's thresholds are themselves provisional. Revisit once both have baselines.
+3. When calendar ingestion lands (§4.6), whether an all-day or multi-hour event
+   should be a heading at all. A three-hour "Marseille" event is a location, not
+   an intention, and would hold a heading over blocks that deserve their own.
+   Not blocking: v1 has no calendar source.
