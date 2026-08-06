@@ -22,8 +22,8 @@ export { createActivityEvent, LEGACY_KIND_ALIASES, canonicalKind } from "./activ
 export { ROUTE_REGISTRY, normalizeRoute } from "./route.js";
 
 // ── Bouts (read-side behavioral unit; the one dwell methodology) ─
-export type { Bout } from "./bouts.js";
-export { bouts, BOUT_GAP_MS, SEGMENT_CAP_MS } from "./bouts.js";
+export type { Bout, Run } from "./bouts.js";
+export { bouts, runs, BOUT_GAP_MS, SEGMENT_CAP_MS, RUN_GAP_MS, MIN_RUN_MS } from "./bouts.js";
 
 // ── Tides (observational reading over bouts — never a protocol) ──
 export type {

@@ -47,6 +47,54 @@ export interface Bout {
   readonly longestRunMs: Duration;
 }
 
+/**
+ * A continuous stretch of attention on ONE domain.
+ *
+ * The unit a person recognises as "a thing I did". A bout is a *visit* and can
+ * span dozens of domains — one 62-minute bout on 6 Aug contained 161 switches —
+ * so rendering a bout as a line item throws away most of what happened. A run
+ * is what browser history would show if it grouped properly: fifty YouTube page
+ * loads collapse into `02:06–02:51 · 45m`.
+ *
+ * Same gating as bouts: time while unfocused or idle does not accumulate, and a
+ * single gap contributes at most `SEGMENT_CAP_MS`.
+ */
+export interface Run {
+  readonly domain: Domain;
+  readonly startTs: number;
+  readonly endTs: number;
+  /** Focus/idle-gated, segment-capped attended time. */
+  readonly dwellMs: Duration;
+}
+
+/**
+ * A gap longer than this ends a run, even on the same domain — two sittings
+ * rather than one.
+ *
+ * Matches `BOUT_GAP_MS` deliberately: a run is a bout narrowed to one domain,
+ * so they should agree about where a sitting ends. It must also be generous,
+ * because silence is the normal state of reading a page — no events fire while
+ * you read, and a tight threshold would shred one long read into nothing.
+ */
+export const RUN_GAP_MS = BOUT_GAP_MS;
+
+/**
+ * The grouping threshold, doing two jobs at once.
+ *
+ * **Under this is not a thing you did, and does not break what you were doing.**
+ *
+ * As a floor it drops a tab touched in passing. As a detour tolerance it lets a
+ * glance elsewhere be absorbed rather than shredding a session — without it a
+ * chess sitting became ten entries because he checked another tab and came
+ * back. One number for both keeps the rule explicable and makes overlapping
+ * entries impossible: anything big enough to appear is big enough to interrupt.
+ *
+ * A merged entry spans its detours while its dwell counts only the domain, so
+ * "13:29–14:11 · 34m" says both how long the sitting lasted and how much of it
+ * was actually chess.
+ */
+export const MIN_RUN_MS = 2 * 60 * 1000;
+
 /** Kinds that mark attention leaving, and returning. */
 const ATTENTION_OFF = new Set(["focus_end", "idle_start"]);
 const ATTENTION_ON = new Set(["focus_start", "idle_end"]);
@@ -185,5 +233,104 @@ export function bouts(events: readonly ActivityEvent[]): readonly Bout[] {
   if (draft !== null) {
     out.push(seal(draft));
   }
+  return out;
+}
+
+/**
+ * Derive runs — what you did, grouped the way you would describe it.
+ *
+ * Chronological, so a caller can render them as history without re-sorting.
+ * Attribution matches `bouts`: a gap is credited to the domain in flight,
+ * capped, and dropped while attention is off. The two derivations share that
+ * walk deliberately, so a run's minutes and a bout's minutes can never disagree
+ * about the same stretch of time.
+ *
+ * One threshold does two jobs, and that is the whole grouping rule:
+ * **under `MIN_RUN_MS` is not a thing you did, and does not break what you were
+ * doing.** A ten-second glance at another tab is neither an entry of its own nor
+ * a reason to split a chess session into ten.
+ */
+export function runs(
+  events: readonly ActivityEvent[],
+  gapMs: number = RUN_GAP_MS,
+  minRunMs: number = MIN_RUN_MS
+): readonly Run[] {
+  const ordered = normalize(events);
+  const out: Run[] = [];
+  let current: Domain | null = null;
+  let startTs = 0;
+  let endTs = 0;
+  let dwellMs = 0;
+  let attending = true;
+  let prevTs = 0;
+  // A run that opens after a long absence is a new sitting and must never be
+  // merged back into the previous one, however small the apparent gap looks
+  // once the segment cap has clipped it.
+  let newSitting = false;
+
+  const flush = (): void => {
+    if (current === null || dwellMs < minRunMs) {
+      // Too small to be an entry, and by the same rule too small to have
+      // interrupted anything — so it silently makes way for a merge.
+      return;
+    }
+    const last = out[out.length - 1];
+    const isDetour = last !== undefined && startTs - last.endTs < minRunMs;
+    if (!newSitting && last !== undefined && last.domain === current && isDetour) {
+      out[out.length - 1] = {
+        domain: last.domain,
+        startTs: last.startTs,
+        endTs,
+        dwellMs: createDuration(last.dwellMs + dwellMs),
+      };
+      return;
+    }
+    out.push({ domain: current, startTs, endTs, dwellMs: createDuration(dwellMs) });
+  };
+
+  for (const event of ordered) {
+    const kind = canonicalKind(event.kind);
+
+    if (current !== null) {
+      const idle = event.ts - prevTs;
+      // Credit BEFORE deciding to split. Silence on a page is time spent there;
+      // discarding it because the gap was long would lose exactly the quiet
+      // stretches that make up a long read.
+      if (attending) {
+        const elapsed = Math.min(idle, SEGMENT_CAP_MS);
+        if (elapsed > 0) {
+          dwellMs += elapsed;
+          endTs = prevTs + elapsed;
+        }
+      }
+      if (idle > gapMs) {
+        flush();
+        current = null;
+        dwellMs = 0;
+        newSitting = true;
+      }
+    }
+
+    if (ATTENTION_OFF.has(kind)) {
+      attending = false;
+    } else if (ATTENTION_ON.has(kind)) {
+      attending = true;
+    }
+
+    const domain = domainOf(event);
+    if (domain !== null && domain !== current) {
+      flush();
+      if (current !== null) {
+        // A same-sitting domain change; only a real absence starts a sitting.
+        newSitting = false;
+      }
+      current = domain;
+      startTs = event.ts;
+      endTs = event.ts;
+      dwellMs = 0;
+    }
+    prevTs = event.ts;
+  }
+  flush();
   return out;
 }
