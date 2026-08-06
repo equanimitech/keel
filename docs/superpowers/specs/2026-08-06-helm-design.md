@@ -130,10 +130,19 @@ same caveat: these are eyeballed from one user's history and should become
 personal baselines once ~21 days of data exist. A verdict produced with them is
 a hypothesis.
 
-`driftingEveryMinutes: 5` is the one number chosen on values rather than
-evidence. Rationale: yesterday's drip was 3–6 minute fragments, so 5 meets each
-fragment roughly once; 30 (the declared default) never fires inside one. If it
-reads as nagging in use, 10 is the fallback and it is a one-line change.
+`driftingEveryMinutes: 5` — **decided 2026-08-06.** Rationale: the 2026-08-05
+drip was 100 minutes in 3–6 minute fragments, so 5 meets each fragment roughly
+once, while 30 (the rule's declared default) never fires inside one. That is
+why nothing fired on the day that prompted this work.
+
+**Known ceiling — repetition trains dismissal.** At floor 5 / interval 5, a
+100-minute drift day is ~20 interstitials, and `gate/state.ts` already names
+this failure mode: a gate you swat has stopped being a gate. Deliberately not
+pre-solved, because the frequency is unmeasured until `intention_set` logging
+exists (§7). The upgrade path if it nags is **escalation rather than
+repetition** — 5, 10, 20 within a watch — so the third interruption costs more
+than the first instead of less. One line in `helm()`, and it keeps the
+`nextFiredAt` arithmetic untouched.
 
 ### 4.3 `apps/agent` — expose the heading
 
@@ -310,11 +319,10 @@ ingestion actually help?" with data rather than conviction.
 
 ## 8. Open
 
-1. `driftingEveryMinutes` — 5 (proposed) or 10. A values call; one-line change.
-2. Whether the helm should also read the *tide label* (`drifting` / `restless`)
+1. Whether the helm should also read the *tide label* (`drifting` / `restless`)
    rather than weedy dwell alone. Deferred: dwell is the simpler signal and the
    tide's thresholds are themselves provisional. Revisit once both have baselines.
-3. When calendar ingestion lands (§4.6), whether an all-day or multi-hour event
+2. When calendar ingestion lands (§4.6), whether an all-day or multi-hour event
    should be a heading at all. A three-hour "Marseille" event is a location, not
    an intention, and would hold a heading over blocks that deserve their own.
    Not blocking: v1 has no calendar source.
