@@ -5,7 +5,7 @@
 
 # %%
 import pandas as pd
-from load import load, domain_time
+from load import load, domain_time, alert_class
 
 pd.set_option("display.max_rows", 60)
 df = load()
@@ -25,17 +25,22 @@ pivot = (dt[dt.domain.isin(top)]
 pivot
 
 # %% [markdown]
-# ## YouTube share per day — is the drift trending?
+# ## Top-vice share per day — is the drift trending?
+# The vice is derived from the data (heaviest `windowed` domain by focused time),
+# never named in source — this file is committed to a public repo.
 
 # %%
+_windowed = dt[dt.domain.map(alert_class) == "windowed"]
+TOP_VICE = _windowed.groupby("domain").minutes.sum().idxmax()
 per_day = dt.groupby("focus_day").minutes.sum().rename("total")
-yt = dt[dt.domain == "youtube.com"].groupby("focus_day").minutes.sum().rename("youtube")
-share = pd.concat([yt, per_day], axis=1).fillna(0)
-share["yt_%"] = (100 * share.youtube / share.total).round(0)
+vice = dt[dt.domain == TOP_VICE].groupby("focus_day").minutes.sum().rename("vice")
+share = pd.concat([vice, per_day], axis=1).fillna(0)
+share["vice_%"] = (100 * share.vice / share.total).round(0)
 share.round(0)
 
 # %%
-ax = share["yt_%"].plot(kind="bar", figsize=(10, 3), title="YouTube % of browser focus, by focus-day")
+ax = share["vice_%"].plot(kind="bar", figsize=(10, 3),
+                          title="Top-vice % of browser focus, by focus-day")
 ax.set_ylabel("% of focused browser time")
 
 # %% [markdown]
@@ -84,9 +89,11 @@ by_watch
 # and **distinct tabs touched** (concurrency proxy — no tab-lifecycle event yet).
 
 # %%
-yt_domains = {"youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
-vids = df[(df.kind == "video_started") & (df.domain.isin(yt_domains))].copy()
-ends = df[(df.kind == "video_ended") & (df.domain.isin(yt_domains))].copy()
+# Dominant video host, derived from the log rather than named in source (public repo).
+# Isolating one host keeps the binge-run signal clean; several sites emit video_started.
+VIDEO_HOST = df[df.kind == "video_started"].domain.value_counts().idxmax()
+vids = df[(df.kind == "video_started") & (df.domain == VIDEO_HOST)].copy()
+ends = df[(df.kind == "video_ended") & (df.domain == VIDEO_HOST)].copy()
 print(f"video_started: {len(vids)} · video_ended(+seconds): {len(ends)} "
       f"· end/start ratio: {len(ends)/max(len(vids),1):.0%}")
 vids.groupby("focus_day").size().rename("starts").to_frame().join(
