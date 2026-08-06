@@ -229,6 +229,38 @@ export function loadBreakTarget() {
   return null;
 }
 
+/**
+ * Browser events at or after `sinceTs`, from the day files.
+ *
+ * The backfill source. The extension's own store was emptied on every ack for
+ * 51 days (delete-on-ack, removed 2026-08-06), so its history is gone while
+ * the host's is intact — this is how the Areas page gets a dwell number that
+ * reflects a life rather than a session.
+ *
+ * @param {number} sinceTs @returns {any[]}
+ */
+export function readBrowserEventsSince(sinceTs) {
+  const out = [];
+  let files;
+  try { files = readdirSync(LOG_DIR).filter((f) => f.endsWith(".browser.jsonl")).sort(); }
+  catch { return out; }
+  for (const f of files) {
+    // Skip whole day-files that close before the cutoff, rather than parsing them.
+    const dayEnd = new Date(`${f.slice(0, 10)}T23:59:59.999`).getTime();
+    if (Number.isFinite(dayEnd) && dayEnd < sinceTs) continue;
+    let text;
+    try { text = readFileSync(join(LOG_DIR, f), "utf8"); } catch { continue; }
+    for (const line of text.split("\n")) {
+      if (!line) continue;
+      try {
+        const e = JSON.parse(line);
+        if (e && typeof e.ts === "number" && e.ts >= sinceTs) out.push(e);
+      } catch { /* skip a torn line, never fail the backfill */ }
+    }
+  }
+  return out;
+}
+
 /** Dwell gates declared by enabled rules — what the extension needs to fire an
  * interstitial every N minutes of attended time.
  * @returns {{ruleId: string, domains: string[], everyMinutes: number, prompt: string}[]} */

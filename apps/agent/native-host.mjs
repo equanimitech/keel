@@ -3,7 +3,7 @@
 // unprivileged writer. Chrome frames messages as a uint32 little-endian length
 // prefix followed by UTF-8 JSON. Max 1 MB/message (Chrome limit).
 
-import { appendBrowserEvents, loadWatchlist, loadAreas, loadAreaMap, saveAreaMap, loadBlockDomains, loadBreakTarget, loadDwellGates, loadLedger } from "./store.mjs";
+import { appendBrowserEvents, loadWatchlist, loadAreas, loadAreaMap, saveAreaMap, loadBlockDomains, loadBreakTarget, loadDwellGates, loadLedger, readBrowserEventsSince } from "./store.mjs";
 
 const MAX_MESSAGE_BYTES = 1024 * 1024;
 
@@ -16,6 +16,12 @@ export function encodeMessage(obj) {
 }
 
 const MAX_EVENTS_PER_MESSAGE = 5000;
+// No horizon on reads. The store is the user's own log on their own disk and
+// the channel is a local pipe, so refusing a question about their own past
+// buys nothing. Responses are chunked, so a wide query costs time, not a
+// blown frame.
+/** Events per response frame. ~200 bytes each, so well inside Chrome's 1 MB. */
+const QUERY_CHUNK = 2000;
 const MAX_FIELD_BYTES = 2048;
 const MAX_EVENT_BYTES = 8192;
 const MIN_TS = 1262304000000; // 2010-01-01
@@ -32,6 +38,7 @@ const ALLOWED_KINDS = new Set([
   "focus_start", "focus_end", "idle_start", "idle_end",
   "log_pruned", "panic_pressed",
   "video_started", "video_ended", "video_paused", "video_resumed", "post_seen", "game_finished",
+  "product_seen",
 ]);
 
 function isValidEvent(e) {
@@ -57,6 +64,13 @@ export function validateInbound(msg) {
   if (typeof msg !== "object" || msg === null) return null;
   if (msg.type === "request_observe") return { type: "request_observe" };
   if (msg.type === "request_policy") return { type: "request_policy" };
+  // Read query: what happened since `since`. The store answers; no surface
+  // keeps its own history. `since` is clamped rather than trusted — an
+  // unbounded value would stream the whole log through a 1 MB channel.
+  if (msg.type === "request_events") {
+    const since = typeof msg.since === "number" && Number.isFinite(msg.since) ? msg.since : 0;
+    return { type: "request_events", since: Math.max(0, since) };
+  }
   // Area assignment from the Areas page. Both fields must be plain, bounded
   // strings; the host writes them into area-map.json, so an unchecked value
   // would end up as a key in a file every surface reads.
@@ -135,6 +149,23 @@ export function runHost(stdin = process.stdin, stdout = process.stdout) {
           areas: loadAreas(),
           areaMap: loadAreaMap(),
         });
+      } else if (msg.type === "request_events") {
+        // The store answers questions about itself. Surfaces query rather than
+        // remember, so there is exactly one history and no copy to drift.
+        // Raw events, not a computed rollup: `bouts()` is TypeScript in
+        // @keel/domain and this host is plain JS, so the caller computes and
+        // the one dwell implementation stays in one place.
+        const events = readBrowserEventsSince(msg.since);
+        for (let i = 0; i < events.length; i += QUERY_CHUNK) {
+          reply({
+            type: "events_slice",
+            events: events.slice(i, i + QUERY_CHUNK),
+            done: i + QUERY_CHUNK >= events.length,
+          });
+        }
+        if (events.length === 0) {
+          reply({ type: "events_slice", events: [], done: true });
+        }
       } else if (msg.type === "set_area") {
         // Empty areaId un-assigns, so a mistake is undoable in one gesture.
         const map = loadAreaMap();

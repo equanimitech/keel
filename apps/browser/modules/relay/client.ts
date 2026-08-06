@@ -1,10 +1,32 @@
 /**
- * Relay client — flush buffered events to the keel native host and pull the
- * observe list back. Pure helpers (chunkEvents/unacked) are unit-tested; the
- * chrome.runtime.connectNative wiring is integration. Fail-open throughout.
+ * Relay client — the extension's channel to the keel store.
+ *
+ * ── One store, queried ──────────────────────────────────────────────────
+ *
+ * `~/.keel/log/` is the store. The tray writes to it, the agent writes to it,
+ * and this extension writes to it through the native host. Nobody keeps a
+ * second copy.
+ *
+ * That means the extension's IndexedDB is an **outbox**, not a history: events
+ * land there, get shipped, and are deleted on ack. When a surface needs to know
+ * what happened, it *asks* (`queryEvents`) rather than remembering.
+ *
+ * This is ActivityWatch's shape — one server owning storage, clients querying —
+ * arrived at after briefly building the alternative. A watermark plus a
+ * duplicated local history was added and removed on 2026-08-06: both were
+ * workarounds for the absence of a read path, and the read path is three
+ * messages.
+ *
+ * Deliberately native messaging rather than aw-server's localhost HTTP: an
+ * extension calling `http://localhost` needs a host permission, and shipping
+ * zero `host_permissions` is keel's structural guarantee that it cannot read
+ * your browsing. Same architecture, none of the exposure.
+ *
+ * Fail-open throughout. Pure helpers (chunkEvents/unacked) are unit-tested; the
+ * connectNative wiring is integration.
  */
-import { storage } from "wxt/storage";
-import { readEventsSince } from "../activity/log";
+import type { ActivityEvent } from "@keel/domain";
+import { readAllEvents, deleteEventsByIds } from "../activity/log";
 import { replaceObserveDomains } from "../watchlist/store";
 import { replacePolicy } from "../friction/policy/store";
 import { chunkEvents } from "./batch";
@@ -13,23 +35,8 @@ export { chunkEvents, unacked } from "./batch";
 
 const HOST_NAME = "tech.equanimi.keel";
 const MAX_BATCH = 1000;
-
-/**
- * High-water mark: events at or before this ts have been acked by the host.
- *
- * Replaces delete-on-ack. The relay used to empty the local store as it
- * shipped, which left the Areas page computing dwell over a few minutes of
- * buffer while labelling it "all time". Now it ships a *copy* and remembers
- * how far it got.
- *
- * Advanced only on ack, so a connection that dies mid-flush simply resends.
- * The host appends without deduping, but `bouts()` dedupes by event id on the
- * read side, so a resent event costs a line in the log and never a wrong
- * number.
- */
-export const flushedThrough = storage.defineItem<number>("local:relay:flushedThrough", {
-  fallback: 0,
-});
+/** A query streams in frames; give the host room to finish before hanging up. */
+const QUERY_TIMEOUT_MS = 15_000;
 
 /**
  * Assign a domain to an area (empty `areaId` un-assigns).
@@ -55,7 +62,72 @@ export async function setArea(domain: string, areaId: string): Promise<boolean> 
   }
 }
 
-/** Connect once, ship everything since the watermark, pull observe + policy. */
+/**
+ * Ask the store what happened since `since`.
+ *
+ * Returns raw events; the caller runs `bouts()` over them. The host streams
+ * rather than computing because `@keel/domain` is TypeScript and the agent
+ * surface is plain JS — so the one dwell implementation stays in one place,
+ * and the cost is a few MB over a channel that is already local.
+ *
+ * Nothing is persisted. The page computes, renders, and discards.
+ */
+export async function queryEvents(since: number): Promise<readonly ActivityEvent[]> {
+  let port: ReturnType<typeof browser.runtime.connectNative>;
+  try {
+    port = browser.runtime.connectNative(HOST_NAME);
+  } catch (e) {
+    console.warn("[keel relay] connectNative threw:", e);
+    return [];
+  }
+
+  return new Promise((resolve) => {
+    const collected: ActivityEvent[] = [];
+    let settled = false;
+    const finish = (): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      try {
+        port.disconnect();
+      } catch {
+        // already gone
+      }
+      resolve(collected);
+    };
+
+    // A host that dies mid-stream yields what arrived, never a hung page.
+    const timer = setTimeout(finish, QUERY_TIMEOUT_MS);
+
+    port.onDisconnect.addListener(() => {
+      clearTimeout(timer);
+      finish();
+    });
+    port.onMessage.addListener((raw: unknown) => {
+      const msg = raw as { type?: string; events?: ActivityEvent[]; done?: boolean };
+      if (msg.type !== "events_slice") {
+        return;
+      }
+      if (Array.isArray(msg.events)) {
+        collected.push(...msg.events);
+      }
+      if (msg.done === true) {
+        clearTimeout(timer);
+        finish();
+      }
+    });
+
+    try {
+      port.postMessage({ type: "request_events", since });
+    } catch {
+      clearTimeout(timer);
+      finish();
+    }
+  });
+}
+
+/** Connect once, ship the outbox (ack-prune), pull observe + policy. */
 export async function flushToHost(): Promise<void> {
   let port: ReturnType<typeof browser.runtime.connectNative>;
   try {
@@ -64,18 +136,6 @@ export async function flushToHost(): Promise<void> {
     console.warn("[keel relay] connectNative threw:", e); // host not installed — stay on the export stopgap
     return;
   }
-  // Read before wiring the ack listener — it closes over `highWater`.
-  const since = await flushedThrough.getValue();
-  // `readEventsSince` is inclusive, so step past the last acked event rather
-  // than resending it on every flush forever.
-  const events = await readEventsSince(since === 0 ? 0 : since + 1);
-  let highWater = since;
-  for (const event of events) {
-    if (event.ts > highWater) {
-      highWater = event.ts;
-    }
-  }
-
   try {
     // Surface a failed handshake instead of failing silently. connectNative
     // returns a port even when the host is unreachable; the failure only shows
@@ -91,22 +151,17 @@ export async function flushToHost(): Promise<void> {
         domains?: string[];
         standing?: string[];
         armable?: string[];
-        areas?: never;
-        areaMap?: never;
       };
-      // An ack advances the watermark instead of deleting. The relay ships a
-      // COPY; the local store is what the Areas page computes dwell over, and
-      // deleting on ack left it reading minutes of buffer while labelling it
-      // "all time". Bounded by the retention guard (writer.ts, ~100 days).
-      if (msg.type === "ack" && msg.ids) {
-        console.debug("[keel relay] host acked", msg.ids.length, "events");
-        void flushedThrough.setValue(highWater);
-      }
+      // Delete on ack: the outbox has done its job once the store has the
+      // event. Keeping a second copy here is what produced a page that
+      // reported minutes of buffer as if it were history.
+      if (msg.type === "ack" && msg.ids) void deleteEventsByIds(msg.ids);
       else if (msg.type === "observe" && msg.domains) void replaceObserveDomains(msg.domains);
       else if (msg.type === "policy") void replacePolicy(msg);
       else if (msg.type === "area_set") void flushToHost(); // re-pull so every surface agrees
     });
-    console.debug("[keel relay] flushing", events.length, "new events to", HOST_NAME);
+    const events = await readAllEvents();
+    console.debug("[keel relay] flushing", events.length, "buffered events to", HOST_NAME);
     for (const batch of chunkEvents(events, MAX_BATCH)) {
       port.postMessage({ type: "events", events: batch });
     }
