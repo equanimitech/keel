@@ -136,21 +136,52 @@ export function loadBlockDomains() {
 // archived there, because that is where the garden is tended. keel never
 // writes this file; a second writer is how the list forks.
 //
+// Since 2026-08-06 zenborg's vault root IS `$KAIROS_HOME`, so this file is the
+// vault's own `areas.json` rather than a copy of it. The previous arrangement
+// seeded a copy here and went stale twelve minutes later; the seeder is gone
+// and there is nothing left to re-run. Dev builds of zenborg write
+// `~/.kairos-dev`, so point `KAIROS_HOME` there to follow them.
+//
 // keel's own domain→area map stays keel's business, and stays local.
 export const KAIROS_DIR = process.env.KAIROS_HOME || join(homedir(), ".kairos");
 export const AREAS_PATH = join(KAIROS_DIR, "areas.json");
-const LEGACY_AREAS_PATH = join(KEEL_DIR, "areas.json");
 export const AREA_MAP_PATH = join(KEEL_DIR, "area-map.json");
 
-/** Areas from the kernel. Falls back to keel's pre-kairos copy so an
- * un-migrated machine keeps working, and fails soft to `[]` — an instrument
- * must stay usable for someone who has never set areas up.
- * @returns {{id: string, name: string, emoji: string, tags: string[]}[]} */
+/** Areas from the kernel — live, ordered, without the archived ones.
+ *
+ * The vault keys collections by id. A plain array is still accepted because
+ * that is the shape the pre-migration seed wrote, and a machine that has not
+ * upgraded zenborg yet may still have one sitting there.
+ *
+ * Archived areas are filtered HERE rather than at the writer. Zenborg keeps
+ * them so a log entry naming a retired area can still resolve to a name; each
+ * reader then decides whether it cares. Friction does not.
+ *
+ * No `attitude` here, on purpose. It looks like the vault's best friction
+ * signal — BEGINNING and RETURNING want protection, BEING wants none — but it
+ * lives on *habits*, not areas: 0 of 20 areas carry one against 80 of 126
+ * habits (measured 2026-08-06). Friction that wants to read attitude needs the
+ * habits collection, or the moment that references a habit. It cannot come
+ * from here, and a field that is always "" would only imply otherwise.
+ *
+ * Fails soft to `[]`: keel stays usable for someone who never set areas up.
+ * @returns {{id: string, name: string, emoji: string, color: string, tags: string[], order: number}[]} */
 export function loadAreas() {
-  for (const path of [AREAS_PATH, LEGACY_AREAS_PATH]) {
-    try { return JSON.parse(readFileSync(path, "utf8")); } catch { /* next */ }
-  }
-  return [];
+  /** @type {any} */
+  let raw;
+  try { raw = JSON.parse(readFileSync(AREAS_PATH, "utf8")); } catch { return []; }
+  const list = Array.isArray(raw) ? raw : Object.values(raw ?? {});
+  return list
+    .filter((a) => a && a.id && a.name && a.isArchived !== true)
+    .map((a) => ({
+      id: a.id,
+      name: a.name,
+      emoji: a.emoji ?? "",
+      color: a.color ?? "",
+      tags: a.tags ?? [],
+      order: typeof a.order === "number" ? a.order : 0,
+    }))
+    .sort((x, y) => x.order - y.order || x.name.localeCompare(y.name));
 }
 
 /** Domain (or domain/path) → areaId.
@@ -163,34 +194,6 @@ export function loadAreaMap() {
 export function saveAreaMap(map) {
   if (!existsSync(KEEL_DIR)) mkdirSync(KEEL_DIR, { recursive: true });
   writeJsonAtomic(AREA_MAP_PATH, map);
-}
-
-/**
- * Seed the kairos kernel from a zenborg vault.
- *
- * A migration step, not a steady state. The end state is zenborg writing
- * `$KAIROS_HOME/areas.json` directly; until that lands, the vault is still the
- * true source and this re-seeds the kernel from it. Areas created in zenborg
- * will not reach readers until this runs again — the one live gap in the
- * migration (kairos/kernel/areas.md).
- *
- * Archived areas are dropped rather than flagged, per the contract: a reader
- * should never have to know an area was retired.
- *
- * @param {string} vaultDir @returns {number} count seeded
- */
-export function seedAreasFromZenborg(vaultDir = join(homedir(), ".zenborg")) {
-  /** @type {any} */
-  let raw;
-  try { raw = JSON.parse(readFileSync(join(vaultDir, "areas.json"), "utf8")); } catch { return 0; }
-  // The vault keys collections by id; tolerate both that and a plain array.
-  const list = Array.isArray(raw) ? raw : Object.values(raw);
-  const areas = list
-    .filter((a) => a && a.id && a.name && a.isArchived !== true)
-    .map((a) => ({ id: a.id, name: a.name, emoji: a.emoji ?? "", color: a.color ?? "", tags: a.tags ?? [] }));
-  if (!existsSync(KAIROS_DIR)) mkdirSync(KAIROS_DIR, { recursive: true });
-  writeJsonAtomic(AREAS_PATH, areas);
-  return areas.length;
 }
 
 /** Resolve a rule's areas to the domains currently sitting in them, unioned
