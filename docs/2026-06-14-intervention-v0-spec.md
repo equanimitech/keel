@@ -6,7 +6,7 @@
 
 keel's first **interventions**, run as a **single-subject experiment**. Not "shields" (dead lexicon). An intervention = **mechanism (BCT) × delivery (trigger) × surface**. That 3-space is also the experiment's factor space.
 
-The bet: AI-wait-gap micro-interventions + cue-removal, measured on Rafa's own data (no models, no 21-day gate — academic/heuristic prior now, personalize later). Drift is **binge-shaped** (youtube/shorts: 92% of views in runs of 5+), so the job is to break the chain.
+The bet: AI-wait-gap micro-interventions + cue-removal, measured on the operator's own log (no models, no 21-day gate — academic/heuristic prior now, personalize later). Drift is **binge-shaped** — on the pilot corpus the large majority of short-form video views fell in runs, rather than arriving as isolated one-offs — so the job is to break the chain.
 
 ## Reuse, don't rebuild
 
