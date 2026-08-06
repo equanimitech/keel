@@ -101,7 +101,8 @@ vids.groupby("focus_day").size().rename("starts").to_frame().join(
 
 # %% [markdown]
 # ### Binge runs — consecutive starts with < gap_min between them
-# Tests the v0-spec claim ("92% of shorts in runs of 5+"). A run breaks on a gap.
+# Tests the v0-spec claim that short-form views are binge-shaped: most arrive in
+# runs rather than as isolated one-offs. A run breaks on a gap.
 
 # %%
 def runs(start_ts, gap_min=3):
