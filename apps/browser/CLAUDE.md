@@ -35,7 +35,11 @@ apps/browser/
 │   │   ├── adapters.ts              # Site-specific probes as DATA — the only place a domain may appear
 │   │   └── send.ts                  # Content-script channel
 │   ├── watchlist/                   # observe-tier mirror (chrome.storage)
-│   ├── friction/cooldown/           # state.ts (pure) + store.ts (chrome) + arm.ts (the one gesture)
+│   ├── friction/
+│   │   ├── cooldown/                # state.ts (pure) + store.ts (chrome) + arm.ts (the one gesture)
+│   │   ├── gate/                    # dwell gate: state.ts + decide.ts (pure) + overlay.ts + arm.ts
+│   │   ├── policy/                  # store.ts — the friction policy, areas read from ~/.kairos
+│   │   └── areas/                   # scope.ts + days.ts — which areas a rule applies to, when
 │   └── drogues/blocklist/           # Commitment device (seed + user, DNR) — the survivor
 ```
 

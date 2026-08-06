@@ -11,7 +11,9 @@ keel/
 │   ├── browser/          # Chrome extension (WXT) — activity writer + per-domain sensors
 │   └── tray/             # macOS menubar-only app (Tauri, no windows) — desktop activity-log writer; ships as "keel"
 ├── packages/
-│   └── domain/           # Shared domain types (@keel/domain)
+│   ├── domain/           # Shared domain types (@keel/domain)
+│   ├── ui/               # Shared design system — tokens + shadcn/ui (@keel/ui)
+│   └── keel-alfred/      # Alfred workflow — global launcher for the ritual system
 └── package.json          # Workspace scripts
 ```
 
@@ -55,6 +57,38 @@ Rules:
 
 Dependencies flow inward: Domain -> Application -> Infrastructure -> UI.
 
-- **`packages/domain`**: the ActivityEvent log substrate + value objects + the event-taxonomy contract (`packages/domain/docs/event-taxonomy.md`). The intervention layer was retired 2026-06-12 (see `docs/decisions/`) — it returns as a separate module (P5) built on personal baselines.
-- **`apps/browser`**: activity writer (coarse events) + watchlist-gated per-domain sensors (key-action completions) + the blocklist drogue (commitment device — the retirement's lone survivor)
+- **`packages/domain`**: the ActivityEvent log substrate (`activity.ts`) + the read-side derivations built on it — `bouts.ts` (bouts, runs), `tide.ts` (what your attention is actually doing), `areas.ts`, `route.ts` — plus `rules.ts`, the 7 primitive contracts (`docs/primitive-contracts.md`), and the event-taxonomy contract (`packages/domain/docs/event-taxonomy.md`).
+- **`apps/browser`**: activity writer (coarse events) + watchlist-gated per-domain sensors (key-action completions) + `modules/friction/` (the gate, the cooldown, the policy) + the blocklist drogue (commitment device)
 - **`apps/tray`**: macOS menubar app (Tauri) — the desktop activity-log writer. (The frozen `apps/desktop` compass was removed 2026-06-13; archived at tag `desktop-archive-2026-06-13`, reusable gems mapped in `docs/decisions/2026-06-13-remove-desktop-preserve-compass-gems.md`.)
+
+## Interventions: retired, then returned
+
+Two dates, and conflating them is the fastest way to misread this repo.
+
+- **2026-06-12** — the shield / signal / budget layer was retired
+  (`docs/decisions/2026-06-12-retire-the-intervention-layer-….md`). keel became
+  observability-first: accumulate raw signal, model later. The blocklist drogue
+  survived as a commitment device.
+- **2026-08-05** — interventions returned as the **friction interpreter**
+  (`apps/browser/modules/friction/`), built on `RuleSpec` and the accumulated
+  baselines. Not the old shield layer: rules are data, the gate is one actuator,
+  and the whole thing is scoped by area.
+
+The load-bearing invariant, enforced in `@keel/domain` types rather than at
+runtime: **a tide (ambient observation) may arm a `gate`; it may never arm a
+`cooldown`.** `AmbientRule.primitives` is `Exclude<PrimitiveSpec, CooldownSpec>`,
+so an imposed lock cannot be constructed. Locks are self-invoked only.
+
+## kairos — the shared kernel
+
+keel is one instrument of **kairos**, not a standalone product. Some state is
+owned by the kernel, not by keel, and is read from `$KAIROS_HOME` (default
+`~/.kairos`):
+
+- **areas** — `~/.kairos/areas.json`, defined in zenborg, read by both the agent
+  surface (`apps/agent/store.mjs`) and the browser (`entrypoints/manage`,
+  `modules/friction/policy`). Contract + schema live in the kairos repo at
+  `kernel/areas.md`. keel never writes them.
+
+`docs/superpowers/specs/2026-08-06-helm-design.md` is the current statement of
+how keel's parts (heading, tide, helm, gate) compose inside kairos.

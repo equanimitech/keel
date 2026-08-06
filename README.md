@@ -14,11 +14,19 @@ keel is named by a capability × surface grammar — one core, many edges:
 
 ## Shared domain (`packages/domain`)
 
-Pure TypeScript: the `ActivityEvent` log substrate, immutable value objects, and the event-taxonomy contract the surfaces write against. No runtime dependencies, no fp-ts, no framework — types and pure functions only.
+Pure TypeScript: the `ActivityEvent` log substrate, the read-side derivations built on it (bouts and runs, the tide, areas, routes), the `RuleSpec` primitives the friction layer executes, and the event-taxonomy contract the surfaces write against. No runtime dependencies, no fp-ts, no framework — types and pure functions only.
+
+## kairos
+
+keel is one instrument of **kairos**, not a standalone product: keel reads what your attention *did*, zenborg holds what you *meant*. Some state belongs to the kernel rather than to keel — **areas** are defined in zenborg and read from `~/.kairos/areas.json` (override with `KAIROS_HOME`). keel never writes them. `docs/superpowers/specs/2026-08-06-helm-design.md` describes how the pieces compose.
 
 ## What changed
 
-The shield / signal / budget **intervention** layer was retired on 2026-06-12 (see `docs/decisions/`). keel is now **observability-first**: it accumulates raw attention signal now; interventions return as a separate module (P5) built on personal baselines. The blocklist drogue — a commitment device — is the retirement's lone survivor. The frozen macOS compass app (`apps/desktop`) was removed on 2026-06-13 — archived at tag `desktop-archive-2026-06-13`, with its reusable domain gems (drift detection, the BCT/PDP intervention model) mapped in `docs/decisions/`.
+The shield / signal / budget **intervention** layer was retired on 2026-06-12 (see `docs/decisions/`), and keel became observability-first: accumulate raw attention signal, model later. The blocklist drogue — a commitment device — was the retirement's lone survivor.
+
+Interventions came back on 2026-08-05, rebuilt on that accumulated signal, as the **friction interpreter** (`apps/browser/modules/friction/`). Rules are data (`RuleSpec`, see `docs/primitive-contracts.md`), the dwell gate is the one actuator, and everything is scoped by area. The invariant that makes it safe is a type, not a runtime check: ambient observation may arm a *gate*, never a *cooldown* — locks are self-invoked only.
+
+The frozen macOS compass app (`apps/desktop`) was removed on 2026-06-13 — archived at tag `desktop-archive-2026-06-13`, with its reusable domain gems (drift detection, the BCT/PDP intervention model) mapped in `docs/decisions/`. Docs describing the retired shield layer live in `docs/archive/`.
 
 ## Architecture
 
@@ -37,9 +45,10 @@ keel/
 │   ├── browser/   # Chrome extension (WXT) — activity writer + sensors + drogue
 │   └── tray/      # macOS menubar activity-log writer (Tauri)
 ├── packages/
-│   ├── domain/    # ActivityEvent substrate + event-taxonomy contract (@keel/domain)
-│   └── ui/        # Shared design system — tokens + shadcn/ui (@keel/ui)
-└── package.json   # Workspace scripts
+│   ├── domain/       # ActivityEvent substrate + event-taxonomy contract (@keel/domain)
+│   ├── ui/           # Shared design system — tokens + shadcn/ui (@keel/ui)
+│   └── keel-alfred/  # Alfred workflow — global launcher for the ritual system
+└── package.json      # Workspace scripts
 ```
 
 ## Getting started
