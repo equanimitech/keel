@@ -55,15 +55,12 @@ export default defineConfig({
     //     request, no host access — the alternative (a third-party favicon
     //     service) would ship every domain you visit to someone else, which is
     //     the one thing this manifest exists to prevent.
-    //   • history is the LARGEST permission here: read access to every URL ever
-    //     visited. It exists so the Areas page can show a real inventory of
-    //     sites to sort, including everything from before keel was installed —
-    //     keel's own log only knows what it has observed. What makes it
-    //     acceptable is that a URL never leaves the reader: every result is
-    //     reduced to a bare host inside modules/friction/areas/history.ts, and
-    //     only hosts are returned, stored or logged. Same rule as the writer:
-    //     domains only, never full URLs. Read-only; keel never deletes history.
-    permissions: ["storage", "tabs", "activeTab", "declarativeNetRequest", "idle", "alarms", "nativeMessaging", "favicon", "history"],
+    //   • `history` was added and REMOVED on 2026-08-06. It fed an all-time
+    //     visit count beside each domain; the history view replaced that with
+    //     runs from keel's own log, so the permission had nothing left to
+    //     justify it. An unused permission on a manifest that calls itself the
+    //     privacy statement is worse than a missing feature.
+    permissions: ["storage", "tabs", "activeTab", "declarativeNetRequest", "idle", "alarms", "nativeMessaging", "favicon"],
     // A keyboard path to the cooldown, so reaching for the lock costs less
     // than reaching for the temptation. No popup to open, no menu to find.
     commands: {

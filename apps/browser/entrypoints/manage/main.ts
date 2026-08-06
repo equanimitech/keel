@@ -1,76 +1,167 @@
 /**
- * Areas page — sort your own history into the parts of your life.
+ * Areas — your history, grouped the way you would describe it.
  *
- * Replaces the Watchlist/Blocklist tabs (2026-08-06). Those asked you to type
- * domains into a list; this shows you where your attention actually went and
- * asks only where each site belongs. The work is the same, but the page brings
- * the evidence instead of a blank field.
+ * A rewrite of the ranked list (2026-08-06). The list answered "which domains
+ * do I have", which is a sorting question, while every time it was opened the
+ * question actually being asked was "what did I do" — and an aggregate with no
+ * *when* cannot answer that. So: browser history, better grouped.
  *
- * Ranked by attended dwell so the biggest pulls come first — an alphabetical
- * list makes you find the important ones yourself.
+ * Better grouped means `runs()` rather than page loads. Fifty YouTube
+ * navigations become `19:09–21:10 · 1h 4m`, and a glance at another tab neither
+ * earns its own row nor shreds the session it interrupted.
  *
- * Assignments are written through the native host into `~/.keel/area-map.json`,
- * the same file the tray and MCP read. The extension holds a mirror, never the
- * source.
+ * Sorting did not go away, it became contextual: every row carries the area
+ * picker, so you assign a site while looking at the evening you spent on it.
+ * That is a better prompt than a list of 137 domains with no memory attached.
+ *
+ * The store answers; this page keeps nothing. `queryEvents` reads
+ * `~/.keel/log`, which the tray and agent also write to — one history, no copy
+ * to drift.
  */
 
-import { bouts } from "@keel/domain";
+import { runs } from "@keel/domain";
 import { toJsonl, exportFileName } from "@/modules/activity/events";
-import { readAllEvents, readEventsSince } from "@/modules/activity/log";
+import { readAllEvents } from "@/modules/activity/log";
 import { areaMap, areas, type AreaInfo } from "@/modules/friction/policy/store";
-import { setArea } from "@/modules/relay/client";
-import { visitsByDomain, type VisitInventory } from "@/modules/friction/areas/history";
+import { queryEvents, setArea } from "@/modules/relay/client";
 import {
+  breakdown,
+  byDay,
+  byWeek,
+  clock,
+  dayLabel,
   dwellLabel,
-  partition,
-  rollup,
-  visitsLabel,
-  type DomainRow,
-} from "@/modules/friction/areas/rollup";
+  weekLabel,
+  type AreaSlice,
+  type DayGroup,
+  type WeekGroup,
+} from "@/modules/friction/areas/days";
+import {
+  DEFAULT_SCOPE,
+  narrower,
+  scopeById,
+  scopeSince,
+  wider,
+  type Scope,
+} from "@/modules/friction/areas/scope";
+import { storage } from "wxt/storage";
 import "./style.css";
 
 const root = document.getElementById("areas-root");
 
-/**
- * How far back dwell is reported.
- *
- * Must stay inside the local retention guard (MAX_LOG_EVENTS ≈ 100 days at
- * current rates) or the page would claim a window the store cannot cover —
- * which is the failure this page was rebuilt to remove.
- */
-const DWELL_WINDOW_DAYS = 30;
-const DWELL_WINDOW_MS = DWELL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+/** The chosen scope, so the page opens where you left it. */
+const scopePref = storage.defineItem<string>("local:areas:scope", { fallback: DEFAULT_SCOPE });
 
 /**
- * Chromium's own favicon cache. No network request, no host permission.
- *
- * `/_favicon/` is a browser-provided path rather than a bundled asset, so WXT's
- * `PublicPath` union — derived from files in the output — cannot include it.
- * The cast is the only way to reach it.
+ * Which groups are open. Keyed `w:<ts>` / `d:<ts>` because a Monday's day-start
+ * and its week-start are the same instant, and collapsing them would fold a
+ * week whenever its Monday was clicked.
  */
+const expanded = new Set<string>();
+
+function toggle(key: string): void {
+  if (expanded.has(key)) {
+    expanded.delete(key);
+  } else {
+    expanded.add(key);
+  }
+  void render();
+}
+
+/**
+ * A folded group's shape, in area colour.
+ *
+ * A total says how long you were online; the colours say which life it was.
+ * Area colour is the one sanctioned channel in the design grammar, so a stacked
+ * bar carries the summary with no legend and no second number — and two folded
+ * rows compare at a glance instead of by arithmetic.
+ */
+function summaryBar(slices: readonly AreaSlice[], fill = 1): HTMLElement {
+  const outer = document.createElement("span");
+  outer.className = "summary-track";
+  const bar = document.createElement("span");
+  bar.className = "summary-bar";
+  // Width relative to the busiest group in view, so magnitude is visible at a
+  // glance. Proportion alone made a twenty-minute day and a twelve-hour day
+  // draw identical bars — the shape was right and the scale was a lie.
+  bar.style.width = `${Math.max(fill * 100, 1).toFixed(1)}%`;
+  for (const slice of slices) {
+    // Below this a segment is a sliver nobody can read or hover.
+    if (slice.share < 0.02) {
+      continue;
+    }
+    const seg = document.createElement("span");
+    seg.className = slice.color === "" ? "summary-seg is-unsorted" : "summary-seg";
+    seg.style.width = `${(slice.share * 100).toFixed(1)}%`;
+    if (slice.color !== "") {
+      seg.style.background = slice.color;
+    }
+    seg.title = `${slice.name} · ${dwellLabel(slice.dwellMs)}`;
+    bar.appendChild(seg);
+  }
+  outer.appendChild(bar);
+  return outer;
+}
+
+/**
+ * Per-area totals for a group, at whatever zoom it sits.
+ *
+ * The bar shows shape; this names it. Together they answer "which life was
+ * this week" without expanding anything — the rollup a scope-level summary
+ * exists to give.
+ */
+function rollupLine(slices: readonly AreaSlice[]): HTMLElement {
+  const line = document.createElement("div");
+  line.className = "group-rollup";
+  const parts: string[] = [];
+  for (const slice of slices) {
+    if (slice.share < 0.02) {
+      continue;
+    }
+    parts.push(`${slice.name} ${dwellLabel(slice.dwellMs)}`);
+  }
+  line.textContent = parts.join("  ·  ");
+  return line;
+}
+
+/** A collapsible header: label, colour summary, total. */
+function groupHead(
+  label: string,
+  slices: readonly AreaSlice[],
+  dwellMs: number,
+  open: boolean,
+  level: "week" | "day",
+  fill: number,
+  onToggle: () => void
+): HTMLElement {
+  const head = document.createElement("button");
+  head.className = `group-head is-${level}${open ? " is-open" : ""}`;
+  head.type = "button";
+  head.setAttribute("aria-expanded", String(open));
+
+  const name = document.createElement("span");
+  name.className = "group-label";
+  name.textContent = label;
+
+  const total = document.createElement("span");
+  total.className = "group-total";
+  total.textContent = dwellLabel(dwellMs);
+
+  head.append(name, summaryBar(slices, fill), total);
+  head.addEventListener("click", onToggle);
+
+  const wrap = document.createElement("div");
+  wrap.className = "group-head-wrap";
+  wrap.append(head, rollupLine(slices));
+  return wrap;
+}
+
+/** Chromium's own favicon cache. No network request, no host permission. */
 function faviconUrl(domain: string): string {
   const url = new URL(browser.runtime.getURL("/_favicon/" as never));
   url.searchParams.set("pageUrl", `https://${domain}`);
   url.searchParams.set("size", "32");
   return url.toString();
-}
-
-/**
- * Attended ms per domain over the dwell window, via the shared derivation.
- *
- * Bounded by `DWELL_WINDOW_MS` so the number matches the label it is shown
- * under. It previously read the whole store and was displayed unlabelled,
- * which invited being read as all-time — and the store had been emptied by the
- * relay, so it was neither.
- */
-async function dwellByDomain(now: number = Date.now()): Promise<Record<string, number>> {
-  const out: Record<string, number> = {};
-  for (const bout of bouts(await readEventsSince(now - DWELL_WINDOW_MS))) {
-    for (const [domain, ms] of bout.byDomain) {
-      out[domain] = (out[domain] ?? 0) + ms;
-    }
-  }
-  return out;
 }
 
 function areaOption(area: AreaInfo): HTMLOptionElement {
@@ -80,73 +171,188 @@ function areaOption(area: AreaInfo): HTMLOptionElement {
   return option;
 }
 
-function buildRow(
-  row: DomainRow,
+/** One thing you did: when, how long, where, and which part of your life. */
+function runRow(
+  start: number,
+  end: number,
+  dwellMs: number,
+  domain: string,
   allAreas: readonly AreaInfo[],
-  onAssign: (key: string, areaId: string) => void,
-  keyOverride?: string
+  map: Readonly<Record<string, string>>,
+  onAssign: (domain: string, areaId: string) => void
 ): HTMLElement {
-  const key = keyOverride ?? row.domain;
   const li = document.createElement("li");
-  li.className = "area-row";
+  li.className = "run-row";
+
+  const area = allAreas.find((a) => a.id === map[domain]);
+  // The area's colour, and the only colour on the page — a viewer must be able
+  // to name which area anything coloured belongs to (kairos/kernel/areas.md).
+  if (area?.color) {
+    li.style.borderLeftColor = area.color;
+    li.classList.add("has-area");
+  }
+
+  const time = document.createElement("span");
+  time.className = "run-time";
+  time.textContent = `${clock(start)}–${clock(end)}`;
+
+  const dwell = document.createElement("span");
+  dwell.className = "run-dwell";
+  dwell.textContent = dwellLabel(dwellMs);
+  // The span can exceed the dwell: a merged sitting covers its detours while
+  // its time counts only this domain. Both facts stay available.
+  const spanMin = Math.round((end - start) / 60_000);
+  const dwellMin = Math.round(dwellMs / 60_000);
+  dwell.title =
+    spanMin > dwellMin
+      ? `${dwellMin}m here, across a ${spanMin}m stretch that included short detours`
+      : `${dwellMin}m here`;
 
   const icon = document.createElement("img");
-  icon.className = "area-row-icon";
-  icon.src = faviconUrl(row.domain);
+  icon.className = "run-icon";
+  icon.src = faviconUrl(domain);
   icon.alt = "";
   icon.width = 16;
   icon.height = 16;
-  // A missing favicon is normal (never visited in this profile, or no icon).
   icon.addEventListener("error", () => icon.classList.add("is-blank"));
 
   const name = document.createElement("span");
-  name.className = "area-row-name";
-  name.textContent = key;
-
-  // Two numbers, two windows, each stated. Neither is readable without its
-  // window: "38m" of what period was the whole complaint.
-  const stats = document.createElement("span");
-  stats.className = "area-row-stats";
-
-  const visits = document.createElement("span");
-  visits.className = "area-row-visits";
-  if (row.visits > 0) {
-    visits.textContent = visitsLabel(row.visits);
-    visits.title = "All-time visits, from browser history";
-  }
-
-  const dwell = document.createElement("span");
-  if (row.hasActivity) {
-    dwell.className = "area-row-dwell";
-    dwell.textContent = dwellLabel(row.dwellMs);
-    dwell.title = `Attended time in the last ${DWELL_WINDOW_DAYS} days, measured by keel`;
-  } else {
-    // Absence, not a zero. A "0m" implies a measurement was taken and came
-    // back empty; this domain simply has no activity in the window.
-    dwell.className = "area-row-dwell is-quiet";
-    dwell.textContent = "no recent activity";
-    dwell.title = `Nothing in the last ${DWELL_WINDOW_DAYS} days`;
-  }
-
-  stats.append(visits, dwell);
+  name.className = "run-name";
+  name.textContent = domain;
 
   const select = document.createElement("select");
-  select.className = "area-row-select";
+  select.className = "run-select";
   const none = document.createElement("option");
   none.value = "";
   none.textContent = "—";
   select.appendChild(none);
-  for (const area of allAreas) {
-    select.appendChild(areaOption(area));
+  for (const a of allAreas) {
+    select.appendChild(areaOption(a));
   }
-  select.value = row.areaId ?? "";
-  select.addEventListener("change", () => onAssign(key, select.value));
+  select.value = map[domain] ?? "";
+  select.addEventListener("change", () => onAssign(domain, select.value));
 
-  li.append(icon, name, stats, select);
-  if (!row.hasActivity) {
-    li.classList.add("is-inventory");
-  }
+  li.append(time, dwell, icon, name, select);
   return li;
+}
+
+interface Ctx {
+  readonly scope: Scope;
+  readonly allAreas: readonly AreaInfo[];
+  readonly map: Readonly<Record<string, string>>;
+  readonly onAssign: (domain: string, areaId: string) => void;
+}
+
+function daySection(group: DayGroup, ctx: Ctx, forceOpen: boolean, peak: number): HTMLElement {
+  const wrap = document.createElement("section");
+  wrap.className = "day-section";
+  const key = `d:${group.startOfDay}`;
+  const open = forceOpen || expanded.has(key);
+
+  wrap.appendChild(
+    groupHead(
+      dayLabel(group.startOfDay),
+      breakdown(group.runs, ctx.map, ctx.allAreas),
+      group.dwellMs,
+      open,
+      "day",
+      peak > 0 ? group.dwellMs / peak : 0,
+      () => toggle(key)
+    )
+  );
+
+  if (open) {
+    const ul = document.createElement("ul");
+    ul.className = "run-list";
+    for (const r of group.runs) {
+      ul.appendChild(
+        runRow(r.startTs, r.endTs, r.dwellMs, r.domain, ctx.allAreas, ctx.map, ctx.onAssign)
+      );
+    }
+    wrap.appendChild(ul);
+  }
+  return wrap;
+}
+
+function weekSection(group: WeekGroup, ctx: Ctx, peak: number): HTMLElement {
+  const wrap = document.createElement("section");
+  wrap.className = "week-section";
+  const key = `w:${group.startOfWeek}`;
+  const open = expanded.has(key);
+
+  const runs = group.days.flatMap((d) => [...d.runs]);
+  wrap.appendChild(
+    groupHead(
+      weekLabel(group.startOfWeek),
+      breakdown(runs, ctx.map, ctx.allAreas),
+      group.dwellMs,
+      open,
+      "week",
+      peak > 0 ? group.dwellMs / peak : 0,
+      () => toggle(key)
+    )
+  );
+
+  if (open) {
+    const inner = document.createElement("div");
+    inner.className = "week-days";
+    const dayPeak = Math.max(...group.days.map((d) => d.dwellMs), 1);
+    for (const day of group.days) {
+      inner.appendChild(daySection(day, ctx, false, dayPeak));
+    }
+    wrap.appendChild(inner);
+  }
+  return wrap;
+}
+
+/**
+ * Zoom, not tabs.
+ *
+ * One axis with a step either way, because that is what the control does: the
+ * same life at a coarser or finer grain. Three labelled tabs implied three
+ * unrelated views; `−  this week  +` says there is one view and you are
+ * standing at a distance from it.
+ */
+function zoomControl(current: Scope): HTMLElement {
+  const wrap = document.createElement("div");
+  wrap.className = "zoom-control";
+
+  const step = (target: Scope | null, glyph: string, title: string): HTMLElement => {
+    const btn = document.createElement("button");
+    btn.className = "zoom-btn";
+    btn.type = "button";
+    btn.textContent = glyph;
+    btn.title = title;
+    btn.disabled = target === null;
+    if (target !== null) {
+      btn.addEventListener("click", () => {
+        expanded.clear();
+        void scopePref.setValue(target.id).then(() => render());
+      });
+    }
+    return btn;
+  };
+
+  const label = document.createElement("span");
+  label.className = "zoom-label";
+  label.textContent = current.label;
+
+  // Out widens the window (less detail); in narrows it (more).
+  wrap.append(
+    step(wider(current), "−", "Zoom out"),
+    label,
+    step(narrower(current), "+", "Zoom in")
+  );
+  return wrap;
+}
+
+/** Everything on this page came off this machine and stays on it. */
+function localNote(): HTMLElement {
+  const p = document.createElement("p");
+  p.className = "local-note";
+  p.textContent =
+    "Read from your own log on this machine. Nothing here is uploaded, synced, or shared.";
+  return p;
 }
 
 async function render(): Promise<void> {
@@ -155,12 +361,15 @@ async function render(): Promise<void> {
   }
   root.replaceChildren();
 
-  const [allAreas, map, dwell, inventory] = await Promise.all([
+  const scope = scopeById(await scopePref.getValue());
+  const [allAreas, map, events] = await Promise.all([
     areas.getValue(),
     areaMap.getValue(),
-    dwellByDomain(),
-    visitsByDomain(),
+    queryEvents(scopeSince(scope, Date.now())),
   ]);
+
+  root.appendChild(zoomControl(scope));
+  root.appendChild(localNote());
 
   if (allAreas.length === 0) {
     const empty = document.createElement("p");
@@ -171,124 +380,50 @@ async function render(): Promise<void> {
     return;
   }
 
-  root.appendChild(legend(inventory));
+  const days = byDay(runs(events));
+  if (days.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "areas-empty";
+    empty.textContent =
+      scope.id === "day" ? "Nothing yet today." : `Nothing recorded in ${scope.phrase}.`;
+    root.appendChild(empty);
+    return;
+  }
 
-  const rows = rollup(dwell, map, inventory.counts);
-  const { assigned, unsorted } = partition(rows);
-
-  // Optimistic: update the mirror immediately so the list responds, and let the
-  // host's reply reconcile. A dropdown that waits on a round-trip feels broken.
-  const onAssign = (key: string, areaId: string): void => {
+  // Optimistic: update the mirror so the row responds, then reconcile with the
+  // host. A picker that waits on a round-trip feels broken.
+  const onAssign = (domain: string, areaId: string): void => {
     void (async () => {
       const current = await areaMap.getValue();
       const next = { ...current };
       if (areaId === "") {
-        delete next[key];
+        delete next[domain];
       } else {
-        next[key] = areaId;
+        next[domain] = areaId;
       }
       await areaMap.setValue(next);
-      await setArea(key, areaId);
+      await setArea(domain, areaId);
       await render();
     })();
   };
 
-  for (const area of allAreas) {
-    const list = assigned.get(area.id);
-    if (list === undefined || list.length === 0) {
-      continue;
+  const ctx: Ctx = { scope, allAreas, map, onAssign };
+
+  // The zoom decides the unit: a day of runs, a week of days, a month of weeks.
+  // Each level folds into a colour summary, so widening the scope trades detail
+  // for shape rather than producing a longer list.
+  if (scope.id === "month" || scope.id === "all") {
+    const weeks = byWeek(days);
+    const peak = Math.max(...weeks.map((w) => w.dwellMs), 1);
+    for (const week of weeks) {
+      root.appendChild(weekSection(week, ctx, peak));
     }
-    root.appendChild(
-      section(`${area.emoji} ${area.name}`.trim(), `${list.length} sites`, list, allAreas, onAssign, false, area.color)
-    );
-  }
-
-  if (unsorted.length > 0) {
-    root.appendChild(
-      section("Unsorted", `${unsorted.length} sites`, unsorted, allAreas, onAssign, true)
-    );
-  }
-}
-
-/**
- * States what the two columns mean, once, at the top.
- *
- * The page's original fault was an unlabelled number. Per-row tooltips help
- * on hover; this makes the windows legible on a scan, which is what an
- * Operate surface needs.
- */
-function legend(inventory: VisitInventory): HTMLElement {
-  const p = document.createElement("p");
-  p.className = "areas-legend";
-  p.textContent = inventory.available
-    ? `Visits are all-time, from browser history. Time is attended time in the last ${DWELL_WINDOW_DAYS} days, measured by keel.`
-    : `Time is attended time in the last ${DWELL_WINDOW_DAYS} days, measured by keel. Browser history is unavailable, so all-time visits are not shown.`;
-
-  if (inventory.truncated) {
-    // Never let a capped list read as a complete one.
-    const warn = document.createElement("span");
-    warn.className = "areas-legend-warn";
-    warn.textContent = " Showing the most recent slice of history — older sites may be missing.";
-    p.appendChild(warn);
-  }
-  return p;
-}
-
-function section(
-  title: string,
-  count: string,
-  rows: readonly DomainRow[],
-  allAreas: readonly AreaInfo[],
-  onAssign: (key: string, areaId: string) => void,
-  isUnsorted = false,
-  color?: string
-): HTMLElement {
-  const wrap = document.createElement("section");
-  wrap.className = isUnsorted ? "area-section is-unsorted" : "area-section";
-
-  const head = document.createElement("div");
-  head.className = "area-section-head";
-  const h2 = document.createElement("h2");
-  // The area's own colour, and the only colour on the page. A viewer must be
-  // able to name which area anything coloured belongs to (areas.md).
-  if (color !== undefined && color !== "") {
-    const dot = document.createElement("span");
-    dot.className = "area-dot";
-    dot.style.background = color;
-    h2.appendChild(dot);
-  }
-  h2.appendChild(document.createTextNode(title));
-  const badge = document.createElement("span");
-  badge.className = "area-section-count";
-  badge.textContent = count;
-  head.append(h2, badge);
-
-  const ul = document.createElement("ul");
-  ul.className = "area-list";
-  for (const row of rows) {
-    ul.appendChild(buildRow(row, allAreas, onAssign));
-    // A path that disagrees with its host is shown nested — the split case.
-    for (const path of row.paths) {
-      const nested = buildRow(
-        {
-          ...row,
-          dwellMs: path.dwellMs,
-          visits: 0, // visits are per-host; a path has no separate all-time count
-          hasActivity: path.dwellMs > 0,
-          areaId: path.areaId,
-          paths: [],
-        },
-        allAreas,
-        onAssign,
-        path.key
-      );
-      nested.classList.add("is-path");
-      ul.appendChild(nested);
+  } else {
+    const peak = Math.max(...days.map((d) => d.dwellMs), 1);
+    for (const group of days) {
+      root.appendChild(daySection(group, ctx, scope.id === "day", peak));
     }
   }
-
-  wrap.append(head, ul);
-  return wrap;
 }
 
 // ── Activity log export (local download only — a Blob URL, no network) ──
