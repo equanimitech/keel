@@ -31,10 +31,37 @@ file you own and never leave this machine.
 as the agent surface. Fail-open: any write error drops the event; the logger
 never crashes or blocks.
 
+## Staying up
+
+Install the LaunchAgent — without it the writer dies at reboot and stays dead:
+
+```bash
+cp apps/tray/com.equanimitech.keel.tray.plist ~/Library/LaunchAgents/
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.equanimitech.keel.tray.plist
+```
+
+`launchctl bootout gui/$(id -u)/com.equanimitech.keel.tray` to remove it.
+
+**Why it is not optional.** Over 2026-06-12..08-07 the writer was dark for
+1096h of a 1342h span, and **670h of that was time the Mac was in use** — the
+browser and agent surfaces logged through 55 separate gaps the tray missed,
+the longest running 90.3h. No crash reports, no `writer_paused` events: it was
+simply never relaunched.
+
+That is not a cosmetic gap. Uptime that tracks *when the writer happened to be
+running* silently biases every hour-of-day derivation on the read side, and
+makes a daily rhythm unidentifiable no matter how good the model is. Coverage
+is a precondition for the analysis, not a nice-to-have.
+
 ## How to pause
 
 Menubar icon → "Pause logging" (toggles to "Resume logging"). Pausing and
 resuming are themselves logged. "Open data folder" opens `~/.keel/log/`.
+
+This is the off-switch, not quitting: pausing keeps the process alive and
+leaves `writer_paused` in the log, so a deliberate stop is recorded as data
+rather than becoming an indistinguishable hole. The LaunchAgent restarts a
+quit process for exactly that reason.
 
 ## How to verify
 
