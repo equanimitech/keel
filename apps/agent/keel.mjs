@@ -303,9 +303,6 @@ function cmdHud(now) {
     parts.push(`keel 🌙 winding down · ${mins}m to night`);
   }
 
-  // Day-open pending — persists until `/sign-on` runs this waking-day.
-  if (state.lastSignOnDay !== focusDayKey(now)) parts.push("⊙ sign-on");
-
   // Always-on indicators: the current watch's intention (when set) + the session granularity.
   const inten = activeIntention(state, now, target.watches);
   if (inten) parts.push(`◎ ${inten.length > 24 ? inten.slice(0, 23) + "…" : inten}`);
