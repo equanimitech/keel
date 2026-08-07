@@ -151,6 +151,7 @@ export async function flushToHost(): Promise<void> {
         domains?: string[];
         standing?: string[];
         armable?: string[];
+        momentFriction?: { allow: string[]; deny: string[] } | null;
       };
       // Delete on ack: the outbox has done its job once the store has the
       // event. Keeping a second copy here is what produced a page that

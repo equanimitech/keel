@@ -38,6 +38,7 @@ import {
 import { observeDomains } from "../watchlist/store";
 import { dwellGates } from "../friction/policy/store";
 import { evaluateGate, gateFor } from "../friction/gate/decide";
+import { evaluateMomentGate } from "../friction/gate/moment";
 import type { Runtime } from "wxt/browser";
 
 type WriteFn = (
@@ -223,10 +224,17 @@ export function startActivityWriter(): void {
       if (domain === null) {
         return Promise.resolve({ fire: false });
       }
-      return dwellGates
-        .getValue()
-        .then((gates) => {
-          const gate = gateFor(gates, domain);
+      // The running moment gets asked first, and only ever *adds* a gate: it
+      // fires when this host is outside what the moment is about, and returns
+      // null otherwise. Null falls through to the area's own dwell gates —
+      // which is also what a moment with nothing declared does, so the area
+      // policy remains the floor rather than being replaced by one.
+      return evaluateMomentGate(domain)
+        .then(async (moment) => {
+          if (moment !== null) {
+            return moment;
+          }
+          const gate = gateFor(await dwellGates.getValue(), domain);
           return gate === null ? { fire: false } : evaluateGate(gate);
         })
         .catch(() => ({ fire: false }));

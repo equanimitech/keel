@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { dwellMinutes, nextFiredAt, shouldGate } from "./state.js";
+import {
+  dwellMinutes,
+  MOMENT_GATE_REASK_MS,
+  nextFiredAt,
+  reaskDue,
+  shouldGate,
+} from "./state.js";
 
 const MIN = 60_000;
 const TEN = 10 * MIN;
@@ -57,5 +63,29 @@ describe("dwellMinutes", () => {
   it("floors rather than overstating what was watched", () => {
     expect(dwellMinutes(9.9 * MIN)).toBe(9);
     expect(dwellMinutes(TEN)).toBe(10);
+  });
+});
+
+describe("reaskDue", () => {
+  it("asks the first time it sees a host", () => {
+    expect(reaskDue(0, Date.now())).toBe(true);
+  });
+
+  it("stays quiet across the polls that follow a firing", () => {
+    // armDwellGate polls every 30s. Without this, one out-of-scope tab would be
+    // asked the same question thirty times in a quarter of an hour.
+    const firedAt = 1_000_000;
+    expect(reaskDue(firedAt, firedAt + 30_000)).toBe(false);
+    expect(reaskDue(firedAt, firedAt + 14 * MIN)).toBe(false);
+  });
+
+  it("asks again once the interval has passed", () => {
+    const firedAt = 1_000_000;
+    expect(reaskDue(firedAt, firedAt + MOMENT_GATE_REASK_MS)).toBe(true);
+    expect(reaskDue(firedAt, firedAt + 60 * MIN)).toBe(true);
+  });
+
+  it("keeps the beat coarse enough not to become a nag", () => {
+    expect(MOMENT_GATE_REASK_MS).toBeGreaterThanOrEqual(10 * MIN);
   });
 });

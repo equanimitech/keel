@@ -53,3 +53,27 @@ export function nextFiredAt(reading: GateReading): number {
 export function dwellMinutes(dwellMs: number): number {
   return Math.floor(dwellMs / 60_000);
 }
+
+// ── Moment gate cadence ─────────────────────────────────────────
+//
+// The moment gate has no dwell to count against — it fires because a host is
+// outside what the moment is about, which is true from the first paint. So its
+// state is wall-clock: when did we last ask about this host.
+
+/**
+ * How long before the moment gate asks about the same host again.
+ *
+ * A gate that fires on every 30s poll is a nag, and a nag gets dismissed
+ * without being read — the one failure mode a stopping cue cannot survive.
+ * Asking again a quarter of an hour later keeps it a beat.
+ */
+export const MOMENT_GATE_REASK_MS = 15 * 60_000;
+
+/** Is the moment gate allowed to ask about this host again? */
+export function reaskDue(
+  lastFiredAtMs: number,
+  now: number,
+  everyMs: number = MOMENT_GATE_REASK_MS
+): boolean {
+  return now - lastFiredAtMs >= everyMs;
+}

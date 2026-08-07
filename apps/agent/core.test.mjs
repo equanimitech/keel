@@ -7,6 +7,7 @@ import {
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
   resolveActiveMoment, todaysMoments, intentionLine, focusDayKey,
   setFocus, claimFocus, focusBlocks, focusLine,
+  seedAllowFromRefs, momentFrictionAt,
 } from "./core.mjs";
 
 // Watches with night@01:00 + a 90m lead reproduce the old 23:30→01:00 ramp, 01:00→05:00 lock.
@@ -200,4 +201,104 @@ test("renderOrient: silent by day, voiced otherwise", () => {
   const locked = renderOrient(t, "lockdown", { ...emptyState(), lastPromptTs: now }, now);
   assert.match(locked, /paused until 09:00/);   // reset = morning watch (default 09:00)
   assert.match(locked, /Coarsest only/); // lockdown granularity nudge
+});
+
+// ── Moment friction (refs → allow list) ─────────────────────────
+
+test("seedAllowFromRefs: hostnames only, normalized, deduped", () => {
+  assert.deepEqual(
+    seedAllowFromRefs([
+      "https://linear.app/acme/issue/ABC-1",
+      "https://linear.app/acme/issue/ABC-2",   // same host → one entry
+      "https://WWW.GitHub.com/acme/keel/pull/9",
+    ]),
+    ["linear.app", "github.com"],
+  );
+});
+
+test("seedAllowFromRefs: skips what it cannot parse, never throws, never widens", () => {
+  // A malformed ref is dropped. It must not throw, and it must not turn the
+  // list into "everything" — the surviving refs still scope the moment.
+  assert.deepEqual(
+    seedAllowFromRefs(["not a url", "https://linear.app/x", "", "example.com"]),
+    ["linear.app"],
+  );
+  // Nothing parseable at all → an empty list, which reads as "ask the area".
+  assert.deepEqual(seedAllowFromRefs(["not a url", 42, null]), []);
+  assert.deepEqual(seedAllowFromRefs(undefined), []);
+  assert.deepEqual(seedAllowFromRefs("https://linear.app"), []);  // not an array
+});
+
+test("seedAllowFromRefs: a hostless scheme contributes nothing", () => {
+  // things:///show?id=… is a legitimate ref and a legitimate no-op here:
+  // there is no host to allow, so it scopes nothing.
+  assert.deepEqual(seedAllowFromRefs(["things:///show?id=abc"]), []);
+  assert.deepEqual(
+    seedAllowFromRefs(["things:///show?id=abc", "https://linear.app/x"]),
+    ["linear.app"],
+  );
+});
+
+// Fixtures below carry the real vault shape: a moment sits on a (day, phase)
+// band with an order — there is no startTime and no durationMin on any of the
+// 901 moments in the vault, and never has been. Which moment is active comes
+// from the pointer, not from the clock.
+const momentBoard = {
+  build: {
+    id: "build", name: "ship refs", areaId: "a1", day: "2026-08-07",
+    phase: "AFTERNOON", order: 0, emoji: "🛠️", tags: [],
+    refs: ["https://linear.app/acme/issue/ABC-1", "nonsense"],
+  },
+  sit: {
+    id: "sit", name: "sit", areaId: "a2", day: "2026-08-07",
+    phase: "MORNING", order: 1, emoji: "🧘", tags: [],
+  },
+  yesterday: {
+    id: "yesterday", name: "old thing", areaId: "a1", day: "2026-08-06",
+    phase: "EVENING", order: 0, emoji: "", tags: [],
+  },
+};
+const boardAreas = [{ id: "a1", name: "Themia" }, { id: "a2", name: "Body" }];
+
+test("momentFrictionAt: allow seeded from the active moment's refs, deny carried empty", () => {
+  const noon = Date.parse("2026-08-07T12:00:00");
+  assert.deepEqual(
+    momentFrictionAt({ momentId: "build" }, momentBoard, boardAreas, noon),
+    { allow: ["linear.app"], deny: [] },
+  );
+});
+
+test("momentFrictionAt: an active moment without refs imposes nothing", () => {
+  // The meditation case, and today's normal case — no moment in the vault
+  // carries refs yet. Two empty lists, which `momentVerdict` reads as "ask the
+  // area": not a block, and not permission for everything.
+  const noon = Date.parse("2026-08-07T12:00:00");
+  assert.deepEqual(
+    momentFrictionAt({ momentId: "sit" }, momentBoard, boardAreas, noon),
+    { allow: [], deny: [] },
+  );
+});
+
+test("momentFrictionAt: nothing active → null, by every route there is", () => {
+  const noon = Date.parse("2026-08-07T12:00:00");
+  const at = (pointer, moments = momentBoard) =>
+    momentFrictionAt(pointer, moments, boardAreas, noon);
+  assert.equal(at(null), null);                      // no pointer file on disk (the normal case today)
+  assert.equal(at({}), null);                        // garbled pointer
+  assert.equal(at({ momentId: "gone" }), null);      // id the board no longer holds
+  assert.equal(at({ momentId: "yesterday" }), null); // retired at the 04:00 roll
+  assert.equal(at({ momentId: "build" }, null), null); // unreadable moments.json
+});
+
+test("momentFrictionAt: the moment stays active across the whole day, not for an hour", () => {
+  // A moment has no clock window. Once it is the pointer's, it holds until
+  // zenborg names another — an AFTERNOON moment is still yours at 23:00.
+  const late = Date.parse("2026-08-07T23:00:00");
+  assert.deepEqual(
+    momentFrictionAt({ momentId: "build" }, momentBoard, boardAreas, late),
+    { allow: ["linear.app"], deny: [] },
+  );
+  // And it retires itself past the 04:00 roll rather than needing a clearing pass.
+  const tomorrow = Date.parse("2026-08-08T09:00:00");
+  assert.equal(momentFrictionAt({ momentId: "build" }, momentBoard, boardAreas, tomorrow), null);
 });

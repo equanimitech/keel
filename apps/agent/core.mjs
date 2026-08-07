@@ -414,6 +414,70 @@ export function signOnBlocks(gateOn, dayNotes, tool, now) {
   return !(note && typeof note.title === "string" && note.title.trim() !== "");
 }
 
+// ── Moment friction (kairos-owned moments, keel-owned friction) ──
+//
+// keel reads `$KAIROS_HOME/moments.json` exactly as it reads areas.json: one
+// way, never writing. A moment carries `refs` — the URLs it points at, and
+// nothing more; zenborg neither knows nor cares that friction exists.
+//
+// Turning refs into an allow list is keel's derivation, done HERE rather than
+// in the extension so that only hostnames ever cross the relay. A ref is a
+// full URL (issue number, doc path); the privacy posture says domains and
+// timings, so the URL dies on this side of the wire.
+
+/** @typedef {{ allow: string[], deny: string[] }} MomentFriction */
+
+/** Hostnames from a list of ref URLs. Pure and total: a ref that does not
+ * parse is skipped, never thrown on, and never widened into "everything".
+ *
+ * Normalized like `createDomain` in @keel/domain (lowercase, leading `www.`
+ * dropped) so the extension compares like with like.
+ * @param {unknown} refs @returns {string[]} */
+export function seedAllowFromRefs(refs) {
+  const out = new Set();
+  if (!Array.isArray(refs)) return [];
+  for (const ref of refs) {
+    if (typeof ref !== "string") continue;
+    let host = "";
+    try { host = new URL(ref.trim()).hostname; } catch { continue; } // malformed → skip
+    if (!host) continue; // schemes like things:/// carry no host — nothing to allow
+    out.add(host.toLowerCase().replace(/^www\./, ""));
+  }
+  return [...out];
+}
+
+/** The friction the active moment scopes: two named lists of hostnames.
+ *
+ * "Which moment is active" is not re-decided here. It is `resolveActiveMoment`
+ * above — the same pointer the intention line reads, with the same waking-day
+ * rule (a pointer stops resolving at the 04:00 roll). A second answer to "what
+ * am I doing right now" would let the HUD and the gate disagree, which is the
+ * exact drift that collapsed keel's own intention strings into this pointer.
+ *
+ * A moment carries no clock window — it sits on a (day, phase) band — so the
+ * moment is active until zenborg says otherwise, not until an hour passes.
+ *
+ * `allow` is seeded from that moment's refs. `deny` has no source in the vault —
+ * nothing there expresses "blocked during this moment" — so it rides empty
+ * today. It is carried honestly rather than omitted: the interpreter already
+ * enforces it (deny wins over allow), so an authored source can land later
+ * without reshaping the wire.
+ *
+ * Refs themselves are new (zenborg, 2026-08-07), so until moments start
+ * carrying them this returns an empty pair for an active moment — which reads
+ * as "ask the area", the same as no moment at all. Dormant, not broken.
+ *
+ * Null when nothing is active. Never a hard block: an empty pair means the
+ * area's own policy answers, which is what `momentVerdict` does with it.
+ * @param {any} pointer @param {Record<string, any>|null|undefined} moments
+ * @param {{id: string, name: string}[]|null|undefined} areas @param {number} now
+ * @returns {MomentFriction|null} */
+export function momentFrictionAt(pointer, moments, areas, now) {
+  const active = resolveActiveMoment(pointer, moments, areas, now);
+  if (active === null) return null;
+  return { allow: seedAllowFromRefs(moments?.[active.id]?.refs), deny: [] };
+}
+
 /** The per-turn deep-focus line. In the owner (or not-yet-claimed) session: a breath on the
  * AI gap. In a blocked session: a note that the stream is held elsewhere. Empty unless focus
  * is on. Scoreless by design (a streak would be engagement, not equanimity); the capture

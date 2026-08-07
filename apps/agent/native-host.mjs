@@ -3,7 +3,7 @@
 // unprivileged writer. Chrome frames messages as a uint32 little-endian length
 // prefix followed by UTF-8 JSON. Max 1 MB/message (Chrome limit).
 
-import { appendBrowserEvents, loadWatchlist, loadAreas, loadAreaMap, saveAreaMap, loadBlockDomains, loadBreakTarget, loadDwellGates, loadLedger, readBrowserEventsSince } from "./store.mjs";
+import { appendBrowserEvents, loadWatchlist, loadAreas, loadAreaMap, saveAreaMap, loadBlockDomains, loadBreakTarget, loadDwellGates, loadLedger, loadMomentFriction, readBrowserEventsSince } from "./store.mjs";
 
 const MAX_MESSAGE_BYTES = 1024 * 1024;
 
@@ -148,6 +148,10 @@ export function runHost(stdin = process.stdin, stdout = process.stdout) {
           break: loadBreakTarget(),
           areas: loadAreas(),
           areaMap: loadAreaMap(),
+          // The running moment's allow/deny pair, as hostnames. Null when no
+          // moment is running — which the extension reads as "ask the area",
+          // never as "allow everything".
+          momentFriction: loadMomentFriction(),
         });
       } else if (msg.type === "request_events") {
         // The store answers questions about itself. Surfaces query rather than

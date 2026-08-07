@@ -67,6 +67,10 @@ export type {
 } from "./rules.js";
 export { createRule, createRuleId, warningsFor, cooldownDuration } from "./rules.js";
 
+// ── Moment friction (allow / deny, scoped to the active moment) ──
+export type { MomentFriction, MomentVerdict } from "./moment-friction.js";
+export { momentVerdict, NO_MOMENT_FRICTION } from "./moment-friction.js";
+
 // ── Value Objects ───────────────────────────────────────────────
 export type { Duration, Domain, AppName } from "./value-objects.js";
 export {

@@ -14,6 +14,7 @@
  * seed instead of replacing it.
  */
 
+import type { MomentFriction } from "@keel/domain";
 import { storage } from "wxt/storage";
 import type { DwellGate } from "../gate/decide";
 
@@ -31,6 +32,19 @@ export const armableDomains = storage.defineItem<string[]>("local:policy:armable
 export const dwellGates = storage.defineItem<DwellGate[]>("local:policy:gates", {
   fallback: [],
 });
+
+/**
+ * The allow/deny hostname pair scoped by the moment running right now, or null
+ * when none is. `allow` is seeded host-side from the moment's refs; `deny` is
+ * carried whether or not anything fills it yet.
+ *
+ * Hostnames only ever arrive here — the refs they came from are full URLs and
+ * stay on the host side of the relay.
+ */
+export const momentFriction = storage.defineItem<MomentFriction | null>(
+  "local:policy:momentFriction",
+  { fallback: null }
+);
 
 /** What "take a break" means right now: the areas it pauses, and their domains. */
 export interface BreakTarget {
@@ -85,6 +99,7 @@ export async function replacePolicy(policy: {
   readonly break?: BreakTarget | null;
   readonly areas?: readonly AreaInfo[];
   readonly areaMap?: Readonly<Record<string, string>>;
+  readonly momentFriction?: MomentFriction | null;
 }): Promise<void> {
   if (policy.standing !== undefined) {
     await standingDomains.setValue([...policy.standing]);
@@ -109,5 +124,12 @@ export async function replacePolicy(policy: {
   }
   if (policy.areaMap !== undefined) {
     await areaMap.setValue({ ...policy.areaMap });
+  }
+  // Replaced wholesale including null: a moment that has ended must stop
+  // scoping anything. Same reasoning as gates — a boundary that no longer
+  // exists should not keep speaking. Failing toward the area's own policy is
+  // the right direction here; it is neither "block" nor "allow everything".
+  if (policy.momentFriction !== undefined) {
+    await momentFriction.setValue(policy.momentFriction);
   }
 }

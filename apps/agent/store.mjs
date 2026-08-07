@@ -4,7 +4,7 @@
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, renameSync, statSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { mergeTarget, mergeWatchlist, mergeDesktopSensors, emptyState, logFileName, browserLogFileName, eventLine } from "./core.mjs";
+import { mergeTarget, mergeWatchlist, mergeDesktopSensors, emptyState, logFileName, browserLogFileName, eventLine, momentFrictionAt } from "./core.mjs";
 
 export const KEEL_DIR = join(homedir(), ".keel");
 export const TARGET_ID = "claude-code";
@@ -227,6 +227,19 @@ export function loadAreas() {
       order: typeof a.order === "number" ? a.order : 0,
     }))
     .sort((x, y) => x.order - y.order || x.name.localeCompare(y.name));
+}
+
+/** The allow/deny hostname pair scoped by the active moment, or null when none is.
+ *
+ * Reads the same three files the intention does, and resolves them through the
+ * same `resolveActiveMoment` — there is one answer to "what am I doing right
+ * now" and the HUD and the gate must not be able to disagree about it.
+ *
+ * Hostnames, never the refs themselves: a ref is a full URL and the privacy
+ * posture stops URLs at this boundary. What crosses the relay is domains.
+ * @param {number} [now] @returns {{allow: string[], deny: string[]}|null} */
+export function loadMomentFriction(now = Date.now()) {
+  return momentFrictionAt(loadActiveMomentPointer(), loadMoments(), loadAreas(), now);
 }
 
 /** Domain (or domain/path) → areaId.
