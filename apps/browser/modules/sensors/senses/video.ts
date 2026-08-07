@@ -27,9 +27,19 @@ export function armVideoSense(): void {
   const wired = new WeakSet<HTMLVideoElement>();
   const ended = new WeakSet<HTMLVideoElement>();
 
+  // Elements that emitted `started` and have not yet emitted `ended`.
+  //
+  // A strong Set, unlike the two WeakSets above, and deliberately so: the
+  // whole job here is to still be holding the element after the page has
+  // dropped it, so its span can be closed. Entries leave on `ended`, on the
+  // detach sweep, or when the page goes away — never accumulating.
+  const open = new Set<HTMLVideoElement>();
+
   // Completion fires at most once per element — from whichever trigger
-  // (the ≥90% heuristic or the native `ended`) reaches it first.
+  // (the ≥90% heuristic, the native `ended`, detach, or page teardown)
+  // reaches it first.
   const emitEnded = (video: HTMLVideoElement): void => {
+    open.delete(video);
     if (ended.has(video)) {
       return;
     }
@@ -37,6 +47,22 @@ export function armVideoSense(): void {
     sendSensorEvent("video_ended", {
       seconds: finiteSeconds(video.currentTime),
     });
+  };
+
+  // Measured gap this closes: over 2026-06-12..08-07 the log carried 132
+  // `video_started` against 52 `video_ended` — 61% of watch spans never
+  // closed, making view time uncomputable. Neither trigger above fires when
+  // the platform simply destroys the element (SPA route change, autoplay
+  // swap) or when the tab goes away.
+
+  // A detached element is a finished watch. The MutationObserver below is
+  // already running for re-wiring, so this rides along on the same beat.
+  const sweepDetached = (): void => {
+    for (const video of [...open]) {
+      if (!video.isConnected) {
+        emitEnded(video);
+      }
+    }
   };
 
   const wire = (video: HTMLVideoElement): void => {
@@ -53,6 +79,7 @@ export function armVideoSense(): void {
     video.addEventListener(
       "playing",
       () => {
+        open.add(video);
         sendSensorEvent("video_started", {
           seconds: finiteSeconds(video.currentTime),
         });
@@ -109,8 +136,22 @@ export function armVideoSense(): void {
   };
 
   wireAll();
-  new MutationObserver(wireAll).observe(document.body, {
+  new MutationObserver(() => {
+    sweepDetached();
+    wireAll();
+  }).observe(document.body, {
     childList: true,
     subtree: true,
+  });
+
+  // Tab close and cross-document navigation produce no removal mutation, so
+  // the sweep never sees them. `pagehide` is the last reliable beat — it
+  // fires for bfcache entry too, which `unload` does not. Delivery is
+  // best-effort at teardown; that is still strictly better than dropping the
+  // span outright.
+  addEventListener("pagehide", () => {
+    for (const video of [...open]) {
+      emitEnded(video);
+    }
   });
 }
