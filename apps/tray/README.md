@@ -35,12 +35,24 @@ never crashes or blocks.
 
 Install the LaunchAgent — without it the writer dies at reboot and stays dead:
 
+**Quit any hand-launched keel.app first** — see the gotcha below.
+
 ```bash
 cp apps/tray/com.equanimitech.keel.tray.plist ~/Library/LaunchAgents/
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.equanimitech.keel.tray.plist
+
+# healthy = `job state = running` with `runs` static
+launchctl print gui/$(id -u)/com.equanimitech.keel.tray | grep -E 'runs|job state'
 ```
 
 `launchctl bootout gui/$(id -u)/com.equanimitech.keel.tray` to remove it.
+
+**Gotcha: a silent restart loop.** Bootstrapping while the app is already
+running by hand makes launchd's copy hit the single-instance guard and exit
+**0**; KeepAlive respawns it every `ThrottleInterval`, forever. Nothing
+surfaces this — a clean exit produces no crash report — and the only tell is
+`runs` climbing while `job state = exited`. Quit the manual instance and
+launchd's copy takes the slot within 30s.
 
 **Why it is not optional.** Over 2026-06-12..08-07 the writer was dark for
 1096h of a 1342h span, and **670h of that was time the Mac was in use** — the
