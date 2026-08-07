@@ -30,6 +30,21 @@ Rules:
   `tool_dispatched`, `tool_completed`, `tool_failed`, `turn_stop`,
   `subagent_stop`, `notification`, `pre_compact`, `permission_request`,
   `config_change`, `file_changed`, `rule_changed`.
+
+  **Actor — the agent stream carries two.** This surface is the only one whose
+  events are not all authored by the human, and conflating them produces
+  confident nonsense (see `read-side-pitfalls.md`, case 1).
+
+  | Actor | Kinds | Reads as |
+  |---|---|---|
+  | **human** | `prompt`, `permission_request` (the answer), `config_change`, `rule_changed` | intent, effort, engagement |
+  | **agent** | `tool_dispatched`, `tool_completed`, `tool_failed`, `subagent_stop`, `pre_compact`, `notification` | machine throughput — governed by model autonomy and harness version, NOT by human exertion |
+  | **joint** | `session_start`, `session_end`, `turn_stop`, `file_changed` | a boundary both participate in |
+
+  One human `prompt` can emit 80+ `tool_dispatched`. So agent-actor counts are
+  **not** a workload proxy for the human, and their baseline shifts whenever the
+  model or harness changes — a non-stationarity no other surface has. Any
+  derivation about *the person* must be built from human-actor kinds.
 - **desktop** (`apps/tray` — the body; the surface is keel desktop):
   `writer_started` (writer epoch, payload `appVersion`),
   `writer_paused`/`writer_resumed` (menubar pause toggle),
