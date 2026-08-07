@@ -8,7 +8,7 @@ import {
   updateSession, denyingRule,
   denyReason, renderOrient, focusDayKey,
   signOnBlocks, SIGNON_ALLOW, SIGNON_DENY,
-  resolveActiveMoment, todaysMoments, activeWatch, intentionLine, intentionNudge,
+  resolveActiveMoment, todaysMoments, activeWatch, intentionLine, intentionNudge, intentionSwitch,
   setGranularity, normalizeGranularity, activeGranularity, granularityLine, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
   setFocus, focusLine, claimFocus, focusBlocks, FOCUS_DENY,
   isAllowedPath,
@@ -125,7 +125,15 @@ async function handleUserSubmit(now) {
   // floor, set at session-start.)
   const freshTurn = state.sessionStartTs === now;        // the session's first prompt
   const moments = loadMoments();
-  const unset = !resolveActiveMoment(loadActiveMomentPointer(), moments, loadAreas(), now);
+  const pointer = loadActiveMomentPointer();
+  const moment = resolveActiveMoment(pointer, moments, loadAreas(), now);
+  // Mid-session switches land here — session-start alone would miss every one of them.
+  const switched = intentionSwitch(pointer, moment, state);
+  if (switched) {
+    logHookEvent("intention_switched", now, input, { extra: switched.extra });
+    state.lastMomentId = switched.lastMomentId;
+  }
+  const unset = !moment;
   let nudge = "";
   if (!freshTurn && unset && state.inferNudgedTs !== state.sessionStartTs) {
     state.inferNudgedTs = state.sessionStartTs;
@@ -162,8 +170,16 @@ async function handleSessionStart(now) {
   // (startup/clear) resets it to the floor (tldr); focus is a standing commitment that survives
   // session restarts — it clears only on explicit `keel focus off`.
   if (input?.source === "startup" || input?.source === "clear") state = { ...state, granularity: "" };
+  const pointer = loadActiveMomentPointer();
+  const moment = resolveActiveMoment(pointer, loadMoments(), loadAreas(), now);
+  // The pointer keeps no history of its own, so a switch is only ever recoverable if keel
+  // notices it. Sitting down to a moment declared while away lands here.
+  const switched = intentionSwitch(pointer, moment, state);
+  if (switched) {
+    logHookEvent("intention_switched", now, input, { extra: switched.extra });
+    state = { ...state, lastMomentId: switched.lastMomentId };
+  }
   saveState(state);
-  const moment = resolveActiveMoment(loadActiveMomentPointer(), loadMoments(), loadAreas(), now);
   return emitText([...consent, intentionLine(moment), granularityLine(state)].filter(Boolean).join("\n"));
 }
 

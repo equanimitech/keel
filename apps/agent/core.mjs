@@ -11,7 +11,7 @@
 /** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, granularity: Granularity }} Voice */
 /** @typedef {Record<string, string>} Watches  name → start time "HH:MM" */
 /** @typedef {{ rules: Rule[], orient: Orient, voice: Voice, watches: Watches, windDown: string, signOnGate: boolean }} Target */
-/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, inferNudgedTs: number, granularity: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number }} State */
+/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, inferNudgedTs: number, granularity: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number, lastMomentId: string }} State */
 
 /** Named time-of-day watches (intention blocks) → start time. The active watch is the
  * latest start ≤ now, wrapping past midnight to the last watch. The `night` watch is the
@@ -51,7 +51,7 @@ export const DEFAULT_TARGET = {
 export const emptyState = () => ({
   sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, inferNudgedTs: 0,
   granularity: "", focus: false, focusTs: 0, focusSession: "",
-  lastRuleHash: "", consentShownTs: 0,
+  lastRuleHash: "", consentShownTs: 0, lastMomentId: "",
 });
 
 /** Merge a partial target config over the defaults. @param {any} t @returns {Target} */
@@ -270,6 +270,44 @@ export function resolveActiveMoment(pointer, moments, areas, now) {
   if (m.day !== focusDayKey(now)) return null;
   const area = (areas ?? []).find((a) => a && a.id === m.areaId);
   return { id, name: m.name.trim(), area: area?.name ?? "", emoji: m.emoji ?? "" };
+}
+
+/** Edge-detect a change of the active-moment pointer — the same shape as the rule_changed
+ * check, against the vault instead of the config.
+ *
+ * Why it exists: the pointer holds only the CURRENT intention, so every switch overwrote
+ * the last one and left no trace. keel acts on the active moment (the HUD, the friction
+ * scope) while never recording when it changed, which makes "does declaring an intention
+ * change what follows?" unanswerable after the fact. History only accrues forward.
+ *
+ * Observed, not authored: zenborg writes the pointer and keel never does, so the event's
+ * `ts` is when a hook happened to notice, while `keel_declared_at` carries the pointer's
+ * own `at` — the true instant of declaration. Detection is deliberately eventual: nothing
+ * depends on noticing promptly, which is why this rides hooks that already write rather
+ * than the HUD, whose statusline path re-renders constantly and stays read-only.
+ *
+ * The edge is taken on the RAW pointer id, never the resolved moment. A pointer stops
+ * resolving on its own at the 04:00 roll (see resolveActiveMoment), and treating that as a
+ * switch would emit a "switched to nothing" every single morning — noise dressed as signal.
+ *
+ * @param {any} pointer @param {ActiveMoment|null} moment @param {any} state
+ * @returns {{ extra: Record<string, unknown>, lastMomentId: string }|null} */
+export function intentionSwitch(pointer, moment, state) {
+  const id = pointer && typeof pointer === "object" && typeof pointer.momentId === "string"
+    ? pointer.momentId.trim() : "";
+  const prev = typeof state?.lastMomentId === "string" ? state.lastMomentId : "";
+  if (id === prev) return null;
+  /** @type {Record<string, unknown>} */
+  const extra = { keel_moment_id: id, keel_prev_moment_id: prev };
+  const at = Date.parse(pointer && typeof pointer === "object" ? pointer.at ?? "" : "");
+  if (Number.isFinite(at)) extra.keel_declared_at = at;
+  // The name and area ride along because moments are deletable — `delete_cycle` cascades —
+  // and an id that no longer resolves would leave the event unreadable to a later read.
+  if (moment && moment.id === id) {
+    extra.keel_moment_name = moment.name;
+    if (moment.area) extra.keel_moment_area = moment.area;
+  }
+  return { extra, lastMomentId: id };
 }
 
 /** Today's moments in board order — the candidates the agent proposes from when nothing

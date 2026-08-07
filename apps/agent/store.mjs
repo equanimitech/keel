@@ -6,7 +6,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { mergeTarget, mergeWatchlist, mergeDesktopSensors, emptyState, logFileName, browserLogFileName, eventLine, momentFrictionAt } from "./core.mjs";
 
-export const KEEL_DIR = join(homedir(), ".keel");
+// `KEEL_HOME` mirrors `KAIROS_HOME` below, and matches what garmin_sync.py already honours.
+// Without it the hook handlers can only ever be exercised against the real log, which makes
+// an end-to-end test indistinguishable from corrupting the record.
+export const KEEL_DIR = process.env.KEEL_HOME || join(homedir(), ".keel");
 export const TARGET_ID = "claude-code";
 const CONFIG_PATH = join(KEEL_DIR, "config.json");
 const STATE_PATH = join(KEEL_DIR, "state.json");
