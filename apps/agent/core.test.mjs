@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   toMin, frictionAt, phaseOf, updateSession, unbrokenMin,
-  denyingRule, renderOrient, ritualNudge,
+  denyingRule, renderOrient, signOnBlocks,
   mergeTarget, emptyState, frictionNow,
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
   setIntention, activeIntention, rollIntentionDay, focusDayKey,
@@ -38,20 +38,29 @@ test("intention: per-watch, trims, stamps the waking-day, no cross-watch bleed",
   assert.equal(activeIntention(s2, eve, watches), "review PRs");    // evening surfaces only in the evening
 });
 
-test("ritualNudge: persists until signed-on this waking-day, no time window, Monday → weeklyNudge", () => {
-  const voice = { morningNudge: "open the day", weeklyNudge: "open the week" };
-  const friday = Date.parse("2026-06-19T22:00:00");        // Fri, late — old 04:00–14:00 window would suppress
-  // Not signed on → nudges regardless of hour.
-  assert.equal(ritualNudge(emptyState(), friday, voice).line, "open the day");
-  // Signed on this waking-day → silent.
-  const signedOn = { ...emptyState(), lastSignOnDay: focusDayKey(friday) };
-  assert.equal(ritualNudge(signedOn, friday, voice), null);
-  // Pre-04:00 next calendar day is still the prior (signed-on) waking-day → stays silent.
-  assert.equal(ritualNudge(signedOn, Date.parse("2026-06-20T02:00:00"), voice), null);
-  // Monday → weeklyNudge.
-  assert.equal(ritualNudge(emptyState(), Date.parse("2026-06-22T09:00:00"), voice).line, "open the week");
-  // No configured rituals → silent.
-  assert.equal(ritualNudge(emptyState(), friday, {}), null);
+test("signOnBlocks: holds writes until the day is framed in zenborg", () => {
+  const friday = Date.parse("2026-06-19T22:00:00");
+  const framed = { [focusDayKey(friday)]: { day: focusDayKey(friday), personal: "swim", professional: "ship" } };
+
+  // Gate off (the default) → never blocks, framed or not.
+  assert.equal(signOnBlocks(false, {}, "Edit", friday), false);
+  // Gate on, day unframed → writes held.
+  assert.equal(signOnBlocks(true, {}, "Edit", friday), true);
+  assert.equal(signOnBlocks(true, {}, "Bash", friday), true);
+  // Reads stay open — "no work before framing", not "no computer".
+  assert.equal(signOnBlocks(true, {}, "Read", friday), false);
+  assert.equal(signOnBlocks(true, {}, "Grep", friday), false);
+  // Framed today → open.
+  assert.equal(signOnBlocks(true, framed, "Edit", friday), false);
+  // A held-to-skip day opens it too; keel can't tell them apart, by design.
+  const skipped = { [focusDayKey(friday)]: { day: focusDayKey(friday), skipped: true } };
+  assert.equal(signOnBlocks(true, skipped, "Edit", friday), false);
+  // Pre-04:00 next calendar day is still the prior (framed) waking-day → stays open.
+  assert.equal(signOnBlocks(true, framed, "Edit", Date.parse("2026-06-20T02:00:00")), false);
+  // ...but past the 04:00 roll it's a new, unframed day → held again.
+  assert.equal(signOnBlocks(true, framed, "Edit", Date.parse("2026-06-20T09:00:00")), true);
+  // Fail-open: an unreadable vault must never be able to lock the day shut.
+  assert.equal(signOnBlocks(true, null, "Edit", friday), false);
 });
 
 test("focusDayKey: the day flips at 04:00, not midnight", () => {
