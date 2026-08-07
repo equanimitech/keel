@@ -7,7 +7,7 @@ import {
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
   resolveActiveMoment, todaysMoments, intentionLine, focusDayKey,
   setFocus, claimFocus, focusBlocks, focusLine,
-  seedAllowFromRefs, momentFrictionAt,
+  seedAllowFromRefs, momentFrictionAt, intentionSwitch,
 } from "./core.mjs";
 
 // Watches with night@01:00 + a 90m lead reproduce the old 23:30→01:00 ramp, 01:00→05:00 lock.
@@ -301,4 +301,55 @@ test("momentFrictionAt: the moment stays active across the whole day, not for an
   // And it retires itself past the 04:00 roll rather than needing a clearing pass.
   const tomorrow = Date.parse("2026-08-08T09:00:00");
   assert.equal(momentFrictionAt({ momentId: "build" }, momentBoard, boardAreas, tomorrow), null);
+});
+
+// ── intentionSwitch: the pointer keeps no history, so keel has to notice ──
+
+test("intentionSwitch: fires on a change, stays silent on a repeat", () => {
+  const pointer = { momentId: "build", at: "2026-08-07T09:12:00.000Z" };
+  const moment = { id: "build", name: "ship drift", area: "craft", emoji: "" };
+
+  const first = intentionSwitch(pointer, moment, { lastMomentId: "" });
+  assert.equal(first?.lastMomentId, "build");
+  assert.equal(first?.extra.keel_moment_id, "build");
+  assert.equal(first?.extra.keel_prev_moment_id, "");
+  // ts is when a hook noticed; declared_at is when it was actually declared.
+  assert.equal(first?.extra.keel_declared_at, Date.parse("2026-08-07T09:12:00.000Z"));
+  assert.equal(first?.extra.keel_moment_name, "ship drift");
+  assert.equal(first?.extra.keel_moment_area, "craft");
+
+  // Every subsequent hook sees the same pointer — exactly one event per switch.
+  assert.equal(intentionSwitch(pointer, moment, { lastMomentId: "build" }), null);
+});
+
+test("intentionSwitch: the edge is the raw pointer, so the 04:00 roll is not a switch", () => {
+  // resolveActiveMoment returns null for yesterday's moment, but the pointer is untouched.
+  // Edging on the resolved moment would emit a spurious 'switched to nothing' every morning.
+  const stale = { momentId: "build", at: "2026-08-06T09:12:00.000Z" };
+  assert.equal(intentionSwitch(stale, null, { lastMomentId: "build" }), null);
+});
+
+test("intentionSwitch: records the switch even when the moment no longer resolves", () => {
+  // delete_cycle cascades into its moments, so an id alone can dangle. The switch is still
+  // recorded — just without the label that would have made it readable later.
+  const p = { momentId: "gone", at: "2026-08-07T11:00:00.000Z" };
+  const sw = intentionSwitch(p, null, { lastMomentId: "build" });
+  assert.equal(sw?.extra.keel_moment_id, "gone");
+  assert.equal(sw?.extra.keel_prev_moment_id, "build");
+  assert.equal(sw?.extra.keel_moment_name, undefined);
+});
+
+test("intentionSwitch: clearing the pointer is a switch to nothing", () => {
+  const sw = intentionSwitch(null, null, { lastMomentId: "build" });
+  assert.equal(sw?.lastMomentId, "");
+  assert.equal(sw?.extra.keel_moment_id, "");
+  assert.equal(sw?.extra.keel_prev_moment_id, "build");
+  // ...but a vault that never had a pointer must not emit one on every hook forever.
+  assert.equal(intentionSwitch(null, null, {}), null);
+  assert.equal(intentionSwitch({}, null, { lastMomentId: "" }), null);
+});
+
+test("intentionSwitch: an unparseable declaration time is omitted, never faked", () => {
+  const sw = intentionSwitch({ momentId: "build", at: "not-a-date" }, null, { lastMomentId: "" });
+  assert.equal("keel_declared_at" in (sw?.extra ?? {}), false);
 });

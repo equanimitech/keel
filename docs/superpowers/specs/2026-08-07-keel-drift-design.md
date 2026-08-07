@@ -255,6 +255,25 @@ Each step leaves the repo green and is independently useful.
    `--json`.
 5. **Garmin backfill** — widen the poller, then re-run drift over the deeper range.
 
+## The declared-interval join (unblocked, not yet built)
+
+Phase bucketing is what *history* supports, and it stays the join for everything before
+2026-08-07. But `(day, phase)` is a coarse unit: it compares a plan to a four-hour band.
+
+`intention_switched` (shipped alongside this spec) records when the active-moment pointer
+changes, which makes a tighter join possible going forward — *what happened while I was
+actually holding intention X*, bounded by consecutive switches rather than by clock bands.
+That is the only version that can answer whether **declaring** an intention changes what
+follows, which is the mechanism the rest of the stack assumes and has never tested.
+
+It is deliberately not built here: the events have to accrue first. Drift reads phases
+today and gains the declared-interval view once there is enough history to read.
+
+One consequence worth protecting: injecting moment- or attitude-derived context into
+sessions would give declaring a *second* effect, on the agent as well as the person, and
+the two could not be separated afterwards. If that lands before a baseline exists, the
+injection must be recorded in the event so it can be controlled for.
+
 ## Deferred, and the trigger for each
 
 - **Supernote as the fifth oracle** — wake extracts prose into activity events.

@@ -29,7 +29,17 @@ Rules:
 - **agent** (`apps/agent`): `session_start`, `session_end`, `prompt`,
   `tool_dispatched`, `tool_completed`, `tool_failed`, `turn_stop`,
   `subagent_stop`, `notification`, `pre_compact`, `permission_request`,
-  `config_change`, `file_changed`, `rule_changed`.
+  `config_change`, `file_changed`, `rule_changed`, `intention_switched`.
+
+  `intention_switched` is the odd one: keel does not author it. zenborg owns
+  `activeMoment.json` and keel only ever reads it, so this is an *observed* switch
+  — emitted when a hook notices the pointer differs from the last one seen. `ts` is
+  therefore the observation, while `keel_declared_at` carries the pointer's own `at`,
+  the true instant of declaration. The edge is taken on the raw pointer id rather
+  than the resolved moment, because a pointer stops resolving by itself at the 04:00
+  roll and that is not a switch. Detection is eventual by design: a change made away
+  from the machine is recorded whenever the next hook fires, with its real time
+  intact.
 
   **Actor — the agent stream carries two.** This surface is the only one whose
   events are not all authored by the human, and conflating them produces
@@ -37,7 +47,7 @@ Rules:
 
   | Actor | Kinds | Reads as |
   |---|---|---|
-  | **human** | `prompt`, `permission_request` (the answer), `config_change`, `rule_changed` | intent, effort, engagement |
+  | **human** | `prompt`, `permission_request` (the answer), `config_change`, `rule_changed`, `intention_switched` | intent, effort, engagement |
   | **agent** | `tool_dispatched`, `tool_completed`, `tool_failed`, `subagent_stop`, `pre_compact`, `notification` | machine throughput — governed by model autonomy and harness version, NOT by human exertion |
   | **joint** | `session_start`, `session_end`, `turn_stop`, `file_changed` | a boundary both participate in |
 
