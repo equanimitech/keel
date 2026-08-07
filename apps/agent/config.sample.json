@@ -8,6 +8,7 @@
         "night": "01:30"
       },
       "windDown": "90m",
+      "signOnGate": false,
       "rules": [
         {
           "notch": "block",

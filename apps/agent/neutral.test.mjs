@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   toMin, frictionAt, mergeTarget, emptyState, DEFAULT_TARGET,
-  ritualNudge, focusDayKey, targetHash, renderRules, consentLines,
+  signOnBlocks, focusDayKey, targetHash, renderRules, consentLines,
   mergeWatchlist, watchlistLines, mergeDesktopSensors, desktopSensorLines,
 } from "./core.mjs";
 
@@ -37,21 +37,16 @@ test("characterization: mergeTarget fills defaults, replaces watches wholesale, 
 
 // ── neutral defaults ───────────────────────────────────────────
 
-test("ritual nudges are silent by default (no foreign slash commands)", () => {
+test("the sign-on gate is off by default — an unconfigured keel never locks the day", () => {
   const tuesdayMorning = new Date(2026, 5, 9, 9, 0).getTime();
-  assert.equal(ritualNudge(emptyState(), tuesdayMorning, mergeTarget({}).voice), null);
+  assert.equal(mergeTarget({}).signOnGate, false);
+  assert.equal(signOnBlocks(mergeTarget({}).signOnGate, {}, "Edit", tuesdayMorning), false);
 });
 
-test("ritual nudges fire when configured: weekly on Monday, morning otherwise", () => {
-  const voice = mergeTarget({ voice: { morningNudge: "good morning line", weeklyNudge: "weekly line" } }).voice;
-  const monday = new Date(2026, 5, 8, 9, 0).getTime();
+test("the sign-on gate engages only when explicitly enabled", () => {
   const tuesday = new Date(2026, 5, 9, 9, 0).getTime();
-  assert.equal(ritualNudge(emptyState(), monday, voice)?.line, "weekly line");
-  assert.equal(ritualNudge(emptyState(), tuesday, voice)?.line, "good morning line");
-  const night = new Date(2026, 5, 9, 23, 0).getTime();
-  assert.equal(ritualNudge(emptyState(), night, voice)?.line, "good morning line"); // no window — persists until signed on
-  const signedOn = { ...emptyState(), lastSignOnDay: focusDayKey(night) };
-  assert.equal(ritualNudge(signedOn, night, voice), null);     // signed on this waking-day → silent
+  assert.equal(mergeTarget({ signOnGate: true }).signOnGate, true);
+  assert.equal(signOnBlocks(mergeTarget({ signOnGate: true }).signOnGate, {}, "Edit", tuesday), true);
 });
 
 test("default voice carries no prescriptive substitution", () => {

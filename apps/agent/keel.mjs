@@ -6,7 +6,8 @@
 import {
   phaseOf, nowMinOf, frictionNow, nightWindow, minToHHMM, toDurationMin,
   updateSession, denyingRule,
-  denyReason, renderOrient, ritualNudge, focusDayKey,
+  denyReason, renderOrient, focusDayKey,
+  signOnBlocks, SIGNON_ALLOW, SIGNON_DENY,
   setIntention, rollIntentionDay, activeIntention, activeWatch, intentionLine,
   setGranularity, normalizeGranularity, activeGranularity, granularityLine, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
   setFocus, focusLine, claimFocus, focusBlocks, FOCUS_DENY,
@@ -15,7 +16,7 @@ import {
   watchlistLines, desktopSensorLines,
   applyObserveVerdicts, mergeLedger,
 } from "./core.mjs";
-import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, readStdin, TARGET_ID, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
+import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, loadDayNotes, readStdin, TARGET_ID, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
 import { runHost } from "./native-host.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { homedir } from "node:os";
@@ -84,19 +85,26 @@ async function handlePreTool(now) {
   // Journal + ~/.keel stay open so capture and sign-off are never trapped.
   const focusDenied = focusBlocks(state, input?.session_id)
     && !isAllowedPath(filePath, ["~/journals", "~/.keel"], homedir());
-  const allowed = !nightDenied && !focusDenied;
+  // Day-open commitment: writes are held until the day is framed in zenborg. Same
+  // exemptions as focus, so capture and the ritual itself are never trapped behind it.
+  const signOnDenied = signOnBlocks(target.signOnGate, loadDayNotes(), input?.tool_name, now)
+    && !isAllowedPath(filePath, SIGNON_ALLOW, homedir());
+  const allowed = !nightDenied && !focusDenied && !signOnDenied;
   // Rules observability: every gate decision is auditable from the log alone.
   logHookEvent("tool_dispatched", now, input, { extra: {
     keel_denied: !allowed, keel_friction: Number(f.toFixed(3)), keel_phase: phaseOf(f),
     ...(rule?.notch ? { keel_rule_notch: rule.notch } : {}),
     ...(focusDenied ? { keel_focus_block: true } : {}),
+    ...(signOnDenied ? { keel_signon_block: true } : {}),
   } });
   if (allowed) return emit(null); // allow (silent)
+  // Night outranks focus outranks sign-on: report the wall you'd hit first anyway.
+  const reason = nightDenied ? denyReason(target) : focusDenied ? FOCUS_DENY : SIGNON_DENY;
   return emit({
     hookSpecificOutput: {
       hookEventName: "PreToolUse",
       permissionDecision: "deny",
-      permissionDecisionReason: focusDenied ? FOCUS_DENY : denyReason(target),
+      permissionDecisionReason: reason,
     },
   });
 }
@@ -147,8 +155,6 @@ async function handleSessionStart(now) {
     consent = consentLines();
     state = { ...state, consentShownTs: now };
   }
-  // Persists every session until `/sign-on` runs this waking-day (no mark to spend).
-  const nudge = ritualNudge(state, now, target.voice);
   // Focus is day-scoped, depth is session-scoped. Intention clears only on a new
   // calendar day (rollIntentionDay) — it survives session restarts and /clear, since
   // per-session focus is already covered by Claude's own session goals. Granularity is
@@ -158,7 +164,7 @@ async function handleSessionStart(now) {
   // commitment that survives session restarts — it clears only on explicit `keel focus off`.
   if (input?.source === "startup" || input?.source === "clear") state = { ...state, granularity: "" };
   saveState(state);
-  return emitText([...consent, nudge?.line, intentionLine(state, now, target.watches), granularityLine(state)].filter(Boolean).join("\n"));
+  return emitText([...consent, intentionLine(state, now, target.watches), granularityLine(state)].filter(Boolean).join("\n"));
 }
 
 function cmdStatus(now) {
@@ -180,12 +186,9 @@ function cmdSignoff() {
   console.log("keel: signed off. The day is sealed. (keel no longer walls coding — your declared night is the only hard stop.)");
 }
 
-// Marks the day as opened — `/sign-on` calls this on completion. Clears the day-open
-// nudge (ritualNudge keys off lastSignOnDay) until the next waking-day (04:00 roll).
-function cmdSignon(now) {
-  saveState({ ...loadState(), lastSignOnDay: focusDayKey(now) });
-  console.log("keel: signed on. The day is open — nudge cleared till tomorrow.");
-}
+// ponytail: `keel signon` is gone (2026-08-07). The day now opens in zenborg, which
+// owns `$KAIROS_HOME/signon.json`; a keel command that stamped keel's own state would
+// be a second source of truth AND a key cut from inside the locked box.
 
 // Sets the intention for a watch. `keel intention "<focus>"` → the current watch;
 // `keel intention <watch> "<focus>"` → a named watch. Day-scoped (clears at the 04:00 roll).
@@ -398,7 +401,6 @@ async function main() {
   if (cmd === "rules") return cmdRules();
   if (cmd === "native-host") { runHost(); return; }
   if (cmd === "signoff") return cmdSignoff();
-  if (cmd === "signon") return cmdSignon(now);
   if (cmd === "intention") return cmdIntention(process.argv.slice(3).join(" "), now);
   if (cmd === "granularity" || cmd === "gran") return cmdGranularity(sub);
   if (cmd === "focus") return cmdFocus(process.argv.slice(3).join(" "), now);
@@ -406,7 +408,7 @@ async function main() {
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
   if (cmd === "watchlist" && sub === "scan") return cmdWatchlistScan();
-  console.log("usage: keel <hook pre-tool|user-submit|session-start | signon | signoff | intention [<watch>] [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | focus [\"<hard problem>\"|on|off] | rules | log status | status | watchlist scan>");
+  console.log("usage: keel <hook pre-tool|user-submit|session-start | signoff | intention [<watch>] [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | focus [\"<hard problem>\"|on|off] | rules | log status | status | watchlist scan>");
 }
 
 main().catch(() => process.exit(0)); // fail-open

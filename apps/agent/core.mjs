@@ -8,10 +8,10 @@
 /** @typedef {{ notch: Notch, engagesAt: Friction, arming?: Arming, maxGraceMin?: number, tools: string[], allowPaths?: string[] }} Rule */
 /** @typedef {{ bellAfterMin: number, sessionGapMin: number }} Orient */
 /** @typedef {{ windDown: string, lockdown: string }} Granularity */
-/** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, morningNudge: string, weeklyNudge: string, granularity: Granularity }} Voice */
+/** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, granularity: Granularity }} Voice */
 /** @typedef {Record<string, string>} Watches  name → start time "HH:MM" */
-/** @typedef {{ rules: Rule[], orient: Orient, voice: Voice, watches: Watches, windDown: string }} Target */
-/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, lastSignOnDay: string, inferNudgedTs: number, watchIntentions: Record<string, string>, intentionDay: string, granularity: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number }} State */
+/** @typedef {{ rules: Rule[], orient: Orient, voice: Voice, watches: Watches, windDown: string, signOnGate: boolean }} Target */
+/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, inferNudgedTs: number, watchIntentions: Record<string, string>, intentionDay: string, granularity: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number }} State */
 
 /** Named time-of-day watches (intention blocks) → start time. The active watch is the
  * latest start ≤ now, wrapping past midnight to the last watch. The `night` watch is the
@@ -26,6 +26,9 @@ export const DEFAULT_WIND_DOWN = "90m";
 export const DEFAULT_TARGET = {
   watches: DEFAULT_WATCHES,
   windDown: DEFAULT_WIND_DOWN,
+  // Default OFF: the gate's only key is zenborg's framing screen. Flipping this on
+  // without that screen reachable would lock the day shut with no way to open it.
+  signOnGate: false,
   rules: [{ notch: "block", engagesAt: 1.0, arming: "breakpoint", maxGraceMin: 10,
             tools: ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"],
             allowPaths: ["~/journals", "~/.keel"] }],
@@ -37,8 +40,6 @@ export const DEFAULT_TARGET = {
     consequence: "",
     identity: "",
     signoffNudge: "",
-    morningNudge: "",
-    weeklyNudge: "",
     granularity: {
       windDown: "Keep it high-level — summaries and next steps, not deep multi-file dives.",
       lockdown: "Coarsest only — one-line status + tomorrow's first step; no detail.",
@@ -48,7 +49,7 @@ export const DEFAULT_TARGET = {
 
 /** @returns {State} */
 export const emptyState = () => ({
-  sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, lastSignOnDay: "", inferNudgedTs: 0,
+  sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, inferNudgedTs: 0,
   watchIntentions: {}, intentionDay: "", granularity: "", focus: false, focusTs: 0, focusSession: "",
   lastRuleHash: "", consentShownTs: 0,
 });
@@ -61,6 +62,7 @@ export function mergeTarget(t = {}) {
     voice: { ...DEFAULT_TARGET.voice, ...t.voice },
     watches: (t.watches && Object.keys(t.watches).length) ? t.watches : DEFAULT_WATCHES,
     windDown: t.windDown ?? DEFAULT_TARGET.windDown,
+    signOnGate: t.signOnGate ?? DEFAULT_TARGET.signOnGate,
   };
 }
 
@@ -201,18 +203,9 @@ export const dayKey = (now) => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-/** The day-open nudge — persists every session until `/sign-on` actually runs this
- * waking-day (keyed off lastSignOnDay, not "already nudged"). Monday → weeklyNudge;
- * any other day → morningNudge. No time window: focusDayKey rolls at 04:00, so a
- * late-night session still counts as the prior (signed-on) day and stays silent.
- * Returns { line } to emit, or null. Pure — `keel signon` clears it by stamping
- * lastSignOnDay. @param {State} state @param {number} now */
-export function ritualNudge(state, now, voice) {
-  if (state.lastSignOnDay === focusDayKey(now)) return null; // already signed on this waking-day
-  const line = new Date(now).getDay() === 1 ? (voice?.weeklyNudge || "") : (voice?.morningNudge || "");
-  if (!line) return null;                                   // silent unless the user configured rituals
-  return { line };
-}
+// ponytail: the day-open *nudge* is gone (2026-08-07). A line that scrolls past at
+// session start was a reminder you could ignore; the gate below is the same intent
+// with teeth. Nothing to surface — if the day isn't framed, the tools don't move.
 
 /** The waking-day boundary in hours — the logical day flips at 04:00, not midnight,
  * matching the morning ritual window. A 02:00 session still belongs to the prior day. */
@@ -337,6 +330,43 @@ export function claimFocus(state, sessionId) {
  * claimed, and this isn't it. Unclaimed focus blocks nothing yet. @param {State} state @param {string|undefined} sessionId */
 export function focusBlocks(state, sessionId) {
   return !!(state.focus && state.focusSession && sessionId && sessionId !== state.focusSession);
+}
+
+// ── Day-note gate (kairos-owned) ────────────────────────────────
+//
+// The day opens in zenborg, not here. keel is a READER of `$KAIROS_HOME/dayNotes.json`
+// exactly as it reads areas.json — same seam, same direction, keel never writes it.
+// The key can't live inside the box it opens: a Claude Code skill that unlocked Claude
+// Code would deadlock. Zenborg is outside the lock.
+//
+// There is no separate sign-on ceremony and no separate flag. Naming the day IS opening
+// it: one question, answered in the UI next to that day's moments. keel only asks whether
+// today has a name — never what the name says, and never whether the note is any good.
+
+/** Tools the gate holds until the day is named. Reads stay open on purpose: "no work
+ * before naming the day", not "no computer" — you can look around, not change things. */
+export const SIGNON_TOOLS = ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"];
+
+/** Paths that stay writable with the day unnamed, so capture and the day-close are
+ * never trapped behind the gate. Mirrors the night rule's allowPaths. */
+export const SIGNON_ALLOW = ["~/journals", "~/.keel"];
+
+export const SIGNON_DENY = "⊙ keel — today has no name yet. Name the day in zenborg (its title, and a note if you want one); the tools unlock the moment you do. (reads, journal + ~/.keel stay open.)";
+
+/** Does the gate hold this tool right now? Pure — the caller supplies the kairos
+ * collection. Off unless explicitly enabled, and fails OPEN on a missing/garbled file:
+ * an unreadable vault must never be able to lock the day shut.
+ *
+ * Keyed on `focusDayKey` (04:00 roll), not the calendar date, so a 02:00 session still
+ * belongs to the day you already named rather than re-locking mid-flow.
+ * @param {boolean} gateOn @param {Record<string, unknown>|null|undefined} dayNotes
+ * @param {string|undefined} tool @param {number} now @returns {boolean} */
+export function signOnBlocks(gateOn, dayNotes, tool, now) {
+  if (!gateOn) return false;
+  if (!SIGNON_TOOLS.includes(tool ?? "")) return false;
+  if (!dayNotes || typeof dayNotes !== "object") return false; // fail-open: no vault, no lock
+  const note = /** @type {any} */ (dayNotes[focusDayKey(now)]);
+  return !(note && typeof note.title === "string" && note.title.trim() !== "");
 }
 
 /** The per-turn deep-focus line. In the owner (or not-yet-claimed) session: a breath on the
