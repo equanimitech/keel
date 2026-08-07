@@ -49,14 +49,28 @@
          turned off; it is how observation is silently lost, which is the
          failure this file exists to end.
 
-         There are no crash reports for this binary, so an unconditional
-         KeepAlive cannot become a restart loop here. ThrottleInterval guards
-         the case where that stops being true. -->
+         An unconditional KeepAlive CAN loop, and did on first install — see
+         the note below. ThrottleInterval bounds it to one spawn per 30s,
+         which is slow enough to notice and cheap enough to ignore. -->
     <key>KeepAlive</key>
     <true/>
 
     <key>ThrottleInterval</key>
     <integer>30</integer>
+
+    <!-- FIRST-INSTALL GOTCHA, learned the hard way on 2026-08-07.
+         Bootstrapping while a hand-launched keel.app is already running gives
+         a silent restart loop: the app's single-instance guard makes launchd's
+         copy exit **0**, KeepAlive respawns it, repeat every ThrottleInterval.
+         Crash reports never show it — a clean exit is not a crash — so the
+         only tell is `runs` climbing in `launchctl print`.
+
+             launchctl print gui/$(id -u)/com.equanimitech.keel.tray \
+               | grep -E 'runs|job state'
+
+         `job state = running` and a static `runs` is healthy. `job state =
+         exited` with `runs` incrementing means a second instance owns the
+         slot; quit it and launchd's copy takes over within 30s. -->
 
     <key>StandardErrorPath</key>
     <string>/tmp/keel-tray.log</string>
