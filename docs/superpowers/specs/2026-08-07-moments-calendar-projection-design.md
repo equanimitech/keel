@@ -155,12 +155,19 @@ Deferred deliberately, in rough order of appeal:
 The projection is a pure function from vault JSON to a list of events, so it is
 tested directly, without Calendar.app:
 
-- Phase bands, including `EVENING` wrapping past midnight (`20:00 → 03:00` is
-  seven hours, not negative seventeen).
 - The rule table above: each of the three timing cases renders as specified.
 - Skipped records: unknown phase, malformed `day`.
+- A `startTime` that will not parse falls back to ambient rather than raising.
 - AppleScript string escaping for quotes and backslashes in moment names.
-- Window boundaries: a moment on the first and last day is included.
+- Window boundaries: a moment on the first and last day is included; one past
+  the edge is not.
+- Timed events sort before all-day rows within a day.
+
+Note that phase *bands* (`startHour`/`endHour`) are not tested, because the
+projection no longer reads them. Placement comes from `startTime` alone; the
+phase contributes only its label to the notes. The band arithmetic — and its
+`EVENING` wrap past midnight — existed solely to serve the rejected slicing
+scheme and was deleted with it.
 
 An end-to-end write is verified once by hand. It is not automated — the cost of
 a Calendar.app fixture exceeds the value, and the AppleScript layer is a thin
