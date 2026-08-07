@@ -5,7 +5,7 @@ import {
   denyingRule, renderOrient, signOnBlocks,
   mergeTarget, emptyState, frictionNow,
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
-  setIntention, activeIntention, rollIntentionDay, focusDayKey,
+  resolveActiveMoment, todaysMoments, intentionLine, focusDayKey,
   setFocus, claimFocus, focusBlocks, focusLine,
 } from "./core.mjs";
 
@@ -26,16 +26,46 @@ test("granularity: parses aliases, falls back to the floor, never empty", () => 
   assert.equal(activeGranularity(setGranularity(emptyState(), "page")), "page");
 });
 
-test("intention: per-watch, trims, stamps the waking-day, no cross-watch bleed", () => {
-  const noon = Date.parse("2026-06-19T12:00:00");          // → morning watch (05:00 ≤ noon < 13:00)
-  const eve = Date.parse("2026-06-19T20:00:00");           // → evening watch
-  assert.equal(activeIntention(emptyState(), noon, watches), "");
-  const s = setIntention(emptyState(), "morning", "  ship export  ", noon);
-  assert.equal(activeIntention(s, noon, watches), "ship export");   // trimmed, surfaced in its watch
-  assert.equal(s.intentionDay, "2026-06-19");
-  const s2 = setIntention(s, "evening", "review PRs", noon);
-  assert.equal(activeIntention(s2, noon, watches), "ship export");  // morning still active at noon
-  assert.equal(activeIntention(s2, eve, watches), "review PRs");    // evening surfaces only in the evening
+test("resolveActiveMoment: resolves the pointer, names the area, degrades to null", () => {
+  const noon = Date.parse("2026-06-19T12:00:00");
+  const areas = [{ id: "a1", name: "Themia" }];
+  const moments = {
+    m1: { id: "m1", name: "  staging release  ", areaId: "a1", day: "2026-06-19", order: 1, emoji: "🛠️" },
+    old: { id: "old", name: "yesterday's thing", areaId: "a1", day: "2026-06-18", order: 0 },
+    noArea: { id: "noArea", name: "gym", areaId: "gone", day: "2026-06-19", order: 0 },
+  };
+  const at = (id) => resolveActiveMoment({ momentId: id }, moments, areas, noon);
+
+  assert.deepEqual(at("m1"), { id: "m1", name: "staging release", area: "Themia", emoji: "🛠️" });
+  // An area the vault no longer lists still yields the moment — the name is what carries.
+  assert.equal(at("noArea")?.area, "");
+  // Staleness retires itself at the 04:00 roll: yesterday's pointer stops resolving.
+  assert.equal(at("old"), null);
+  // Every unusable input degrades to "no intention", never to a wrong one.
+  assert.equal(at("missing"), null);
+  assert.equal(resolveActiveMoment(null, moments, areas, noon), null);
+  assert.equal(resolveActiveMoment({}, moments, areas, noon), null);
+  assert.equal(resolveActiveMoment({ momentId: "  " }, moments, areas, noon), null);
+  assert.equal(resolveActiveMoment({ momentId: "m1" }, null, areas, noon), null);
+  // Phase is deliberately not matched — an afternoon moment is still yours at 23:00.
+  assert.equal(resolveActiveMoment({ momentId: "m1" }, moments, areas, Date.parse("2026-06-19T23:00:00"))?.name, "staging release");
+
+  assert.equal(intentionLine(at("m1")), "[keel] ◎ intention: staging release (Themia) — capture drift (idea/pain), hold the thread.");
+  assert.equal(intentionLine(null), "");
+});
+
+test("todaysMoments: today's board only, in order", () => {
+  const noon = Date.parse("2026-06-19T12:00:00");
+  const moments = {
+    b: { name: "gym", day: "2026-06-19", order: 2 },
+    a: { name: "staging release", day: "2026-06-19", order: 1 },
+    old: { name: "stale", day: "2026-06-18", order: 0 },
+    junk: { name: "   ", day: "2026-06-19", order: 0 },
+  };
+  assert.deepEqual(todaysMoments(moments, noon).map((m) => m.name), ["staging release", "gym"]);
+  assert.deepEqual(todaysMoments(null, noon), []);
+  // Pre-04:00 still belongs to the prior waking-day, so that day's board is what shows.
+  assert.deepEqual(todaysMoments(moments, Date.parse("2026-06-19T02:00:00")).map((m) => m.name), ["stale"]);
 });
 
 test("signOnBlocks: holds writes until the day has a name in zenborg", () => {
@@ -70,16 +100,6 @@ test("focusDayKey: the day flips at 04:00, not midnight", () => {
   assert.equal(focusDayKey(Date.parse("2026-06-19T03:59:00")), "2026-06-18"); // pre-dawn → prior day
   assert.equal(focusDayKey(Date.parse("2026-06-19T04:00:00")), "2026-06-19"); // boundary → new day
   assert.equal(focusDayKey(Date.parse("2026-06-19T23:30:00")), "2026-06-19");
-});
-
-test("rollIntentionDay: keeps within a waking-day, clears across the 04:00 boundary", () => {
-  const lateNight = Date.parse("2026-06-19T01:00:00");   // still 2026-06-18's day
-  const setLastEve = setIntention(emptyState(), "evening", "ship export", Date.parse("2026-06-18T20:00:00"));
-  // 01:00 the "next" calendar morning is the same waking-day → intention survives.
-  assert.equal(rollIntentionDay(setLastEve, lateNight).watchIntentions.evening, "ship export");
-  // Past 04:00 → new waking-day → all watches cleared.
-  const nextMorning = Date.parse("2026-06-19T09:00:00");
-  assert.deepEqual(rollIntentionDay(setLastEve, nextMorning).watchIntentions, {});
 });
 
 test("toMin parses HH:MM", () => {

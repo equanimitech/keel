@@ -113,6 +113,13 @@ owned by the kernel, not by keel, and is read from `$KAIROS_HOME` (default
   surface (`apps/agent/store.mjs`) and the browser (`entrypoints/manage`,
   `modules/friction/policy`). Contract + schema live in the kairos repo at
   `kernel/areas.md`. keel never writes them.
+- **the active moment** — `~/.kairos/activeMoment.json`, a pointer (`{momentId, at}`)
+  to the moment that IS the current intention, resolved against `moments.json`.
+  Set in zenborg (MCP or the UI), read by the agent surface; keel never writes it.
+  It is honoured only while the moment it names sits on the current waking-day, so
+  it retires itself at the 04:00 roll. This replaced keel's own watch-scoped
+  intention strings on 2026-08-07 — see
+  `docs/superpowers/specs/2026-08-07-active-moment-intention-design.md`.
 
 `docs/superpowers/specs/2026-08-06-helm-design.md` is the current statement of
 how keel's parts (heading, tide, helm, gate) compose inside kairos.

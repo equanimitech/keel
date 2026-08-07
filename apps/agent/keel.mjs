@@ -8,7 +8,7 @@ import {
   updateSession, denyingRule,
   denyReason, renderOrient, focusDayKey,
   signOnBlocks, SIGNON_ALLOW, SIGNON_DENY,
-  setIntention, rollIntentionDay, activeIntention, activeWatch, intentionLine,
+  resolveActiveMoment, todaysMoments, activeWatch, intentionLine, intentionNudge,
   setGranularity, normalizeGranularity, activeGranularity, granularityLine, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
   setFocus, focusLine, claimFocus, focusBlocks, FOCUS_DENY,
   isAllowedPath,
@@ -16,7 +16,7 @@ import {
   watchlistLines, desktopSensorLines,
   applyObserveVerdicts, mergeLedger,
 } from "./core.mjs";
-import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, loadDayNotes, readStdin, TARGET_ID, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
+import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, loadDayNotes, loadActiveMomentPointer, loadMoments, loadAreas, readStdin, TARGET_ID, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
 import { runHost } from "./native-host.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { homedir } from "node:os";
@@ -119,15 +119,17 @@ async function handleUserSubmit(now) {
   state.turnLockedTs = phase === "lockdown" ? state.lastPromptTs : 0;
 
   // Ambient by design: indicators live in the statusline HUD (`keel hud`), not injected per-turn.
-  // The one exception — fired once per session, on turn 2+, only while unset: prompt the agent
-  // to infer the intention from the conversation and set it silently. Surfaces in the HUD.
-  // (Granularity needs no inference — it always has a floor, set at session-start.)
+  // The one exception — fired once per session, on turn 2+, only while nothing is active:
+  // prompt the agent to infer what this session is doing and PROPOSE a moment. It proposes;
+  // zenborg writes; keel only ever reads. (Granularity needs no inference — it always has a
+  // floor, set at session-start.)
   const freshTurn = state.sessionStartTs === now;        // the session's first prompt
-  const unset = !activeIntention(state, now, target.watches);
+  const moments = loadMoments();
+  const unset = !resolveActiveMoment(loadActiveMomentPointer(), moments, loadAreas(), now);
   let nudge = "";
   if (!freshTurn && unset && state.inferNudgedTs !== state.sessionStartTs) {
     state.inferNudgedTs = state.sessionStartTs;
-    nudge = "<keel: today's intention is unset. Infer it from the conversation so far and set it silently — `keel intention \"<focus>\"`. Do not announce; it surfaces in the statusline HUD. If you genuinely cannot infer it, leave it.>";
+    nudge = intentionNudge(todaysMoments(moments, now));
   }
   // First prompt while focus is on + unclaimed → this session becomes the focus owner.
   state = claimFocus(state, input?.session_id);
@@ -155,16 +157,14 @@ async function handleSessionStart(now) {
     consent = consentLines();
     state = { ...state, consentShownTs: now };
   }
-  // Focus is day-scoped, depth is session-scoped. Intention clears only on a new
-  // calendar day (rollIntentionDay) — it survives session restarts and /clear, since
-  // per-session focus is already covered by Claude's own session goals. Granularity is
-  // a per-session dial: a fresh session (startup/clear) resets it to the floor (tldr).
-  state = rollIntentionDay(state, now);
-  // Granularity is per-session (resets to the floor on a fresh session); focus is a standing
-  // commitment that survives session restarts — it clears only on explicit `keel focus off`.
+  // The intention is kairos's, not keel's — every session reads the active moment fresh, so
+  // there is nothing here to roll or clear. Granularity is a per-session dial: a fresh session
+  // (startup/clear) resets it to the floor (tldr); focus is a standing commitment that survives
+  // session restarts — it clears only on explicit `keel focus off`.
   if (input?.source === "startup" || input?.source === "clear") state = { ...state, granularity: "" };
   saveState(state);
-  return emitText([...consent, intentionLine(state, now, target.watches), granularityLine(state)].filter(Boolean).join("\n"));
+  const moment = resolveActiveMoment(loadActiveMomentPointer(), loadMoments(), loadAreas(), now);
+  return emitText([...consent, intentionLine(moment), granularityLine(state)].filter(Boolean).join("\n"));
 }
 
 function cmdStatus(now) {
@@ -190,30 +190,23 @@ function cmdSignoff() {
 // owns `$KAIROS_HOME/signon.json`; a keel command that stamped keel's own state would
 // be a second source of truth AND a key cut from inside the locked box.
 
-// Sets the intention for a watch. `keel intention "<focus>"` → the current watch;
-// `keel intention <watch> "<focus>"` → a named watch. Day-scoped (clears at the 04:00 roll).
+// `keel intention` READS the active moment. It cannot set one: the intention is a zenborg
+// moment now, and keel is a reader of the vault (2026-08-07). An old `keel intention "…"`
+// caller gets told where the setter went rather than silently doing nothing.
 function cmdIntention(arg, now) {
-  const target = loadTarget();
-  const watches = target.watches;
-  const raw = String(arg ?? "").trim();
-  // optional leading watch name
-  let watch = activeWatch(now, watches);
-  let text = raw;
-  const m = raw.match(/^(\S+)\s*(.*)$/);
-  if (m && Object.prototype.hasOwnProperty.call(watches, m[1])) { watch = m[1]; text = m[2].trim(); }
+  const moment = activeMomentNow(now);
+  if (String(arg ?? "").trim()) {
+    console.log("keel: the intention is a zenborg moment now — set it there (MCP or the UI) and keel picks it up. `keel intention` shows the active one.");
+    return;
+  }
+  console.log(moment
+    ? `keel: ◎ intention — ${moment.name}${moment.area ? ` (${moment.area})` : ""}.`
+    : "keel: no active moment. Set one in zenborg; keel reads it from the vault.");
+}
 
-  if (text === "clear") {
-    saveState(setIntention(loadState(), watch, "", now));
-    console.log(`keel: ${watch} intention cleared.`);
-    return;
-  }
-  if (!text) {
-    const cur = (loadState().watchIntentions ?? {})[watch] || "";
-    console.log(cur ? `keel: ${watch} intention — ${cur}` : `keel: no intention set for ${watch}. \`keel intention "<focus>"\` to set one.`);
-    return;
-  }
-  saveState(setIntention(loadState(), watch, text, now));
-  console.log(`keel: ${watch} intention set — ${text}. Held for today; surfaced during the ${watch} watch. \`keel intention ${watch} clear\` to release.`);
+/** The active moment right now, resolved from the kairos vault. @param {number} now */
+function activeMomentNow(now) {
+  return resolveActiveMoment(loadActiveMomentPointer(), loadMoments(), loadAreas(), now);
 }
 
 function cmdGranularity(arg) {
@@ -242,39 +235,32 @@ function logFocusEvent(kind, now) {
   catch { /* fail-open */ }
 }
 
-// `keel focus "<hard problem>"` — the deep gear of intention: sets the current watch's
-// intention AND flips the breath/self-ending flag. `keel focus on` reuses the current
-// intention; `keel focus off` drops the gear but keeps the intention. focus_on/focus_off
-// land in the log so the gap-fill EDA can segment focus periods.
+// `keel focus` — the deep gear over the intention: flips the breath/self-ending flag and
+// holds you to one stream. It no longer NAMES the stream; the active moment does that
+// (2026-08-07), so any label argument is accepted and ignored rather than becoming a
+// second source of truth. focus_on/focus_off land in the log so the gap-fill EDA can
+// segment focus periods.
 function cmdFocus(arg, now) {
   const raw = String(arg ?? "").trim();
   const low = raw.toLowerCase();
   const state = loadState();
-  const target = loadTarget();
+  const label = activeMomentNow(now)?.name ?? "";
   if (!raw) {
-    const cur = activeIntention(state, now, target.watches);
     console.log(state.focus
-      ? `keel: ◉ focus on${cur ? ` — "${cur}"` : ""}. \`keel focus off\` to close.`
-      : "keel: focus off. `keel focus \"<hard problem>\"` to go deep, or `keel focus on` for the current intention.");
+      ? `keel: ◉ focus on${label ? ` — "${label}"` : ""}. \`keel focus off\` to close.`
+      : "keel: focus off. `keel focus on` to go deep on the active moment.");
     return;
   }
   if (low === "off" || low === "stop" || low === "clear") {
     saveState(setFocus(state, false, now));
     logFocusEvent("focus_off", now);
-    console.log("keel: focus off — stream closed. (intention kept for the watch.)");
+    console.log("keel: focus off — stream closed. (the active moment stays whatever zenborg says.)");
     return;
   }
-  let s = state, label;
-  if (low === "on" || low === "start") {
-    label = activeIntention(state, now, target.watches);
-    if (!label) { console.log("keel: name what you're going deep on — `keel focus \"<hard problem>\"`."); return; }
-  } else {
-    label = raw;                                  // the hard problem → set it as the watch intention
-    s = setIntention(state, activeWatch(now, target.watches), raw, now);
-  }
-  saveState(setFocus(s, true, now));
+  saveState(setFocus(state, true, now));
   logFocusEvent("focus_on", now);
-  console.log(`keel: ◉ focus on — one stream on "${label}". Other sessions are held; this one's the owner once you prompt. Breath on the AI gap. \`keel focus off\` to release.`);
+  const named = label ? `one stream on "${label}"` : "one stream (no active moment — set one in zenborg to name it)";
+  console.log(`keel: ◉ focus on — ${named}. Other sessions are held; this one's the owner once you prompt. Breath on the AI gap. \`keel focus off\` to release.`);
 }
 
 // ── HUD (for the Claude Code statusLine) ──────────────────────
@@ -306,8 +292,8 @@ function cmdHud(now) {
     parts.push(`keel 🌙 winding down · ${mins}m to night`);
   }
 
-  // Always-on indicators: the current watch's intention (when set) + the session granularity.
-  const inten = activeIntention(state, now, target.watches);
+  // Always-on indicators: the active moment (when one is set) + the session granularity.
+  const inten = activeMomentNow(now)?.name ?? "";
   if (inten) parts.push(`◎ ${inten.length > 24 ? inten.slice(0, 23) + "…" : inten}`);
   if (state.focus) parts.push("◉ focus");
   parts.push(`▤ ${activeGranularity(state)}`);
@@ -408,7 +394,7 @@ async function main() {
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
   if (cmd === "watchlist" && sub === "scan") return cmdWatchlistScan();
-  console.log("usage: keel <hook pre-tool|user-submit|session-start | signoff | intention [<watch>] [\"<focus>\"|clear] | granularity [sentence|tldr|page|report|reset] | focus [\"<hard problem>\"|on|off] | rules | log status | status | watchlist scan>");
+  console.log("usage: keel <hook pre-tool|user-submit|session-start | signoff | intention (read-only; set it in zenborg) | granularity [sentence|tldr|page|report|reset] | focus [on|off] | rules | log status | status | watchlist scan>");
 }
 
 main().catch(() => process.exit(0)); // fail-open

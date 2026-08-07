@@ -146,7 +146,33 @@ export function loadBlockDomains() {
 export const KAIROS_DIR = process.env.KAIROS_HOME || join(homedir(), ".kairos");
 export const AREAS_PATH = join(KAIROS_DIR, "areas.json");
 export const DAY_NOTES_PATH = join(KAIROS_DIR, "dayNotes.json");
+export const ACTIVE_MOMENT_PATH = join(KAIROS_DIR, "activeMoment.json");
+export const MOMENTS_PATH = join(KAIROS_DIR, "moments.json");
 export const AREA_MAP_PATH = join(KEEL_DIR, "area-map.json");
+
+/** The active-moment pointer — which moment the intention currently is:
+ *
+ *   { "momentId": "80d0f15a-…", "at": "2026-08-07T13:40:12.222Z" }
+ *
+ * Zenborg is the only writer (MCP or UI); keel reads it exactly as it reads
+ * areas.json. `null` when missing or unparseable — `resolveActiveMoment` treats
+ * that as "no intention", never as a wrong one. @returns {any|null} */
+export function loadActiveMomentPointer() {
+  try {
+    const raw = JSON.parse(readFileSync(ACTIVE_MOMENT_PATH, "utf8"));
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : null;
+  } catch { return null; }
+}
+
+/** Moments from the kernel, keyed by id — the collection the pointer resolves against,
+ * and the board the intention nudge proposes from. Fails soft to `null`.
+ * @returns {Record<string, any>|null} */
+export function loadMoments() {
+  try {
+    const raw = JSON.parse(readFileSync(MOMENTS_PATH, "utf8"));
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : null;
+  } catch { return null; }
+}
 
 /** Day notes from the kernel, keyed by ISO date:
  *

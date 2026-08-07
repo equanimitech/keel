@@ -11,7 +11,7 @@
 /** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, granularity: Granularity }} Voice */
 /** @typedef {Record<string, string>} Watches  name → start time "HH:MM" */
 /** @typedef {{ rules: Rule[], orient: Orient, voice: Voice, watches: Watches, windDown: string, signOnGate: boolean }} Target */
-/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, inferNudgedTs: number, watchIntentions: Record<string, string>, intentionDay: string, granularity: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number }} State */
+/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, inferNudgedTs: number, granularity: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number }} State */
 
 /** Named time-of-day watches (intention blocks) → start time. The active watch is the
  * latest start ≤ now, wrapping past midnight to the last watch. The `night` watch is the
@@ -50,7 +50,7 @@ export const DEFAULT_TARGET = {
 /** @returns {State} */
 export const emptyState = () => ({
   sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, inferNudgedTs: 0,
-  watchIntentions: {}, intentionDay: "", granularity: "", focus: false, focusTs: 0, focusSession: "",
+  granularity: "", focus: false, focusTs: 0, focusSession: "",
   lastRuleHash: "", consentShownTs: 0,
 });
 
@@ -228,36 +228,81 @@ export function activeWatch(now, watches = DEFAULT_WATCHES) {
   return cur;
 }
 
-/** Set the focus for one watch (named time block). Day-scoped — all watches clear at the
- * waking-day rollover. Empty text clears that watch.
- * @param {State} state @param {string} watch @param {string} text @param {number} now */
-export function setIntention(state, watch, text, now) {
-  const t = String(text ?? "").trim();
-  const wi = { ...(state.watchIntentions ?? {}) };
-  if (t) { wi[watch] = t; } else { delete wi[watch]; }
-  return { ...state, watchIntentions: wi, intentionDay: focusDayKey(now) };
+// ── Intention: the active moment (kairos-owned) ─────────────────
+//
+// The intention is a zenborg *moment*, not a keel string. keel is a READER of
+// `$KAIROS_HOME/activeMoment.json` exactly as it reads areas.json and dayNotes.json
+// — same seam, same direction, keel never writes it.
+//
+//   { "momentId": "80d0f15a-…", "at": "2026-08-07T13:40:12.222Z" }
+//
+// A pointer file rather than a flag on the moment: 900+ moment records never need
+// rewriting, and "exactly one is active" is structural instead of an invariant every
+// writer has to remember to clear.
+//
+// This replaced keel's own watch-scoped intention strings (2026-08-07). Two systems
+// held the same concept and neither knew about the other, so the HUD line and the
+// board drifted apart by construction.
+
+/** @typedef {{ id: string, name: string, area: string, emoji: string }} ActiveMoment */
+
+/** Resolve the active-moment pointer against the vault's collections. Pure — the caller
+ * supplies the parsed files.
+ *
+ * Returns null whenever the intention cannot be established: no pointer, garbled, an
+ * unknown id, or a moment belonging to another day. An unreadable vault therefore
+ * degrades to "no intention" and never to a wrong one.
+ *
+ * Staleness needs no clearing pass: the pointer is honoured only while the moment it
+ * names sits on the current waking-day (focusDayKey, the 04:00 roll), so yesterday's
+ * pointer stops resolving on its own. Phase is deliberately NOT matched — an afternoon
+ * moment is still what you're doing at 20:05, until you switch it in zenborg.
+ *
+ * @param {any} pointer @param {Record<string, any>|null|undefined} moments
+ * @param {{id: string, name: string}[]|null|undefined} areas @param {number} now
+ * @returns {ActiveMoment|null} */
+export function resolveActiveMoment(pointer, moments, areas, now) {
+  const id = pointer && typeof pointer === "object" ? pointer.momentId : null;
+  if (typeof id !== "string" || !id.trim()) return null;
+  if (!moments || typeof moments !== "object") return null;
+  const m = moments[id];
+  if (!m || typeof m.name !== "string" || !m.name.trim()) return null;
+  if (m.day !== focusDayKey(now)) return null;
+  const area = (areas ?? []).find((a) => a && a.id === m.areaId);
+  return { id, name: m.name.trim(), area: area?.name ?? "", emoji: m.emoji ?? "" };
 }
 
-/** Clear all watch intentions if they belong to an earlier waking-day; otherwise keep them.
- * Per-day semantics: survives session restarts/clears within a day, resets at the 04:00 boundary.
- * @param {State} state @param {number} now @returns {State} */
-export function rollIntentionDay(state, now) {
-  const today = focusDayKey(now);
-  if (state.intentionDay === today) return state;
-  return { ...state, watchIntentions: {}, intentionDay: today };
+/** Today's moments in board order — the candidates the agent proposes from when nothing
+ * is active. @param {Record<string, any>|null|undefined} moments @param {number} now
+ * @returns {{name: string, emoji: string}[]} */
+export function todaysMoments(moments, now) {
+  const day = focusDayKey(now);
+  return Object.values(moments ?? {})
+    .filter((m) => m && m.day === day && typeof m.name === "string" && m.name.trim())
+    .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+    .map((m) => ({ name: m.name.trim(), emoji: m.emoji ?? "" }));
 }
 
-/** The active watch's intention, or "" if none set. @param {State} state @param {number} now @param {Watches} [watches] */
-export function activeIntention(state, now, watches) {
-  return (state.watchIntentions ?? {})[activeWatch(now, watches)] || "";
+/** The session-start guardrail line — names the active moment and the drift contract.
+ * Empty when nothing is active. @param {ActiveMoment|null} moment @returns {string} */
+export function intentionLine(moment) {
+  if (!moment) return "";
+  const where = moment.area ? ` (${moment.area})` : "";
+  return `[keel] ◎ intention: ${moment.name}${where} — capture drift (idea/pain), hold the thread.`;
 }
 
-/** The per-turn guardrail line — anchors the chat to the current watch's declared focus.
- * Empty when none set. @param {State} state @param {number} now @param {Watches} [watches] @returns {string} */
-export function intentionLine(state, now, watches) {
-  const w = activeWatch(now, watches);
-  const i = (state.watchIntentions ?? {})[w] || "";
-  return i ? `[keel] ◎ ${w} intention: ${i} — capture drift (idea/pain), hold the thread.` : "";
+/** The once-per-session nudge, fired only while nothing is active: the agent infers what
+ * the session is actually doing, proposes the closest moment, and sets it in zenborg on
+ * the user's yes. keel can't set it itself — it's a reader, and the writer lives outside
+ * the box it opens. @param {{name: string}[]} candidates @returns {string} */
+export function intentionNudge(candidates) {
+  const board = candidates.length
+    ? `Today's board: ${candidates.map((m) => `"${m.name}"`).join(", ")}.`
+    : "Today's board is empty.";
+  return `<keel: no active moment — the intention is unset. ${board} Infer what this session` +
+    " is actually doing, propose the closest moment (or a new 1–3 word one) in one short line," +
+    " and on the user's yes set it active in zenborg via the zenborg MCP. Never set it unasked;" +
+    " if you genuinely cannot infer it, say nothing.>";
 }
 
 /** Response-granularity levels → the depth contract each implies (maps to semantic-zoom). */
@@ -301,9 +346,9 @@ export function granularityLine(state) {
 }
 
 // ── Deep-focus mode (single-stream commitment, opt-in, owner-claimed) ──
-// Focus is the deep gear of `intention`, not a second concept: `keel focus "<problem>"`
-// sets the watch intention (which already holds-the-thread + captures-drift) and flips this
-// flag. It does two things intention can't: adds a breath on the AI-wait gap, and holds you to
+// Focus is the deep gear of `intention`, not a second concept: the active moment already
+// names the stream (holds-the-thread + captures-drift) and `keel focus` flips this flag over
+// it. It does two things intention can't: adds a breath on the AI-wait gap, and holds you to
 // ONE stream — tool calls in any session other than the focus owner are denied. A standing
 // commitment (a user-invoked Ulysses pact): it survives session restarts and clears only on
 // explicit `keel focus off`, never on idle. The CLI can't know which session you meant, so the
