@@ -75,7 +75,7 @@ test("renderRules shows effective values and marks custom vs default sections", 
 
 test("consentLines state the contract: local log, never leaves, how to stop", () => {
   const lines = consentLines().join("\n");
-  assert.match(lines, /~\/.keel\/log/);
+  assert.match(lines, /~\/\.kairos\/keel\/log/);
   assert.match(lines, /never leaves|stays on/i);
   assert.match(lines, /pause|remove|disable/i);
 });

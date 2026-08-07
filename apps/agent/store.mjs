@@ -1,15 +1,25 @@
 // @ts-check
-// keel agent store — the only I/O. Config + state repository over ~/.keel, plus stdin.
+// keel agent store — the only I/O. Config + state repository over ~/.kairos/keel, plus stdin.
 
 import { readFileSync, writeFileSync, appendFileSync, mkdirSync, existsSync, renameSync, statSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { mergeTarget, mergeWatchlist, mergeDesktopSensors, emptyState, logFileName, browserLogFileName, eventLine, momentFrictionAt } from "./core.mjs";
 
-// `KEEL_HOME` mirrors `KAIROS_HOME` below, and matches what garmin_sync.py already honours.
-// Without it the hook handlers can only ever be exercised against the real log, which makes
-// an end-to-end test indistinguishable from corrupting the record.
-export const KEEL_DIR = process.env.KEEL_HOME || join(homedir(), ".keel");
+// The kairos vault is the shared home, so keel's own files live INSIDE it as a subtree
+// keel owns: `$KAIROS_HOME/keel/`. The one-way seam is unchanged and worth stating
+// precisely — keel never writes the kernel's collections (areas, moments, activeMoment,
+// dayNotes, all at the vault root); it writes only its own subtree. One knob moves both:
+// point `KAIROS_HOME` at `~/.kairos-dev` and the log follows the dev vault.
+//
+// `KEEL_HOME` still overrides the subtree outright, and matches what garmin_sync.py
+// already honours. Without it the hook handlers can only ever be exercised against the
+// real log, which makes an end-to-end test indistinguishable from corrupting the record.
+//
+// Migrated 2026-08-07 from `~/.keel`, which is now a symlink to this path so any call
+// site still saying `~/.keel` keeps working.
+export const KAIROS_DIR = process.env.KAIROS_HOME || join(homedir(), ".kairos");
+export const KEEL_DIR = process.env.KEEL_HOME || join(KAIROS_DIR, "keel");
 export const TARGET_ID = "claude-code";
 const CONFIG_PATH = join(KEEL_DIR, "config.json");
 const STATE_PATH = join(KEEL_DIR, "state.json");
@@ -88,7 +98,7 @@ export function saveSnapshot(snap) {
   writeJsonAtomic(SNAPSHOT_PATH, snap);
 }
 
-// ── Rules (~/.keel/rules/*.json) ────────────────────────────────
+// ── Rules (~/.kairos/keel/rules/*.json) ────────────────────────────────
 // One RuleSpec per file. The source of truth for policy: MCP authors here,
 // the tray reads it directly, the extension pulls it over the relay. Replaces
 // the three legacy lists (config.watchlist.windowed, the drogue seed, and
@@ -145,8 +155,9 @@ export function loadBlockDomains() {
 // and there is nothing left to re-run. Dev builds of zenborg write
 // `~/.kairos-dev`, so point `KAIROS_HOME` there to follow them.
 //
-// keel's own domain→area map stays keel's business, and stays local.
-export const KAIROS_DIR = process.env.KAIROS_HOME || join(homedir(), ".kairos");
+// keel's own domain→area map stays keel's business — it now sits in keel's subtree of
+// the vault rather than in a separate dotdir, but the ownership is the same as ever.
+// `KAIROS_DIR` is defined at the top of this file, where `KEEL_DIR` derives from it.
 export const AREAS_PATH = join(KAIROS_DIR, "areas.json");
 export const DAY_NOTES_PATH = join(KAIROS_DIR, "dayNotes.json");
 export const ACTIVE_MOMENT_PATH = join(KAIROS_DIR, "activeMoment.json");

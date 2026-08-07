@@ -28,7 +28,7 @@ import { fileURLToPath } from "node:url";
 const emit = (obj) => { if (obj) process.stdout.write(JSON.stringify(obj)); process.exit(0); };
 const emitText = (t) => { if (t) process.stdout.write(t); process.exit(0); };
 
-// ── Activity log: every hook event lands in ~/.keel/log, full stdin captured
+// ── Activity log: every hook event lands in ~/.kairos/keel/log, full stdin captured
 // (size-capped per field; the transcript_path we log keeps full fidelity).
 // Fail-open at every layer — observability must never break the gate.
 const KIND_BY_HOOK = {
@@ -82,9 +82,11 @@ async function handlePreTool(now) {
   const filePath = input?.tool_input?.file_path;
   const nightDenied = !!rule && !isAllowedPath(filePath, rule.allowPaths, homedir());
   // Single-stream commitment: a non-owner session's tools are denied while focus is active.
-  // Journal + ~/.keel stay open so capture and sign-off are never trapped.
+  // Journal + keel's own subtree stay open so capture and sign-off are never trapped.
+  // SIGNON_ALLOW rather than a second literal list: two hand-maintained copies of the
+  // same exemption is how one of them silently goes stale after a path move.
   const focusDenied = focusBlocks(state, input?.session_id)
-    && !isAllowedPath(filePath, ["~/journals", "~/.keel"], homedir());
+    && !isAllowedPath(filePath, SIGNON_ALLOW, homedir());
   // Day-open commitment: writes are held until the day is framed in zenborg. Same
   // exemptions as focus, so capture and the ritual itself are never trapped behind it.
   const signOnDenied = signOnBlocks(target.signOnGate, loadDayNotes(), input?.tool_name, now)
@@ -333,7 +335,7 @@ function cmdLog(now, sub = "status", day = "today") {
   if (!events.length) {
     console.log(day === "yesterday"
       ? "keel log: no events yesterday."
-      : "keel log: no events today yet — is the writer wired? (hooks → ~/.keel/log/)");
+      : "keel log: no events today yet — is the writer wired? (hooks → ~/.kairos/keel/log/)");
     return;
   }
   const s = summarizeEvents(events, now);

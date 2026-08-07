@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   mergeTarget, phaseOf, frictionNow, denyingRule,
-  emptyState, isAllowedPath,
+  emptyState, isAllowedPath, SIGNON_ALLOW,
 } from "./core.mjs";
 
 const HOME = "/Users/operator";
@@ -60,6 +60,16 @@ test("isAllowedPath: journal + ritual writes are exempt, code writes are not", (
   assert.equal(isAllowedPath("/Users/operator/Developer/themia/minerva/x.ts", ALLOW, HOME), false);
   // prefix-spoof guard: ~/journals-evil must not match ~/journals
   assert.equal(isAllowedPath("/Users/operator/journals-evil/x.md", ALLOW, HOME), false);
+});
+
+// The 2026-08-07 move put keel's files at ~/.kairos/keel and left ~/.keel as a symlink.
+// isAllowedPath matches literal prefixes and never resolves symlinks, so BOTH spellings
+// have to be exempt — miss the real one and the gate locks keel out of its own state.
+test("isAllowedPath: both the vault subtree and the legacy symlink are exempt", () => {
+  assert.equal(isAllowedPath("/Users/operator/.kairos/keel/state.json", SIGNON_ALLOW, HOME), true);
+  assert.equal(isAllowedPath("/Users/operator/.keel/state.json", SIGNON_ALLOW, HOME), true);
+  // the kernel's own collections sit at the vault ROOT and are not keel's to write
+  assert.equal(isAllowedPath("/Users/operator/.kairos/moments.json", SIGNON_ALLOW, HOME), false);
   // no path (e.g. a Bash command) or empty allow-list → not exempt
   assert.equal(isAllowedPath(undefined, ALLOW, HOME), false);
   assert.equal(isAllowedPath("/Users/operator/journals/x.md", [], HOME), false);

@@ -8,7 +8,7 @@
 Garmin has no local sync event and no push for unofficial clients, so this
 polls. Reads Garmin Connect via garminconnect (garth tokens already cached in
 ~/.garminconnect — no credentials live here), and appends taxonomy-conformant
-ActivityEvents to ~/.keel/log/YYYY-MM-DD.garmin.jsonl.
+ActivityEvents to ~/.kairos/keel/log/YYYY-MM-DD.garmin.jsonl.
 
 Kinds (both completions, per packages/domain/docs/event-taxonomy.md):
   workout_completed  ts = activity start, durationMs = elapsed
@@ -35,7 +35,10 @@ import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 
-KEEL_HOME = os.path.expanduser(os.environ.get("KEEL_HOME", "~/.keel"))
+KEEL_HOME = os.path.expanduser(
+    os.environ.get("KEEL_HOME")
+    or os.path.join(os.environ.get("KAIROS_HOME", "~/.kairos"), "keel")
+)
 LOG_DIR = os.path.join(KEEL_HOME, "log")
 CURSOR = os.path.join(KEEL_HOME, "garmin.cursor")
 TOKENSTORE = os.path.expanduser("~/.garminconnect")

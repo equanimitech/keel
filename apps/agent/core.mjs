@@ -31,7 +31,11 @@ export const DEFAULT_TARGET = {
   signOnGate: false,
   rules: [{ notch: "block", engagesAt: 1.0, arming: "breakpoint", maxGraceMin: 10,
             tools: ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"],
-            allowPaths: ["~/journals", "~/.keel"] }],
+            // Both spellings: `~/.kairos/keel` is the real directory, `~/.keel` the
+            // symlink left behind by the 2026-08-07 move. isAllowedPath matches on the
+            // literal prefix and never resolves symlinks, so dropping either spelling
+            // would silently lock one of them behind the gate.
+            allowPaths: ["~/journals", "~/.kairos/keel", "~/.keel"] }],
   orient: { bellAfterMin: 120, sessionGapMin: 30 },
   voice: {
     windDownNudge: "Wind-down window — a good moment to land open work.",
@@ -432,7 +436,7 @@ export const SIGNON_TOOLS = ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash
 
 /** Paths that stay writable with the day unnamed, so capture and the day-close are
  * never trapped behind the gate. Mirrors the night rule's allowPaths. */
-export const SIGNON_ALLOW = ["~/journals", "~/.keel"];
+export const SIGNON_ALLOW = ["~/journals", "~/.kairos/keel", "~/.keel"];
 
 export const SIGNON_DENY = "⊙ keel — today has no name yet. Name the day in zenborg (its title, and a note if you want one); the tools unlock the moment you do. (reads, journal + ~/.keel stay open.)";
 
@@ -672,7 +676,7 @@ export function renderRules(t, configured = {}) {
   lines.push(`orient (${src("orient")}): bell after ${t.orient.bellAfterMin}m · session gap ${t.orient.sessionGapMin}m`);
   const setVoice = Object.entries(t.voice).filter(([, v]) => typeof v === "string" && v).map(([k]) => k);
   lines.push(`voice (${src("voice")}): ${setVoice.join(", ") || "(all silent)"}`);
-  lines.push(`edit: ~/.keel/config.json — changes apply at the next hook fire, no reload.`);
+  lines.push(`edit: ~/.kairos/keel/config.json — changes apply at the next hook fire, no reload.`);
   return lines.join("\n");
 }
 
@@ -725,7 +729,7 @@ export function mergeWatchlist(w = {}) {
  * @param {Watchlist} w @returns {string[]} */
 export function watchlistLines(w) {
   if (w.observe.length === 0 && w.windowed.length === 0) {
-    return ["watchlist: empty — self-authored; add domains in ~/.keel/config.json (tiers: observe, windowed)"];
+    return ["watchlist: empty — self-authored; add domains in ~/.kairos/keel/config.json (tiers: observe, windowed)"];
   }
   const observe = w.observe.length ? w.observe.join(", ") : "(none)";
   const windowed = `${w.windowed.length} domain(s) (tier inert — vice retired)`;
@@ -753,7 +757,7 @@ export function desktopSensorLines(d) {
 export function consentLines() {
   return [
     "[keel] First run — the contract:",
-    "[keel] · keel logs your Claude Code session events (prompts, tool calls, timings) to ~/.keel/log/ — plain JSONL you own.",
+    "[keel] · keel logs your Claude Code session events (prompts, tool calls, timings) to ~/.kairos/keel/log/ — plain JSONL you own.",
     "[keel] · Everything stays on this machine. Nothing is sent anywhere, ever.",
     "[keel] · Pause or remove anytime: disable the plugin (or delete the hooks block); your data stays yours.",
     "[keel] · See your rules: `keel rules` · see your data: `keel log status`.",

@@ -17,7 +17,7 @@ keel/
 └── package.json          # Workspace scripts
 ```
 
-Surfaces are named by the capability × surface grammar (keel agent / keel browser / keel tray — see `docs/decisions/2026-06-12-keel-productization.md`). The agent surface is plain `// @ts-check` JS (no TS imports — it deploys standalone); its dev-mode deploy is symlinks from `~/.keel/`, its distribution is a Claude Code plugin (`apps/agent/.claude-plugin/`).
+Surfaces are named by the capability × surface grammar (keel agent / keel browser / keel tray — see `docs/decisions/2026-06-12-keel-productization.md`). The agent surface is plain `// @ts-check` JS (no TS imports — it deploys standalone); its dev-mode deploy is symlinks from `~/.kairos/keel/`, its distribution is a Claude Code plugin (`apps/agent/.claude-plugin/`).
 
 ## Commands
 
@@ -77,11 +77,11 @@ Dependencies flow inward: Domain -> Application -> Infrastructure -> UI.
 - **`apps/browser`**: activity writer (coarse events) + watchlist-gated per-domain sensors (key-action completions) + `modules/friction/` (the gate, the cooldown, the policy) + the blocklist drogue (commitment device)
 - **`apps/tray`**: macOS menubar app (Tauri) — the desktop activity-log writer. (The frozen `apps/desktop` compass was removed 2026-06-13; archived at tag `desktop-archive-2026-06-13`, reusable gems mapped in `docs/decisions/2026-06-13-remove-desktop-preserve-compass-gems.md`.)
 
-**Cross-surface transport:** the browser extension relays events (`modules/relay`) to `apps/agent/native-host.mjs` — a command-less, append-only, schema-validating native-messaging host that writes to `~/.keel/log/`. Chrome frames messages with a uint32 LE length prefix, 1 MB max; responses are chunked to stay inside it.
+**Cross-surface transport:** the browser extension relays events (`modules/relay`) to `apps/agent/native-host.mjs` — a command-less, append-only, schema-validating native-messaging host that writes to `~/.kairos/keel/log/`. Chrome frames messages with a uint32 LE length prefix, 1 MB max; responses are chunked to stay inside it.
 
 ## Privacy posture (load-bearing, not aspirational)
 
-Everything stays on-device. Payloads carry **domains and timings — never full URLs, prompts, or page content.** Window titles are capped at 256 chars. Browser events live in extension-local IndexedDB until exported; agent/tray events write to `~/.keel/log/` as JSONL. Treat any change that widens a payload as a design decision, not an implementation detail.
+Everything stays on-device. Payloads carry **domains and timings — never full URLs, prompts, or page content.** Window titles are capped at 256 chars. Browser events live in extension-local IndexedDB until exported; agent/tray events write to `~/.kairos/keel/log/` as JSONL. Treat any change that widens a payload as a design decision, not an implementation detail.
 
 `packages/domain/docs/event-taxonomy.md` is the writers' contract: every `ActivityEvent.kind` is a **span** (`_start`/`_end`), a **switch** (`_switched`/`_activated`), or a **completion** (past-tense). Kinds are an open set that accretes per surface — never centralize them into an enum. `durationMs` appears only when the writer observed the interval's start; never fabricate it across a restart or pause.
 
@@ -107,7 +107,18 @@ so an imposed lock cannot be constructed. Locks are self-invoked only.
 
 keel is one instrument of **kairos**, not a standalone product. Some state is
 owned by the kernel, not by keel, and is read from `$KAIROS_HOME` (default
-`~/.kairos`):
+`~/.kairos`).
+
+Since 2026-08-07 keel's own files live **inside** that vault, at
+`$KAIROS_HOME/keel/` (log, config, state, rules, area-map) — one directory to
+back up, one knob to point at a dev vault. `~/.keel` remains as a symlink to it,
+so any call site still saying `~/.keel` keeps working. The one-way seam is
+unchanged, only stated more precisely: **keel never writes the kernel's
+collections** (the JSON at the vault root); it writes only its own subtree.
+`KEEL_HOME` still overrides the subtree outright, which is how the tests get a
+scratch log instead of the real one.
+
+The kernel-owned state:
 
 - **areas** — `~/.kairos/areas.json`, defined in zenborg, read by both the agent
   surface (`apps/agent/store.mjs`) and the browser (`entrypoints/manage`,

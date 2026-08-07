@@ -151,7 +151,7 @@ test("concurrent appends from two processes produce no torn lines", async () => 
 
 const pathToImport = (p) => p.split("\\").join("/");
 
-// ── end-to-end: hook subprocess writes events under $HOME/.keel/log ──
+// ── end-to-end: hook subprocess writes events under $HOME/.kairos/keel/log ──
 
 function runHook(home, sub, stdinObj) {
   return execFileSync(process.execPath, [KEEL_MJS, "hook", sub], {
@@ -164,7 +164,7 @@ function runHook(home, sub, stdinObj) {
 test("hook user-submit logs a prompt event with sessionId from stdin", async () => {
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
   runHook(home, "user-submit", { session_id: "sess-42", prompt: "hello keel" });
-  const file = join(home, ".keel", "log", logFileName(Date.now()));
+  const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
   assert.ok(existsSync(file));
   const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   const prompt = events.find((e) => e.kind === "prompt");
@@ -177,7 +177,7 @@ test("hook user-submit logs a prompt event with sessionId from stdin", async () 
 test("hook stop logs a turn_stop event", async () => {
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
   runHook(home, "stop", { session_id: "sess-43", stop_hook_active: false });
-  const file = join(home, ".keel", "log", logFileName(Date.now()));
+  const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
   const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   assert.equal(events.filter((e) => e.kind === "turn_stop" && e.sessionId === "sess-43").length, 1);
 });
@@ -185,7 +185,7 @@ test("hook stop logs a turn_stop event", async () => {
 test("hook pre-tool logs the gate's decision context (rules observability)", async () => {
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
   runHook(home, "pre-tool", { session_id: "sess-47", tool_name: "Read", tool_input: {} });
-  const file = join(home, ".keel", "log", logFileName(Date.now()));
+  const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
   const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   const d = events.find((e) => e.kind === "tool_dispatched");
   assert.equal(typeof d.payload.keel_denied, "boolean");
@@ -197,7 +197,7 @@ test("hook post-tool derives durationMs from the matching dispatch", async () =>
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
   runHook(home, "pre-tool", { session_id: "sess-44", tool_name: "Glob", tool_input: { pattern: "*" } });
   runHook(home, "post-tool", { session_id: "sess-44", tool_name: "Glob", tool_response: { ok: true } });
-  const file = join(home, ".keel", "log", logFileName(Date.now()));
+  const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
   const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   const done = events.find((e) => e.kind === "tool_completed");
   assert.equal(done.payload.tool_name, "Glob");
@@ -208,7 +208,7 @@ test("hook post-tool derives durationMs from the matching dispatch", async () =>
 test("hook session-end logs session_end (full-capture hook set)", async () => {
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
   runHook(home, "session-end", { session_id: "sess-45", reason: "exit" });
-  const file = join(home, ".keel", "log", logFileName(Date.now()));
+  const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
   const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   assert.equal(events.filter((e) => e.kind === "session_end").length, 1);
 });
@@ -216,7 +216,7 @@ test("hook session-end logs session_end (full-capture hook set)", async () => {
 test("oversized stdin fields are capped in the logged payload", async () => {
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
   runHook(home, "user-submit", { session_id: "sess-46", prompt: "z".repeat(40_000) });
-  const file = join(home, ".keel", "log", logFileName(Date.now()));
+  const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
   const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   const prompt = events.find((e) => e.kind === "prompt");
   assert.equal(prompt.payload.prompt.truncated, true);
@@ -238,10 +238,10 @@ test("first session-start shows the consent contract once, then never again", as
 test("session-start logs rule_changed when the effective rules hash moves", async () => {
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
   runHook(home, "session-start", { session_id: "s-r1" });
-  const cfgPath = join(home, ".keel", "config.json");
+  const cfgPath = join(home, ".kairos", "keel","config.json");
   writeFileSync(cfgPath, JSON.stringify({ targets: { "claude-code": { windDown: "60m" } } }));
   runHook(home, "session-start", { session_id: "s-r2" });
-  const file = join(home, ".keel", "log", logFileName(Date.now()));
+  const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
   const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   const changes = events.filter((e) => e.kind === "rule_changed");
   assert.equal(changes.length, 2); // baseline snapshot + the edit
@@ -251,7 +251,7 @@ test("session-start logs rule_changed when the effective rules hash moves", asyn
 
 test("keel log status yesterday reads the prior day's file", async () => {
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
-  const logDir = join(home, ".keel", "log");
+  const logDir = join(home, ".kairos", "keel","log");
   const y = Date.now() - 86_400_000;
   appendEvent(logDir, buildEvent({ id: "y1", kind: "prompt", ts: y, sessionId: "ys" }));
   const out = execFileSync(process.execPath, [KEEL_MJS, "log", "status", "yesterday"],

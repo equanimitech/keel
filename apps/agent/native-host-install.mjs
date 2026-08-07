@@ -25,7 +25,8 @@ if (!extId || !/^[a-p]{32}$/.test(extId)) {
 }
 
 // A tiny launcher so the manifest's "path" is a single executable.
-const keelDir = join(homedir(), ".keel");
+const keelDir = process.env.KEEL_HOME
+  || join(process.env.KAIROS_HOME || join(homedir(), ".kairos"), "keel");
 const launcher = join(keelDir, "native-host.sh");
 const keelMjs = resolve(import.meta.dirname, "keel.mjs");
 mkdirSync(keelDir, { recursive: true });

@@ -5,7 +5,7 @@ set -euo pipefail
 
 # ── generalization seam: environment knobs ──
 TERMINAL="iTerm"                 # terminal app for interactive rituals
-KEEL_DIR="${KEEL_DIR:-$HOME/.keel}"
+KEEL_DIR="${KEEL_DIR:-${KEEL_HOME:-${KAIROS_HOME:-$HOME/.kairos}/keel}}"
 CLAUDE="${CLAUDE:-claude}"
 
 arg="${1:-}"

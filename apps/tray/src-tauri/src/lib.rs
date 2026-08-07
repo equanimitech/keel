@@ -66,14 +66,10 @@ fn read_input_counters() -> [u32; 4] {
 /// Explicit opt-in, re-read once per rollup so a config flip applies
 /// without restarting the tray. Missing file/key = off.
 fn input_sensor_opted_in() -> bool {
-    let path = dirs_home().join(".keel").join("config.json");
+    let path = writer::keel_dir().join("config.json");
     std::fs::read_to_string(path)
         .map(|s| domain::input_sensor_enabled(&s))
         .unwrap_or(false)
-}
-
-fn dirs_home() -> PathBuf {
-    std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default()
 }
 
 const MACOS_PRIVACY_SETTINGS_URL: &str =

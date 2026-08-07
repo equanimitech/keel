@@ -34,7 +34,7 @@ Dependencies flow inward: **Domain → Application → Infrastructure → UI.** 
 
 ## Privacy posture (load-bearing)
 
-Everything stays on your machine. Payloads carry **domains and timings, never full URLs or page content.** Browser events live in extension-local IndexedDB until you export them; desktop/tray events write to `~/.keel/log/`.
+Everything stays on your machine. Payloads carry **domains and timings, never full URLs or page content.** Browser events live in extension-local IndexedDB until you export them; desktop/tray events write to `~/.kairos/keel/log/`.
 
 ## Structure
 

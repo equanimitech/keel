@@ -134,7 +134,7 @@ export function runHost(stdin = process.stdin, stdout = process.stdout) {
         reply({ type: "observe", domains: loadWatchlist().observe });
       } else if (msg.type === "request_policy") {
         // Policy pull: what the extension needs to enforce, derived from
-        // ~/.keel/rules/*.json plus the ledger classification. Domains only —
+        // ~/.kairos/keel/rules/*.json plus the ledger classification. Domains only —
         // the full RuleSpec stays host-side until the interpreter needs it.
         const { standing, armable } = loadBlockDomains();
         const ledger = loadLedger();
