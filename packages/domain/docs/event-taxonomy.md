@@ -63,6 +63,31 @@ Rules:
   `video_paused`/`video_resumed` (settles past ~2.5s so ad breaks and scrubs
   do not register).
 
+- **garmin** (`apps/agent/garmin_sync.py`): `workout_completed` (ts = activity
+  start, `durationMs` = elapsed; payload `activityType`, `manual`, and whichever
+  of `distanceM`/`calories`/`avgHrBpm`/`maxHrBpm`/`steps`/`movingDurationS`/
+  `aerobicTrainingEffect` Garmin reported — absent metrics are omitted, never
+  nulled), `sleep_recorded` (ts = sleep **end** — the completion; `durationMs` =
+  time asleep; payload `calendarDate`, stage seconds, `sleepScore`,
+  `avgSleepStress`, `avgHrBpm`, `avgRespiration`).
+
+  A **polling** writer, not an observing one: Garmin has no local sync event and
+  no push for unofficial clients. Three consequences the read side must respect.
+  (1) `durationMs` here is *transcribed* from a source that measured both
+  boundaries, not observed live; the taxonomy's ban is on fabricating a duration,
+  not on transcribing one. (2) Events arrive **late and out of order** relative
+  to wall clock — a workout lands in its own day's file up to an hour after the
+  fact, so a same-day read may be incomplete. (3) A night the watch missed
+  produces **no event at all** — never read the absence of `sleep_recorded` as
+  "did not sleep".
+
+  Payloads carry type and numbers only. Garmin bakes place names into
+  `activityName` (e.g. "&lt;suburb&gt; Soccer/Football"); that field, plus
+  `locationName` and `startLatitude`/`startLongitude`, are dropped at the writer.
+
+  Body state is the **covariate axis**, not the attention axis. Its value is the
+  join — bouts and wait gaps against sleep debt — not standalone.
+
 The per-area key-action metric each sensor exists to produce: minutes watched
 (video), posts seen (feed), games played (game), **products seen** (shopping).
 These supersede raw dwell time — dwell says an hour passed, `product_seen`

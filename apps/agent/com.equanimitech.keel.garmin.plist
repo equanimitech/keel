@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- keel garmin sync — hourly poll.
+     Install:  cp apps/agent/com.equanimitech.keel.garmin.plist ~/Library/LaunchAgents/
+               launchctl load ~/Library/LaunchAgents/com.equanimitech.keel.garmin.plist
+     Replace REPLACE_WITH_REPO_PATH with the absolute repo path and
+     REPLACE_WITH_HOME with $HOME before loading (sed both, they repeat).
+     Uninstall: launchctl unload ~/Library/LaunchAgents/com.equanimitech.keel.garmin.plist -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.equanimitech.keel.garmin</string>
+
+    <!-- The script's own shebang (`uv run --script`) resolves deps; launchd
+         gets a near-empty PATH, so uv has to be findable explicitly. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>REPLACE_WITH_REPO_PATH/apps/agent/garmin_sync.py</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>REPLACE_WITH_HOME/.pyenv/shims:REPLACE_WITH_HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <!-- Hourly. Garmin Connect only has data once the watch has synced to the
+         cloud, which is itself sporadic; polling faster buys nothing. -->
+    <key>StartInterval</key>
+    <integer>3600</integer>
+
+    <!-- Catch up after sleep/shutdown rather than silently skipping the window. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>StandardErrorPath</key>
+    <string>/tmp/keel-garmin.log</string>
+    <key>StandardOutPath</key>
+    <string>/tmp/keel-garmin.log</string>
+
+    <!-- A failing poll must not become a restart loop. -->
+    <key>ThrottleInterval</key>
+    <integer>300</integer>
+</dict>
+</plist>
