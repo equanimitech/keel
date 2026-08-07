@@ -116,6 +116,35 @@ is a statement about *desktop* consumption, and should say so.
 
 ---
 
+## 8. A raw switch count is mostly transients
+
+`app_switched` and the browser's domain switches both fire on *every* focus
+change — launcher pops, notification steals, alt-tab flicker, a tab touched in
+passing. Over 2026-06-12..08-07:
+
+```
+app dwells      n=14344   median  6s   66% under 15s
+domain dwells   n= 7985   median  5s   67% under 15s
+```
+
+Two thirds of every "switch" is a glance nobody would describe as switching
+tasks. Counting them inflated `Bout.switches` by **71%** — median 17 per bout
+against 4 — and every fragmentation figure built on it by the same margin.
+`tide`'s 20-switches/hour threshold was labelling **76% of bouts fragmented**,
+which is a threshold that has stopped discriminating.
+
+**Rule.** Put a floor under any duration-derived count before you count it.
+`bouts.ts` uses `SWITCH_FLOOR_MS` (15s) and counts moves between domains that
+each held past it. The boundary is not arbitrary: above 15s the median dwell is
+42s, against Gloria Mark's published ~47s average screen dwell — two
+independent instruments agreeing on where a real attention span starts.
+
+The same caution applies to anything else derived from raw event counts. Ask
+what fraction of the population is below the threshold of the thing you claim
+to be measuring, *before* dividing by it.
+
+---
+
 ## Statistical hygiene, briefly
 
 The read-side constants in `event-taxonomy.md` (z-scores over rolling windows,

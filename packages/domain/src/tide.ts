@@ -54,6 +54,13 @@ export interface TideThresholds {
  * distribution — that is the whole observe-first posture, and absolute
  * constants are a placeholder standing in until ~21 days of data exist.
  * Treat a label produced with these as a hypothesis, not a fact.
+ *
+ * `fragmentationPerHour` kept its value across the 2026-08-07 introduction of
+ * `SWITCH_FLOOR_MS`, and deliberately: the number was never wrong, its input
+ * was. Counting sub-15s glances as switches meant 20/h labelled **76%** of
+ * bouts fragmented — a threshold that had stopped discriminating. Against
+ * floored switches the same 20/h labels ~26%. Recalibrating the constant as
+ * well would have moved the goalposts twice.
  */
 export const DEFAULT_THRESHOLDS: TideThresholds = {
   fragmentationPerHour: 20,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BOUT_GAP_MS, SEGMENT_CAP_MS, bouts } from "./bouts.js";
+import { BOUT_GAP_MS, SEGMENT_CAP_MS, SWITCH_FLOOR_MS, bouts } from "./bouts.js";
 import { createActivityEvent, type ActivityEvent } from "./activity.js";
 import { createDomain, toMinutes } from "./value-objects.js";
 
@@ -106,6 +106,58 @@ describe("bouts — segmentation", () => {
       ev(0, "navigation_committed", "youtube.com"),
       ev(1 * MIN, "tab_activated", "youtube.com"),
       ev(2 * MIN, "video_started", "youtube.com"),
+    ]);
+    expect(bout.switches).toBe(0);
+  });
+
+  // 67% of real domain dwells are under the floor. Counting them made
+  // fragmentation two-thirds noise — this is the regression that guards it.
+  it("does not count a glance below the floor as a switch", () => {
+    const [bout] = bouts([
+      ev(0, "navigation_committed", "github.com"),
+      ev(5 * MIN, "tab_activated", "youtube.com"),
+      // Five seconds on youtube, then straight back — a peek, not a switch.
+      ev(5 * MIN + 5_000, "tab_activated", "github.com"),
+      ev(10 * MIN, "tab_closed", "github.com"),
+    ]);
+    expect(bout.switches).toBe(0);
+  });
+
+  it("counts a move between two domains that each hold past the floor", () => {
+    const [bout] = bouts([
+      ev(0, "navigation_committed", "github.com"),
+      ev(5 * MIN, "tab_activated", "youtube.com"),
+      ev(10 * MIN, "tab_closed", "youtube.com"),
+    ]);
+    expect(bout.switches).toBe(1);
+  });
+
+  it("counts a dwell of exactly the floor", () => {
+    const [bout] = bouts([
+      ev(0, "navigation_committed", "github.com"),
+      ev(SWITCH_FLOOR_MS, "tab_activated", "youtube.com"),
+      ev(SWITCH_FLOOR_MS * 2, "tab_closed", "youtube.com"),
+    ]);
+    expect(bout.switches).toBe(1);
+  });
+
+  it("does not credit the first substantial domain as a switch", () => {
+    const [bout] = bouts([
+      ev(0, "navigation_committed", "github.com"),
+      ev(5 * MIN, "tab_closed", "github.com"),
+    ]);
+    expect(bout.switches).toBe(0);
+  });
+
+  it("ignores time on a domain while attention is off, so it never turns substantial", () => {
+    const [bout] = bouts([
+      ev(0, "navigation_committed", "github.com"),
+      ev(5 * MIN, "tab_activated", "youtube.com"),
+      ev(5 * MIN, "focus_end"),
+      // Ten unattended minutes on youtube must not make it substantial.
+      ev(15 * MIN, "focus_start"),
+      ev(15 * MIN, "tab_activated", "github.com"),
+      ev(20 * MIN, "tab_closed", "github.com"),
     ]);
     expect(bout.switches).toBe(0);
   });
