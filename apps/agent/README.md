@@ -21,7 +21,7 @@ The third row is the one nobody else sits in. Calm-tech tools watch the human; a
 keel accumulates attention signal now; steering comes later, built on your own baselines (a separate P5 module, gated behind ~21 days of personal data). v0 is mostly **see**, a little **steer**.
 
 - **Activity log** (`keel log`, plus `SessionStart` / `UserPromptSubmit` hooks) writes every session event to `~/.keel/log/` as plain JSONL. Domains and timings, never prompts or content.
-- **Session intention** (`keel intention "<focus>"`) names the session's focus. It surfaces in the statusline HUD each turn and holds the conversation to that thread. The agent infers and sets it silently if you don't. Resets on a fresh session or `/clear`, persists across resume/compact.
+- **Intention** (`keel intention`) is the **active moment** — the one you set in zenborg, read from `$KAIROS_HOME/activeMoment.json`. It surfaces in the statusline HUD and holds the conversation to that thread. keel only reads it; when nothing is active the agent proposes one from today's board and sets it in zenborg once you agree. It retires itself at the 04:00 roll.
 - **Granularity dial** (`keel granularity <level>`) sets how deep responses go this session. Floor is `tldr`. Levels: `sentence` (L1, claim only), `tldr` (L2, claim + mechanism), `page` (L3, worked example), `report` (L5, citations + edge cases).
 - **Wind-down gate** (`PreToolUse` hook) denies Edit/Write/Bash once you've signed off, parked, or passed a backstop hour. **Breakpoint-armed** (engages at a turn boundary, never mid-edit), escapable only by a scarce **skip credit**. Conversation and journal/ritual writes (`allowPaths`) stay open, so closing the day is never blocked.
 
@@ -76,7 +76,7 @@ Edit the `claude-code` target in `~/.keel/config.json`:
 
 - After you **sign off** (or `park`), or past the **backstop**, coding tools are denied until `reset`. Conversation still works, and so do journal/ritual writes.
 - **Override** a night you judge worth it: `node ~/.keel/keel.mjs skip` (spends a credit). At 0 credits it holds until reset.
-- `keel status` — current friction, phase, credits. `keel intention` / `keel granularity` — see or set the session dials.
+- `keel status` — current friction, phase, credits. `keel intention` — show the active moment (set it in zenborg). `keel granularity` — see or set the session depth dial.
 - **Remove the gate:** delete the `hooks` block from `~/.claude/settings.json`.
 
 ## Advanced: blocklist drogue
