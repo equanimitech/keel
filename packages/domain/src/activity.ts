@@ -13,8 +13,9 @@
  * invalidated, never deleted.
  */
 
-/** The surface that observed the event. */
-export type ActivitySurface = "agent" | "desktop" | "browser";
+/** The surface that observed the event. `garmin` is a polling writer — it
+ * transcribes body state Garmin already measured, rather than observing live. */
+export type ActivitySurface = "agent" | "desktop" | "browser" | "garmin";
 
 /**
  * Event kinds are an open set — each surface contributes its own vocabulary

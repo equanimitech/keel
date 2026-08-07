@@ -83,12 +83,32 @@ Edit the `claude-code` target in `~/.keel/config.json`:
 
 A sibling commitment device (`keel vice <on|off|skip|status>`) blocks vice sites via an `/etc/hosts` lock, raised alongside the coding gate on `signoff`. It needs a one-time root install (a small LaunchDaemon that reconciles `/etc/hosts` to keel's desired state, so a manual `off` mid-window self-heals). Optional and off by default. See `vice-install.sh`.
 
+## Advanced: garmin sync (body state)
+
+`garmin_sync.py` is a fourth activity-log writer — it polls Garmin Connect and appends `workout_completed` / `sleep_recorded` events to `~/.keel/log/YYYY-MM-DD.garmin.jsonl`. Polling, not push: Garmin has no local sync event, and push (the official Health API) needs partner approval and a public HTTPS endpoint — a server keel does not want.
+
+Auth reuses the garth tokens already cached in `~/.garminconnect`; no credentials live in the repo. Deps are declared inline (PEP 723), so `uv` resolves them per-run — nothing to install.
+
+```bash
+cd apps/agent
+./garmin_sync.py --dry-run       # print events, write nothing
+./garmin_sync.py                 # incremental, since ~/.keel/garmin.cursor
+./garmin_sync.py --backfill 30   # widen the sleep window
+
+# hourly, via launchd — set the repo path in the plist first
+cp com.equanimitech.keel.garmin.plist ~/Library/LaunchAgents/
+launchctl load ~/Library/LaunchAgents/com.equanimitech.keel.garmin.plist
+```
+
+Payloads carry type and numbers only. Garmin bakes place names into `activityName` (e.g. "&lt;suburb&gt; Soccer/Football"); that field, `locationName`, and lat/lon are dropped at the writer.
+
 ## Dev
 
 ```bash
 cd apps/agent
-node --test        # unit tests (pure core)
-pnpm typecheck     # JSDoc + // @ts-check (no build)
+node --test                            # unit tests (pure core)
+python3 -m unittest test_garmin_sync   # garmin mapping + cursor (no network)
+pnpm typecheck                         # JSDoc + // @ts-check (no build)
 ```
 
 Pure domain lives in `core.mjs` (the part that later lifts into `@keel/domain`); I/O in `store.mjs`; hook orchestration in `keel.mjs`.
