@@ -145,20 +145,23 @@ export function loadBlockDomains() {
 // keel's own domain→area map stays keel's business, and stays local.
 export const KAIROS_DIR = process.env.KAIROS_HOME || join(homedir(), ".kairos");
 export const AREAS_PATH = join(KAIROS_DIR, "areas.json");
-export const SIGNON_PATH = join(KAIROS_DIR, "signon.json");
+export const DAY_NOTES_PATH = join(KAIROS_DIR, "dayNotes.json");
 export const AREA_MAP_PATH = join(KEEL_DIR, "area-map.json");
 
-/** The day-open record from the kernel, keyed by waking-day (`YYYY-MM-DD`, 04:00 roll):
+/** Day notes from the kernel, keyed by ISO date:
  *
- *   { "2026-08-07": { day, personal, professional, skipped, at } }
+ *   { "2026-08-07": { date, title, body?, createdAt, updatedAt } }
  *
- * Zenborg's framing screen is the only writer — keel reads it exactly as it reads
- * areas.json. Returns `null` when the file is missing or unparseable, which
- * `signOnBlocks` treats as fail-open: a vault keel cannot read must never be able
- * to lock the day shut. @returns {Record<string, any>|null} */
-export function loadSignOn() {
+ * Zenborg is the only writer — keel reads it exactly as it reads areas.json.
+ * There is no separate "signed on" flag: naming the day IS opening it, which is
+ * one collection instead of two saying the same thing.
+ *
+ * Returns `null` when the file is missing or unparseable, which `dayIsNamed`
+ * treats as fail-open: a vault keel cannot read must never be able to lock the
+ * day shut. @returns {Record<string, any>|null} */
+export function loadDayNotes() {
   try {
-    const raw = JSON.parse(readFileSync(SIGNON_PATH, "utf8"));
+    const raw = JSON.parse(readFileSync(DAY_NOTES_PATH, "utf8"));
     return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : null;
   } catch { return null; }
 }

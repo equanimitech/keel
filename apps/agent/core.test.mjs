@@ -38,27 +38,30 @@ test("intention: per-watch, trims, stamps the waking-day, no cross-watch bleed",
   assert.equal(activeIntention(s2, eve, watches), "review PRs");    // evening surfaces only in the evening
 });
 
-test("signOnBlocks: holds writes until the day is framed in zenborg", () => {
+test("signOnBlocks: holds writes until the day has a name in zenborg", () => {
   const friday = Date.parse("2026-06-19T22:00:00");
-  const framed = { [focusDayKey(friday)]: { day: focusDayKey(friday), personal: "swim", professional: "ship" } };
+  const key = focusDayKey(friday);
+  const named = { [key]: { date: key, title: "Ship export", body: "# plan\n- land the writer" } };
 
-  // Gate off (the default) → never blocks, framed or not.
+  // Gate off (the default) → never blocks, named or not.
   assert.equal(signOnBlocks(false, {}, "Edit", friday), false);
-  // Gate on, day unframed → writes held.
+  // Gate on, day unnamed → writes held.
   assert.equal(signOnBlocks(true, {}, "Edit", friday), true);
   assert.equal(signOnBlocks(true, {}, "Bash", friday), true);
-  // Reads stay open — "no work before framing", not "no computer".
+  // Reads stay open — "no work before naming the day", not "no computer".
   assert.equal(signOnBlocks(true, {}, "Read", friday), false);
   assert.equal(signOnBlocks(true, {}, "Grep", friday), false);
-  // Framed today → open.
-  assert.equal(signOnBlocks(true, framed, "Edit", friday), false);
-  // A held-to-skip day opens it too; keel can't tell them apart, by design.
-  const skipped = { [focusDayKey(friday)]: { day: focusDayKey(friday), skipped: true } };
-  assert.equal(signOnBlocks(true, skipped, "Edit", friday), false);
-  // Pre-04:00 next calendar day is still the prior (framed) waking-day → stays open.
-  assert.equal(signOnBlocks(true, framed, "Edit", Date.parse("2026-06-20T02:00:00")), false);
-  // ...but past the 04:00 roll it's a new, unframed day → held again.
-  assert.equal(signOnBlocks(true, framed, "Edit", Date.parse("2026-06-20T09:00:00")), true);
+  // Named today → open.
+  assert.equal(signOnBlocks(true, named, "Edit", friday), false);
+  // A title with no body still opens it — the body is optional, the name isn't.
+  assert.equal(signOnBlocks(true, { [key]: { date: key, title: "Rest" } }, "Edit", friday), false);
+  // A note whose title is empty/whitespace is not a named day.
+  assert.equal(signOnBlocks(true, { [key]: { date: key, title: "   " } }, "Edit", friday), true);
+  assert.equal(signOnBlocks(true, { [key]: { date: key, body: "notes" } }, "Edit", friday), true);
+  // Pre-04:00 next calendar day is still the prior (named) waking-day → stays open.
+  assert.equal(signOnBlocks(true, named, "Edit", Date.parse("2026-06-20T02:00:00")), false);
+  // ...but past the 04:00 roll it's a new, unnamed day → held again.
+  assert.equal(signOnBlocks(true, named, "Edit", Date.parse("2026-06-20T09:00:00")), true);
   // Fail-open: an unreadable vault must never be able to lock the day shut.
   assert.equal(signOnBlocks(true, null, "Edit", friday), false);
 });

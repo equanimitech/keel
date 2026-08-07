@@ -332,36 +332,41 @@ export function focusBlocks(state, sessionId) {
   return !!(state.focus && state.focusSession && sessionId && sessionId !== state.focusSession);
 }
 
-// ── Sign-on gate (kairos-owned) ─────────────────────────────────
+// ── Day-note gate (kairos-owned) ────────────────────────────────
 //
-// The day opens in zenborg, not here. keel is a READER of `$KAIROS_HOME/signon.json`
+// The day opens in zenborg, not here. keel is a READER of `$KAIROS_HOME/dayNotes.json`
 // exactly as it reads areas.json — same seam, same direction, keel never writes it.
-// The key can't live inside the box it opens: sign-on runs as a Claude Code skill, so
-// gating Claude on a flag Claude sets would deadlock. Zenborg is outside the lock.
+// The key can't live inside the box it opens: a Claude Code skill that unlocked Claude
+// Code would deadlock. Zenborg is outside the lock.
 //
-// A framed day and a held-to-skip day both open it. keel deliberately can't tell them
-// apart — the cost of skipping is paid in the UI (a 5s hold), not re-litigated here.
+// There is no separate sign-on ceremony and no separate flag. Naming the day IS opening
+// it: one question, answered in the UI next to that day's moments. keel only asks whether
+// today has a name — never what the name says, and never whether the note is any good.
 
-/** Tools the gate holds until the day is framed. Reads stay open on purpose: "no work
- * before framing", not "no computer" — you can look around, you just can't change things. */
+/** Tools the gate holds until the day is named. Reads stay open on purpose: "no work
+ * before naming the day", not "no computer" — you can look around, not change things. */
 export const SIGNON_TOOLS = ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"];
 
-/** Paths that stay writable with the day unframed, so capture and the ritual itself
- * are never trapped behind the gate. Mirrors the night rule's allowPaths. */
+/** Paths that stay writable with the day unnamed, so capture and the day-close are
+ * never trapped behind the gate. Mirrors the night rule's allowPaths. */
 export const SIGNON_ALLOW = ["~/journals", "~/.keel"];
 
-export const SIGNON_DENY = "⊙ keel — the day isn't framed yet. Open it in zenborg (name today's two priorities, or hold to skip); the tools unlock the moment you do. (reads, journal + ~/.keel stay open.)";
+export const SIGNON_DENY = "⊙ keel — today has no name yet. Name the day in zenborg (its title, and a note if you want one); the tools unlock the moment you do. (reads, journal + ~/.keel stay open.)";
 
-/** Does the sign-on gate hold this tool right now? Pure — the caller supplies the
- * kairos record. Off unless explicitly enabled, and fails OPEN on a missing/garbled
- * file: an unreadable vault must never be able to lock the day shut.
- * @param {boolean} gateOn @param {Record<string, unknown>|null|undefined} signon
+/** Does the gate hold this tool right now? Pure — the caller supplies the kairos
+ * collection. Off unless explicitly enabled, and fails OPEN on a missing/garbled file:
+ * an unreadable vault must never be able to lock the day shut.
+ *
+ * Keyed on `focusDayKey` (04:00 roll), not the calendar date, so a 02:00 session still
+ * belongs to the day you already named rather than re-locking mid-flow.
+ * @param {boolean} gateOn @param {Record<string, unknown>|null|undefined} dayNotes
  * @param {string|undefined} tool @param {number} now @returns {boolean} */
-export function signOnBlocks(gateOn, signon, tool, now) {
+export function signOnBlocks(gateOn, dayNotes, tool, now) {
   if (!gateOn) return false;
   if (!SIGNON_TOOLS.includes(tool ?? "")) return false;
-  if (!signon || typeof signon !== "object") return false; // fail-open: no vault, no lock
-  return !signon[focusDayKey(now)];                        // framed (or skipped) today → open
+  if (!dayNotes || typeof dayNotes !== "object") return false; // fail-open: no vault, no lock
+  const note = /** @type {any} */ (dayNotes[focusDayKey(now)]);
+  return !(note && typeof note.title === "string" && note.title.trim() !== "");
 }
 
 /** The per-turn deep-focus line. In the owner (or not-yet-claimed) session: a breath on the

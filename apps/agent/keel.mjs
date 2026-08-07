@@ -16,7 +16,7 @@ import {
   watchlistLines, desktopSensorLines,
   applyObserveVerdicts, mergeLedger,
 } from "./core.mjs";
-import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, loadSignOn, readStdin, TARGET_ID, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
+import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, loadDayNotes, readStdin, TARGET_ID, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
 import { runHost } from "./native-host.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { homedir } from "node:os";
@@ -87,7 +87,7 @@ async function handlePreTool(now) {
     && !isAllowedPath(filePath, ["~/journals", "~/.keel"], homedir());
   // Day-open commitment: writes are held until the day is framed in zenborg. Same
   // exemptions as focus, so capture and the ritual itself are never trapped behind it.
-  const signOnDenied = signOnBlocks(target.signOnGate, loadSignOn(), input?.tool_name, now)
+  const signOnDenied = signOnBlocks(target.signOnGate, loadDayNotes(), input?.tool_name, now)
     && !isAllowedPath(filePath, SIGNON_ALLOW, homedir());
   const allowed = !nightDenied && !focusDenied && !signOnDenied;
   // Rules observability: every gate decision is auditable from the log alone.
