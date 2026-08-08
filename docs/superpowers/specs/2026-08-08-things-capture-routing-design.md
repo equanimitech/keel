@@ -1,7 +1,9 @@
 # Things Capture Routing — Design Spec
 
 **Date:** 2026-08-08
-**Status:** approved, not yet implemented
+**Status:** design approved, **auto-dispatch blocked by the real-data eval**.
+See "Held-out eval on real captures". The recommendation is now the *suggest*
+shape until two preconditions are met.
 
 ## Problem
 
@@ -265,6 +267,64 @@ prompting nor richer context substituted for it.
 The cost is 23 GB resident and 8.2s to load, transiently, per event. That is
 compatible with the low-power premise because nothing stays resident: idle
 draw is unchanged at zero, and the spike lasts about thirteen seconds.
+
+## Held-out eval on real captures
+
+Everything above was measured on six fixtures written by hand. They were too
+clean. Repeated on **30 real recent captures whose filed area is known** — the
+model sees only the title and is scored against where the human actually filed
+it — the result is materially worse. Titles stay local and are not reproduced
+here.
+
+**Cohort A — 20 captures from the 9 dispatchable areas:** 12 filed correctly,
+**2 mis-filed**, 6 left for triage.
+
+**Cohort B — 10 captures from areas outside the enum**, every one of which
+should have been declined: **5 wrongly grabbed**, 5 correctly declined.
+
+Across both: 19 dispatches, **7 wrong — a 37% error rate on actions taken.**
+
+### Why unanimity did not save it
+
+The gate assumes disagreement tracks difficulty. On these failures the model is
+not uncertain, it is *confidently and consistently* wrong, so five samples agree
+on the same wrong area. Sampling catches ambiguity; it cannot catch a knowledge
+gap.
+
+### The failures are entity-knowledge gaps
+
+Nearly every error is the same shape: routing a capture correctly requires
+knowing *who a person is* or *what an object belongs to*, and nothing in the
+prompt carries that. Two captures with near-identical wording ("a gift for X")
+were filed to different areas by the human because X is a family member in one
+and a partner in the other. No amount of prompt engineering over area
+descriptions recovers that; it is a fact about the person's life.
+
+This is the one place richer context genuinely would help — but the useful
+context is an entity graph, not area glosses or sampled task titles. wake
+already builds exactly such a graph.
+
+### The dominant cause is an incomplete enum
+
+Five of the seven errors are Cohort B — captures belonging to areas deliberately
+excluded from the enum. Restricting to the 9 zenborg-mapped areas left roughly
+470 filed tasks across six populated areas (Saperene, Longevity, Onça, Adminy,
+Sexy, Vitality) with **no correct destination available**, guaranteeing a
+mis-file for anything belonging to them.
+
+This restriction was a mistake in the design, not a finding: a Things area move
+requires a Things area, and needs no zenborg mapping at all.
+
+### Preconditions before auto-dispatch
+
+1. **Complete the enum** — every populated Things area, each with a gloss the
+   human writes. Six of them cannot be glossed by inference.
+2. **Supply entity knowledge** — at minimum a people-to-area mapping, since
+   people are the dominant ambiguity.
+
+Until both hold, the dispatcher should run in *suggest* mode: identical
+classification, proposals only, accepted in a batch. That converts every one of
+the seven wrong dispatches into a rejected suggestion costing a keystroke.
 
 ## Error handling
 
