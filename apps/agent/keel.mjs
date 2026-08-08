@@ -123,8 +123,8 @@ async function handleUserSubmit(now) {
   // Ambient by design: indicators live in the statusline HUD (`keel hud`), not injected per-turn.
   // The one exception — fired once per session, on turn 2+, only while nothing is active:
   // prompt the agent to infer what this session is doing and PROPOSE a moment. It proposes;
-  // zenborg writes; keel only ever reads. (Granularity needs no inference — it always has a
-  // floor, set at session-start.)
+  // zenborg writes; keel only ever reads. (Granularity needs no inference — a ceiling is
+  // always in force, and it is day-scoped rather than set per session.)
   const freshTurn = state.sessionStartTs === now;        // the session's first prompt
   const moments = loadMoments();
   const pointer = loadActiveMomentPointer();
@@ -168,10 +168,13 @@ async function handleSessionStart(now) {
     state = { ...state, consentShownTs: now };
   }
   // The intention is kairos's, not keel's — every session reads the active moment fresh, so
-  // there is nothing here to roll or clear. Granularity is a per-session dial: a fresh session
-  // (startup/clear) resets it to the floor (tldr); focus is a standing commitment that survives
-  // session restarts — it clears only on explicit `keel focus off`.
-  if (input?.source === "startup" || input?.source === "clear") state = { ...state, granularity: "" };
+  // there is nothing here to roll or clear. Granularity is now day-scoped like focus: it is
+  // stamped with the waking-day inside setGranularity and lapses at the 04:00 roll, so it
+  // survives session restarts; focus clears only on explicit `keel focus off`.
+  //
+  // A `startup`/`clear` wipe used to live here. It is why the dial read `tldr` every time it
+  // was looked at — many sessions a day meant the ceiling was reset before it could ever
+  // govern one. See docs/superpowers/specs/2026-08-08-granularity-ceiling-design.md.
   const pointer = loadActiveMomentPointer();
   const moment = resolveActiveMoment(pointer, loadMoments(), loadAreas(), now);
   // The pointer keeps no history of its own, so a switch is only ever recoverable if keel
@@ -182,7 +185,7 @@ async function handleSessionStart(now) {
     state = { ...state, lastMomentId: switched.lastMomentId };
   }
   saveState(state);
-  return emitText([...consent, intentionLine(moment), granularityLine(state)].filter(Boolean).join("\n"));
+  return emitText([...consent, intentionLine(moment), granularityLine(state, now)].filter(Boolean).join("\n"));
 }
 
 function cmdStatus(now) {
@@ -231,7 +234,7 @@ function cmdGranularity(arg) {
   const raw = String(arg ?? "").trim();
   if (raw === "clear" || raw === "reset") {
     saveState(setGranularity(loadState(), ""));
-    console.log(`keel: granularity reset to the floor (${DEFAULT_GRANULARITY}: ${GRANULARITY_LEVELS[DEFAULT_GRANULARITY]}).`);
+    console.log(`keel: granularity ceiling cleared — back to the default (${DEFAULT_GRANULARITY}: ${GRANULARITY_LEVELS[DEFAULT_GRANULARITY]}).`);
     return;
   }
   if (!raw) {
@@ -245,7 +248,7 @@ function cmdGranularity(arg) {
     return;
   }
   saveState(setGranularity(loadState(), level));
-  console.log(`keel: granularity set — ${level}: ${GRANULARITY_LEVELS[level]} Held for this session; surfaced in the HUD. \`keel granularity reset\` returns to ${DEFAULT_GRANULARITY}.`);
+  console.log(`keel: granularity ceiling set — ${level}: ${GRANULARITY_LEVELS[level]} Held for this waking-day across sessions; below it, answers fit the ask. \`keel granularity reset\` returns to ${DEFAULT_GRANULARITY}.`);
 }
 
 function logFocusEvent(kind, now) {
@@ -310,7 +313,7 @@ function cmdHud(now) {
     parts.push(`keel 🌙 winding down · ${mins}m to night`);
   }
 
-  // Always-on indicators: the active moment (when one is set) + the session granularity.
+  // Always-on indicators: the active moment (when one is set) + the day's granularity ceiling.
   const inten = activeMomentNow(now)?.name ?? "";
   if (inten) parts.push(`◎ ${inten.length > 24 ? inten.slice(0, 23) + "…" : inten}`);
   if (state.focus) parts.push("◉ focus");

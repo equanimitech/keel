@@ -11,7 +11,7 @@
 /** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, granularity: Granularity }} Voice */
 /** @typedef {Record<string, string>} Watches  name → start time "HH:MM" */
 /** @typedef {{ rules: Rule[], orient: Orient, voice: Voice, watches: Watches, windDown: string, signOnGate: boolean }} Target */
-/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, inferNudgedTs: number, granularity: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number, lastMomentId: string }} State */
+/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, inferNudgedTs: number, granularity: string, granularityDay: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number, lastMomentId: string }} State */
 
 /** Named time-of-day watches (intention blocks) → start time. The active watch is the
  * latest start ≤ now, wrapping past midnight to the last watch. The `night` watch is the
@@ -54,7 +54,7 @@ export const DEFAULT_TARGET = {
 /** @returns {State} */
 export const emptyState = () => ({
   sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, inferNudgedTs: 0,
-  granularity: "", focus: false, focusTs: 0, focusSession: "",
+  granularity: "", granularityDay: "", focus: false, focusTs: 0, focusSession: "",
   lastRuleHash: "", consentShownTs: 0, lastMomentId: "",
 });
 
@@ -350,13 +350,19 @@ export function intentionNudge(candidates) {
 /** Response-granularity levels → the depth contract each implies (maps to semantic-zoom). */
 export const GRANULARITY_LEVELS = {
   sentence: "L1 — one sentence, claim only.",
-  tldr:     "L2 — one paragraph, claim + mechanism. The resting floor.",
+  tldr:     "L2 — one paragraph, claim + mechanism.",
   page:     "L3 — ~a page: claim + mechanism + worked example, scannable.",
   report:   "L5 — multi-section, citations, edge cases. Defensible.",
 };
 
-/** The granularity every session opens at, and the floor whenever none is set. */
-export const DEFAULT_GRANULARITY = "tldr";
+/** Levels in ascending depth. The order is the whole comparison — `min` over this index
+ * is how every ceiling composes. */
+export const GRANULARITY_ORDER = ["sentence", "tldr", "page", "report"];
+
+/** The ceiling in force when none is set for the day. Deliberately `page`, not `tldr`:
+ * a `tldr` default is a floor by another name, and a floor is a constant — which is
+ * exactly why the dial never moved. `page` is the usable level and a neutral cap. */
+export const DEFAULT_GRANULARITY = "page";
 
 /** Normalize a raw granularity arg to a canonical level, or "" if unrecognized. @param {string} raw */
 export function normalizeGranularity(raw) {
@@ -368,23 +374,50 @@ export function normalizeGranularity(raw) {
   return "";
 }
 
-/** Set the session granularity (the response-depth dial). Session-scoped — a fresh
- * session resets it to the floor at session-start. @param {State} state @param {string} level */
-export function setGranularity(state, level) {
-  return { ...state, granularity: level };
+/** Set the granularity ceiling (the response-depth dial). **Day-scoped**, not
+ * session-scoped: it is stamped with the waking-day and survives a fresh session, so a
+ * dial set once in the morning still governs the terminal you open after lunch. A
+ * session-scoped dial resets to the default every time and can therefore never vary,
+ * which is the bug this replaces.
+ * @param {State} state @param {string} level @param {number} [now] */
+export function setGranularity(state, level, now = Date.now()) {
+  return { ...state, granularity: level, granularityDay: focusDayKey(now) };
 }
 
-/** The active granularity — the session's set level, or the default floor when unset.
- * Never empty: a granularity contract is always in force. @param {State} state */
-export function activeGranularity(state) {
-  return state.granularity && GRANULARITY_LEVELS[state.granularity] ? state.granularity : DEFAULT_GRANULARITY;
+/** The active granularity ceiling — the level set this waking-day, or the default when
+ * unset, invalid, or stamped with an earlier day. Never empty: a contract is always in
+ * force. @param {State} state @param {number} [now] */
+export function activeGranularity(state, now = Date.now()) {
+  const fresh = state.granularityDay === focusDayKey(now);
+  return fresh && state.granularity && GRANULARITY_LEVELS[state.granularity]
+    ? state.granularity
+    : DEFAULT_GRANULARITY;
+}
+
+/** The depth actually owed this turn: the shallower of what the ask deserves and the
+ * day's ceiling. The resting state is the ask, not a pinned level — that is the whole
+ * difference between a ceiling and a floor. An unrecognized `want` defers to the ceiling.
+ * @param {string} want @param {State} state @param {number} [now] @returns {string} */
+export function effectiveGranularity(want, state, now = Date.now()) {
+  const ceiling = activeGranularity(state, now);
+  const asked = GRANULARITY_LEVELS[want] ? want : ceiling;
+  return GRANULARITY_ORDER.indexOf(asked) <= GRANULARITY_ORDER.indexOf(ceiling) ? asked : ceiling;
+}
+
+/** Does this ask outrun the day's ceiling? The guard against a ceiling's failure mode,
+ * which is silent under-delivery: the caller surfaces the fork — "this wants a page and
+ * today's ceiling is tldr" — rather than quietly shrinking the answer. At the ceiling is
+ * not over it. @param {string} want @param {State} state @param {number} [now] */
+export function exceedsCeiling(want, state, now = Date.now()) {
+  if (!GRANULARITY_LEVELS[want]) return false;
+  return GRANULARITY_ORDER.indexOf(want) > GRANULARITY_ORDER.indexOf(activeGranularity(state, now));
 }
 
 /** The granularity contract line — surfaced at session-start and in the HUD. Always renders,
- * because there is always a floor. @param {State} state @returns {string} */
-export function granularityLine(state) {
-  const g = activeGranularity(state);
-  return `[keel] ▤ granularity: ${g} — ${GRANULARITY_LEVELS[g]} Zoom per-response on signal ("page it", "in a sentence").`;
+ * because a ceiling is always in force. @param {State} state @param {number} [now] @returns {string} */
+export function granularityLine(state, now = Date.now()) {
+  const g = activeGranularity(state, now);
+  return `[keel] ▤ granularity ceiling: ${g} — ${GRANULARITY_LEVELS[g]} Below it, fit the answer to the ask. Per-response signal still overrides ("page it", "in a sentence").`;
 }
 
 // ── Deep-focus mode (single-stream commitment, opt-in, owner-claimed) ──

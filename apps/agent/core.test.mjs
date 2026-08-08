@@ -5,6 +5,7 @@ import {
   denyingRule, renderOrient, signOnBlocks,
   mergeTarget, emptyState, frictionNow,
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
+  effectiveGranularity, exceedsCeiling, granularityLine,
   resolveActiveMoment, todaysMoments, intentionLine, focusDayKey,
   setFocus, claimFocus, focusBlocks, focusLine,
   seedAllowFromRefs, momentFrictionAt, intentionSwitch,
@@ -14,6 +15,50 @@ import {
 const watches = { morning: "05:00", afternoon: "13:00", evening: "19:00", night: "01:00" };
 const lead = 90;
 const near = (a, b) => Math.abs(a - b) < 0.02;
+
+test("granularity: a level set on one waking-day does not survive into the next", () => {
+  const mon = Date.parse("2026-08-10T10:00:00");
+  const tue = Date.parse("2026-08-11T10:00:00");
+  const set = setGranularity(emptyState(), "report", mon);
+  assert.equal(activeGranularity(set, mon), "report");     // holds all day
+  assert.notEqual(activeGranularity(set, tue), "report");  // gone at the roll
+});
+
+test("granularity: the day's level caps the ask rather than pinning it", () => {
+  const now = Date.parse("2026-08-10T10:00:00");
+  const light = setGranularity(emptyState(), "tldr", now);
+  // Below the ceiling the ask decides — this is what a floor could never do.
+  assert.equal(effectiveGranularity("sentence", light, now), "sentence");
+  // Above it, the ceiling bites.
+  assert.equal(effectiveGranularity("report", light, now), "tldr");
+});
+
+test("granularity: with nothing set the ceiling is page, not the old tldr floor", () => {
+  const now = Date.parse("2026-08-10T10:00:00");
+  assert.equal(activeGranularity(emptyState(), now), "page");
+  assert.equal(effectiveGranularity("report", emptyState(), now), "page");
+  assert.equal(effectiveGranularity("sentence", emptyState(), now), "sentence");
+});
+
+test("granularityLine: names a ceiling and the resting rule, never a floor", () => {
+  const now = Date.parse("2026-08-10T10:00:00");
+  const line = granularityLine(emptyState(), now);
+  assert.match(line, /ceiling/);
+  assert.match(line, /fit the answer to the ask/);
+  // The old copy sold tldr as "the resting floor" — the thing that made it a constant.
+  assert.doesNotMatch(granularityLine(setGranularity(emptyState(), "tldr", now), now), /floor/);
+  // And it tracks the day's setting, so the line can be watched for movement.
+  assert.match(granularityLine(setGranularity(emptyState(), "sentence", now), now), /sentence/);
+});
+
+test("exceedsCeiling: true only when the ask outruns the day", () => {
+  const now = Date.parse("2026-08-10T10:00:00");
+  const light = setGranularity(emptyState(), "tldr", now);
+  assert.equal(exceedsCeiling("report", light, now), true);
+  assert.equal(exceedsCeiling("sentence", light, now), false);
+  assert.equal(exceedsCeiling("tldr", light, now), false);   // at the ceiling is not over it
+  assert.equal(exceedsCeiling("garbage", light, now), false); // unrecognized asks nothing
+});
 
 test("granularity: parses aliases, falls back to the floor, never empty", () => {
   assert.equal(normalizeGranularity("tl;dr"), "tldr");
