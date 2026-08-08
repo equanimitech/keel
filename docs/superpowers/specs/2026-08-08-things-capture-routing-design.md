@@ -211,8 +211,33 @@ inbox; **0 wrong dispatches**, including the meaningless one. Precision 2/2,
 recall 2/5 of the routable captures.
 
 That trade is the design: the dispatcher is silent more often than it acts, and
-wrong essentially never. Recall is recovered by improving the glosses using the
-logged vote distributions, not by lowering the gate.
+wrong essentially never.
+
+**More context does not help — measured, twice.** Things holds thousands of
+already-filed tasks per area, which look like ideal few-shot exemplars. They
+are not:
+
+- Exemplars *instead of* glosses, across all 14 populated areas: 1 correct
+  dispatch, 0 wrong, 5 left. Worse recall — the model abstained more.
+- Exemplars *in addition to* glosses, on the same 9 areas: 2 correct, 0 wrong,
+  4 left. Identical to glosses alone.
+
+So the nine hand-written gloss lines carry the whole signal, and exemplars cost
+a SQLite read, a larger prompt, and ongoing drift for no measured gain. Enum
+size matters more than exemplar richness: going from 9 to 14 areas pushed the
+model toward `unknown`.
+
+### The honest ceiling
+
+Across every configuration tried, the dispatcher files **about two of five**
+routable captures and mis-files none. Roughly 60% of the inbox still needs
+`/triage`. The machinery is worth building only if "a minority auto-file, none
+ever wrongly" is worth more than "all of them, when you sit down." That is a
+judgement call about the ritual, not a tuning problem.
+
+Untested: whether a larger local model (`qwen3.6:35b` is installed) lifts
+recall. It would cost 23 GB resident and break the low-power premise, so it is
+worth running once to learn the ceiling, not worth shipping.
 
 ## Error handling
 
@@ -241,6 +266,10 @@ call is stubbed; no model runs in the suite.
 
 No queue, no retry ladder, no resident daemon, no new MCP server, no dedicated
 UI. The activity log is the evidence; add machinery when it shows a need.
+
+**Few-shot exemplars from filed tasks — measured and rejected**, not
+overlooked. See Evidence. Do not re-add them without a benchmark showing they
+beat the glosses.
 
 ## Open thread
 
