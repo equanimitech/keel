@@ -40,7 +40,7 @@ its own subtree and never the kernel's collections.
                     ▼                                       ▼
         launchd: wake-things-sync              launchd: keel-dispatch
                     │                                       │
-              export markdown                     classify (lfm2.5 ×5)
+              export markdown                  classify (qwen3.6:35b ×5)
                     │                                       │
               ~/things  ── pond ──►  wake          unanimous? ──no──► leave
                                        │                    │
@@ -91,8 +91,18 @@ through the `things:///` URL scheme — never the database.
 ### 2. Dispatcher — keel agent surface
 
 Reads captures newer than a last-seen id held in `~/.kairos/keel/state/`.
-Classifies each with `lfm2.5` over the local ollama HTTP API at
+Classifies each with **`qwen3.6:35b`** over the local ollama HTTP API at
 `keep_alive: 0`, so no model stays resident between events.
+
+The large model is a measured choice, not a default. On identical fixtures,
+`lfm2.5` (2.6B) filed 2 of 5 routable captures; `qwen3.6:35b` filed **5 of 5,
+with none mis-filed**. The recall ceiling was the model, not the task.
+
+It costs 23 GB resident and an 8.2s cold load, for ~0.9s per vote. A capture
+event therefore costs about 13 seconds and 23 GB, transiently, after which the
+model unloads and idle cost returns to zero. A burst of captures amortizes into
+a single load, because each launchd fire processes everything newer than the
+offset.
 
 Three request options are load-bearing, established by benchmark:
 
@@ -191,10 +201,15 @@ full 256k window: the same call reported 41 GB and took 47s. With
 resident — `ollama serve` idled 18 days at 0.0% CPU and 22 MB RSS with no model
 loaded.
 
-**Model choice is not the lever.** `lfm2.5` and `qwen3:4b` both answered
-correctly and fast on a trivial routing case (3.7s and 2.3s cold). Both
-invented garbage areas when given no enum. The inputs — enum, glosses, gate —
-dominate.
+**Model choice does not rescue bad inputs.** `lfm2.5` and `qwen3:4b` both
+answered correctly and fast on a trivial routing case (3.7s and 2.3s cold), and
+both invented garbage areas when given no enum. No model size compensates for a
+missing enum or missing glosses.
+
+Model choice *does* set the recall ceiling once the inputs are right — see
+"Model size was the ceiling" below. Both statements are true and were measured
+separately; the inputs are necessary, the parameter count is what remained
+binding after them.
 
 **Self-reported confidence is noise.** Single-shot with emoji labels and no
 glosses scored 1/6, and returned 0.92 for every single capture including the
@@ -227,17 +242,29 @@ a SQLite read, a larger prompt, and ongoing drift for no measured gain. Enum
 size matters more than exemplar richness: going from 9 to 14 areas pushed the
 model toward `unknown`.
 
-### The honest ceiling
+### Model size was the ceiling
 
-Across every configuration tried, the dispatcher files **about two of five**
-routable captures and mis-files none. Roughly 60% of the inbox still needs
-`/triage`. The machinery is worth building only if "a minority auto-file, none
-ever wrongly" is worth more than "all of them, when you sit down." That is a
-judgement call about the ritual, not a tuning problem.
+Every small-model configuration plateaued at 2 of 5 routable captures. Swapping
+`lfm2.5` (2.6B) for `qwen3.6:35b` on identical fixtures — same 9 areas, same
+glosses, same 5-vote unanimity gate, only the model changed:
 
-Untested: whether a larger local model (`qwen3.6:35b` is installed) lifts
-recall. It would cost 23 GB resident and break the low-power premise, so it is
-worth running once to learn the ceiling, not worth shipping.
+| model | correct | wrong | left |
+|---|---|---|---|
+| `lfm2.5` (2.6B) | 2 | 0 | 4 |
+| `qwen3.6:35b` | **5** | **0** | 1 |
+
+All five routable captures dispatched correctly, and the meaningless one was
+correctly declined on a split vote (3 Themia / 2 unknown). Thirty calls in 26
+seconds.
+
+This reframes the earlier finding. Glosses, enum construction, and the
+unanimity gate all still matter — they are what makes the *gate* trustworthy.
+But the thing that was capping recall was parameter count, and neither better
+prompting nor richer context substituted for it.
+
+The cost is 23 GB resident and 8.2s to load, transiently, per event. That is
+compatible with the low-power premise because nothing stays resident: idle
+draw is unchanged at zero, and the spike lasts about thirteen seconds.
 
 ## Error handling
 
