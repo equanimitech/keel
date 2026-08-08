@@ -206,11 +206,16 @@ call is stubbed; no model runs in the suite.
 
 ## Open threads
 
-**Model size is unmeasured for this task.** The 35b was chosen on the area
-task, which needed knowledge the small models lacked. Kind classification may
-not need it. Re-running the kind fixtures against `lfm2.5` would either cut the
-per-event cost from 23 GB to 2.5 GB or confirm the large model is required —
-worth doing before implementation, since it changes nothing structural.
+**Model size — resolved, the large model is required.** Re-running the same 11
+captures against `lfm2.5` (2.6B): 5 of 11 unanimous against the large model's
+7, but the quality is far worse than the count suggests. The small model
+collapses toward `reference` as a safe default — it labelled a plain UI code
+task and an investigation task `reference`, one of them unanimously, and read a
+tracker-ticket backfill as `agent_command` where the large model correctly said
+`team_issue`.
+
+That is the same failure signature as the area task: **unanimous and wrong**,
+so the gate provides no protection. The 23 GB transient cost stands.
 
 **The kinds may be wrong.** Four kinds is a guess that survived one sample of
 eleven captures. The digest's own record is the evidence for splitting or
