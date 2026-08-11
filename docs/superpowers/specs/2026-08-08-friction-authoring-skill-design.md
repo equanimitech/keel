@@ -1,25 +1,8 @@
----
-$signature:
-  $type: tech.equanimi.secretariat.signature
-  signer: did:key:z6MkpcX3mHt44yNEDPDWJic8ocJdagzERxx5u2Qh1dWcVRVN
-  signerRole: agent
-  docHash: sha256:bec604657a06c746e96d17e4505d5b300e9c30b58029d12f560458fab831b536
-  signedAt: 2026-08-08T16:13:32.417090Z
-  signature: ed25519:qRlssFfwoqJd2R+XevRZWJL1UMzdpMfxJGp9hgsWq3JKC1oHYNWFlHclhX+j0uYVBNsgqH9BUypA9nAa1sWXBA==
-$attestation:
-  $type: tech.equanimi.secretariat.stamp
-  signer: did:key:z6MkjB8PQaN1vuUzdtnJsxyXR2f8d3tckGHkUYZMDytQsfak
-  act: attest
-  docHash: sha256:bec604657a06c746e96d17e4505d5b300e9c30b58029d12f560458fab831b536
-  docFilename: 2026-08-08-friction-authoring-skill-design.md
-  stampedAt: 2026-08-08T16:24:45.788634Z
-  signature: ed25519:GgmRT3yeVqdc3uI2qtVAGonnDcLQ15/NoMnZWfUDBXOAPkBB1oqtcU5ewveXP3/ZzP6DwOAERqxod296epguDQ==
----
 # Friction authoring skill — design
 
 **Date:** 2026-08-08
 **Surface:** authoring (Claude Code, against `$KAIROS_HOME/keel/rules/`)
-**Status:** design. Draft skill at `docs/superpowers/specs/friction-authoring-SKILL-draft.md`; not installed.
+**Status:** design. Draft skill at `friction-authoring-SKILL-draft.md`; not installed.
 **Lineage:** `packages/domain/src/rules.ts` (the contract), `docs/primitive-contracts.md`
 (what it was ported from), `docs/references/attention-research-basis.md` (the evidence
 base), `2026-06-01-strategic-friction-design.md` (the friction dial and skip credits),
@@ -69,12 +52,7 @@ zero collateral. Prune it.
 The v3 verification counted one number: Shorts links, 31 → 0. That number was correct
 and the rule was still broken. **The loop needs two counts — the target and the
 control** — and that is the single most load-bearing procedural change this design
-makes.
-
-> **Resolved 2026-08-08, after this document was written.** The offending selector was
-> removed and `youtube-shorts-hidden` is now at v4, bisected against two counts on the
-> same surface: 41 Shorts links → 0, 42 `/watch` links untouched. The version history and
-> the two-count rule are recorded in the rule's own `description`.
+makes. (Not applied here; this document does not modify rules.)
 
 ---
 
@@ -301,8 +279,7 @@ already warns about, arriving by a new road.
 
 ## Part VI — The skill
 
-Full draft: `docs/superpowers/specs/friction-authoring-SKILL-draft.md`. Its shape and the
-reasoning behind it:
+Full draft: `friction-authoring-SKILL-draft.md`. Its shape and the reasoning behind it:
 
 **It is a procedure, not a reference.** The taxonomy and the cross-product are tables
 the skill carries, but the load-bearing content is a ten-step workflow with one
@@ -318,7 +295,7 @@ it structured and mandatory rather than a good habit two of six rules happen to 
 
 **Two counts, not one.** Target and control, before and after, plus per-selector
 bisection with `controlLost` recorded per selector. This is the direct lesson of the
-collateral bug above and the only mechanical change that would have caught it.
+collateral bug in Part 0 and the only mechanical change that would have caught it.
 
 **Durability ordering is stated as a rule.** A URL prefix (`a[href^="/shorts"]`) is a
 product contract; a custom-element name is an implementation detail with a half-life
@@ -328,14 +305,13 @@ Shorts rule does.
 
 **Unverified is a label, not a state of mind.** If any selector was not exercised
 against a live DOM, `SELECTORS UNVERIFIED` appears in the description with the specific
-selectors named. A fourth correctness rule follows from the chess probe: a negative
-result on a surface that never rendered proves nothing. Scanning chess.com's 5,362
-loaded CSS rules on `/play/computer` found zero occurrences of `rematch`,
-`game-over-buttons-*` or `board-modal-*` — and that is *not* evidence the selectors are
-dead, because the game-over modal's chunk is not loaded until a game ends. The honest
-note is **"not sampled"**, never **"not present"**. (Subsequently confirmed: rendering
-the modal by resigning a bot game exposed `.quick-analysis-wrapper-splitRow button` and
-`button.game-over-new-game-button-component`, both live.)
+selectors named. Three of the six live rules carry that label today, honestly. A fourth
+correctness rule follows from the chess probe below: a negative result on a surface that
+never rendered proves nothing. Scanning chess.com's 5,362 loaded CSS rules on
+`/play/computer` found zero occurrences of `rematch`, `game-over-buttons-*` or
+`board-modal-*` — and that is *not* evidence the selectors are dead, because the
+game-over modal's chunk is not loaded until a game ends. The honest note is **"not
+sampled"**, never **"not present"**.
 
 **It refuses to design walls.** Step 4 asks for the exit before asking for the
 selectors. If there is no exit, the design is out of scope by construction, and the
@@ -357,3 +333,10 @@ skill says so rather than negotiating.
   `dwell_today_exceeds` precedent cited.
 - The skill makes live-DOM verification a gate, requires a control count, and requires
   unverified selectors to be labelled in the rule's `description`.
+
+## Immediate follow-up, outside this document's scope
+
+`youtube-shorts-hidden` ships a fallback that hides 92% of YouTube search results.
+Remove `ytd-item-section-renderer:has(grid-shelf-view-model a[href^="/shorts"])` — it is
+redundant with the `grid-shelf-view-model` selector above it. Not done here: this
+document does not modify rules.
