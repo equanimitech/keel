@@ -13,6 +13,7 @@
  * cost.
  */
 
+import { safeRedirect, type GateFriction } from "./decide";
 import { showGate } from "./overlay";
 
 const POLL_MS = 30_000;
@@ -20,6 +21,10 @@ const POLL_MS = 30_000;
 interface GateVerdictMessage {
   readonly fire?: boolean;
   readonly dwellMs?: number;
+  readonly friction?: GateFriction;
+  readonly proceed?: { label?: string; action?: { type?: string; to?: string } };
+  readonly abort?: { label?: string };
+  /** @deprecated pre-2026-08-08 background. */
   readonly prompt?: string;
 }
 
@@ -42,13 +47,38 @@ export function armDwellGate(): void {
       return;
     }
     showing = true;
+    // Labels and mechanism come from the rule now. The fallbacks are only for a
+    // verdict from an older background; they are the same strings the page used to
+    // hard-code, which is exactly what made the coercion invisible.
     const proceeded = await showGate({
-      prompt: verdict.prompt ?? "Is this still what you came for?",
+      friction: verdict.friction ?? {
+        type: "intention",
+        prompt: verdict.prompt ?? "Is this still what you came for?",
+      },
       dwellMinutes: Math.floor((verdict.dwellMs ?? 0) / 60_000),
-      proceedLabel: "Keep watching",
-      abortLabel: "Close the tab",
+      proceedLabel: verdict.proceed?.label ?? "Keep watching",
+      abortLabel: verdict.abort?.label ?? "Close the tab",
     });
     showing = false;
+    // A declared `redirect` now actually reroutes. It used to be parsed, stored, and
+    // ignored — every proceed was a `continue`.
+    const action = verdict.proceed?.action;
+    if (proceeded && action?.type === "redirect" && typeof action.to === "string") {
+      // Re-validate at the page even though the host already did. This runs in a
+      // content script on every site, so the target reaches `location.assign` with the
+      // page in scope — a `javascript:` or `data:` scheme here is script execution, not
+      // a reroute. The host check stops a bad rule shipping; this one stops a mirror
+      // that was written before the host had the check.
+      const target = safeRedirect(action.to);
+      if (target !== null) {
+        window.location.assign(target);
+      }
+      return;
+    }
+    if (proceeded && action?.type === "abort") {
+      void browser.runtime.sendMessage({ type: "keel-gate-leave" }).catch(() => {});
+      return;
+    }
     if (!proceeded) {
       // The page cannot close a tab it did not open, so ask the background.
       void browser.runtime.sendMessage({ type: "keel-gate-leave" }).catch(() => {

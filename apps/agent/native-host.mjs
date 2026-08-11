@@ -3,7 +3,7 @@
 // unprivileged writer. Chrome frames messages as a uint32 little-endian length
 // prefix followed by UTF-8 JSON. Max 1 MB/message (Chrome limit).
 
-import { appendBrowserEvents, loadWatchlist, loadAreas, loadAreaMap, saveAreaMap, loadBlockDomains, loadBreakTarget, loadDwellGates, loadLedger, loadMomentFriction, readBrowserEventsSince } from "./store.mjs";
+import { appendBrowserEvents, loadWatchlist, loadAreas, loadAreaMap, saveAreaMap, loadBlockDomains, loadBreakTarget, loadDwellGates, loadLedger, loadMomentFriction, loadTransforms, readBrowserEventsSince } from "./store.mjs";
 
 const MAX_MESSAGE_BYTES = 1024 * 1024;
 
@@ -145,6 +145,7 @@ export function runHost(stdin = process.stdin, stdout = process.stdout) {
           armable,
           observe,
           gates: loadDwellGates(),
+          transforms: loadTransforms(),
           break: loadBreakTarget(),
           areas: loadAreas(),
           areaMap: loadAreaMap(),

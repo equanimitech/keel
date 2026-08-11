@@ -34,6 +34,28 @@ export const dwellGates = storage.defineItem<DwellGate[]>("local:policy:gates", 
 });
 
 /**
+ * A DOM transform as the extension sees it, projected host-side from a rule's
+ * `transform` primitive. Selectors travel as data; the interpreter is
+ * `modules/friction/transform/apply.ts`.
+ *
+ * `replace` never arrives here — the host degrades it to `hide` rather than
+ * shipping a templateId the extension has no registry for.
+ */
+export interface PageTransform {
+  readonly ruleId: string;
+  readonly domains: readonly string[];
+  readonly targets: { readonly primary: string; readonly fallbacks: readonly string[] };
+  readonly replacement:
+    | { readonly type: "hide" }
+    | { readonly type: "restyle"; readonly style: Readonly<Record<string, string>> };
+}
+
+/** DOM transforms declared by rules. */
+export const pageTransforms = storage.defineItem<PageTransform[]>("local:policy:transforms", {
+  fallback: [],
+});
+
+/**
  * The allow/deny hostname pair scoped by the moment running right now, or null
  * when none is. `allow` is seeded host-side from the moment's refs; `deny` is
  * carried whether or not anything fills it yet.
@@ -96,6 +118,7 @@ export async function replacePolicy(policy: {
   readonly standing?: readonly string[];
   readonly armable?: readonly string[];
   readonly gates?: readonly DwellGate[];
+  readonly transforms?: readonly PageTransform[];
   readonly break?: BreakTarget | null;
   readonly areas?: readonly AreaInfo[];
   readonly areaMap?: Readonly<Record<string, string>>;
@@ -110,6 +133,12 @@ export async function replacePolicy(policy: {
   // Gates are replaced wholesale including the empty case — unlike a standing
   // block, a gate that no longer exists must stop firing. Failing toward "more
   // friction" is right for blocks and wrong for interruptions.
+  // Same reasoning as gates, and the stakes are higher: a transform that no
+  // longer has a rule must stop hiding things. A stale mirror that keeps part
+  // of a page invisible is indistinguishable from the site being broken.
+  if (policy.transforms !== undefined) {
+    await pageTransforms.setValue([...policy.transforms]);
+  }
   if (policy.gates !== undefined) {
     await dwellGates.setValue([...policy.gates]);
   }

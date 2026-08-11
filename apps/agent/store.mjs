@@ -336,20 +336,131 @@ export function readBrowserEventsSince(sinceTs) {
   return out;
 }
 
+/** The gate's declared friction, projected whole instead of flattened to a prompt.
+ *
+ * This used to be `p.frictionType?.prompt ?? "Still what you came for?"`, which meant a
+ * gate declaring `{type: "delay", seconds: 20}` — having no `.prompt` — was shipped as
+ * the DEFAULT intention prompt and rendered as an intention gate. The author's mechanism
+ * was not merely unimplemented; it was discarded and silently replaced with a different
+ * one. Same failure as a selector that matches nothing: the rule reads as one thing and
+ * the runtime does another, with no error anywhere.
+ *
+ * An unrecognised type is now surfaced IN the prompt rather than swallowed. Loud beats
+ * silent — the whole point of this projection.
+ * @param {any} frictionType @returns {any} */
+/** A redirect target, or `null` if it is not one keel will navigate to.
+ *
+ * Only absolute http(s) and site-relative paths. `javascript:` and `data:` are the
+ * reason this exists: the target ends up in `window.location.assign` inside a content
+ * script on every page, so a scheme that executes is an injection primitive rather than
+ * a reroute. Rules are local files today, but they arrive over the relay and are edited
+ * by hand, and neither of those is a trust boundary worth resting a script execution on.
+ *
+ * Validated here AND at the page (`gate/arm.ts`). The host stops a bad rule from ever
+ * shipping; the page stops a stale mirror that predates this check.
+ * @param {unknown} to @returns {string|null} */
+export function safeRedirect(to) {
+  if (typeof to !== "string" || !to.trim()) return null;
+  const url = to.trim();
+  // Site-relative. No scheme to smuggle, and `//host` is excluded because a
+  // protocol-relative URL is an absolute one wearing a relative costume.
+  if (url.startsWith("/") && !url.startsWith("//")) return url;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+export function projectFriction(frictionType) {
+  const t = frictionType?.type;
+  if (t === "delay") return { type: "delay", seconds: Number(frictionType.seconds) || 0 };
+  if (t === "breath") return { type: "breath", cycles: Number(frictionType.cycles) || 3 };
+  if (t === "confirmation") return { type: "confirmation" };
+  if (t === "intention") {
+    return { type: "intention", prompt: frictionType.prompt || "Still what you came for?" };
+  }
+  if (t) {
+    return { type: "intention", prompt: `keel declared "${t}" here and cannot render it yet.` };
+  }
+  return { type: "intention", prompt: "Still what you came for?" };
+}
+
 /** Dwell gates declared by enabled rules — what the extension needs to fire an
  * interstitial every N minutes of attended time.
- * @returns {{ruleId: string, domains: string[], everyMinutes: number, prompt: string}[]} */
+ *
+ * Both affordances travel with the gate. They used to be hard-coded in `gate/arm.ts`
+ * ("Keep watching" / "Close the tab"), invisible only because the one live rule happens
+ * to declare those exact strings. The fallbacks below are the same words, but they are
+ * now a stated default in one place rather than a page-side constant that overrides
+ * whatever the author wrote.
+ *
+ * @returns {{ruleId: string, domains: string[], everyMinutes: number, friction: any,
+ *            proceed: {label: string, action: any}, abort: {label: string}}[]} */
 export function loadDwellGates() {
   const out = [];
   for (const rule of loadRules()) {
     if (rule?.defaultEnabled === false) continue;
     for (const p of rule?.primitives ?? []) {
       if (p?.kind !== "gate" || p?.trigger?.type !== "dwell") continue;
+      const action = p.proceedAffordance?.action;
       out.push({
         ruleId: rule.id,
         domains: resolveRuleDomains(rule),
         everyMinutes: p.trigger.everyMinutes,
-        prompt: p.frictionType?.prompt ?? "Still what you came for?",
+        friction: projectFriction(p.frictionType),
+        proceed: {
+          label: p.proceedAffordance?.label || "Keep watching",
+          // `redirect` needs a destination; without one it is a continue wearing a
+          // different name, and a gate that claims to reroute and does not is the bug
+          // this function exists to stop shipping.
+          action:
+            action?.type === "redirect" && safeRedirect(action.to)
+              ? { type: "redirect", to: safeRedirect(action.to) }
+              : action?.type === "abort"
+                ? { type: "abort" }
+                : { type: "continue" },
+        },
+        abort: { label: p.abortAffordance?.label || "Close the tab" },
+      });
+    }
+  }
+  return out;
+}
+
+/** DOM transforms declared by enabled rules — the `transform` primitive, which was
+ * typed in 2026-06 and left uninterpreted until now.
+ *
+ * Projected as data the content script can act on without the full RuleSpec, the same
+ * bargain `loadDwellGates` makes: domains travel with the transform so the page can
+ * self-select, and the rule stays host-side.
+ *
+ * `replace` is not projected. It needs the template registry, which is its own
+ * contract; an unknown replacement degrades to `hide` rather than being dropped,
+ * because a rule that says "get this out of my way" is better served by hiding the
+ * thing than by silently doing nothing.
+ * @returns {{ruleId: string, domains: string[], targets: {primary: string, fallbacks: string[]}, replacement: any}[]} */
+export function loadTransforms() {
+  const out = [];
+  for (const rule of loadRules()) {
+    if (rule?.defaultEnabled === false) continue;
+    for (const p of rule?.primitives ?? []) {
+      if (p?.kind !== "transform") continue;
+      const primary = typeof p?.targets?.primary === "string" ? p.targets.primary.trim() : "";
+      if (!primary) continue;
+      const fallbacks = (p.targets.fallbacks ?? [])
+        .filter((s) => typeof s === "string" && s.trim())
+        .map((s) => s.trim());
+      const style = p.replacement?.style;
+      out.push({
+        ruleId: rule.id,
+        domains: resolveRuleDomains(rule),
+        targets: { primary, fallbacks },
+        replacement:
+          p.replacement?.type === "restyle" && style && typeof style === "object"
+            ? { type: "restyle", style }
+            : { type: "hide" },
       });
     }
   }

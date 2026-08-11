@@ -37,7 +37,7 @@ import {
 } from "../sensors/events";
 import { observeDomains } from "../watchlist/store";
 import { dwellGates } from "../friction/policy/store";
-import { evaluateGate, gateFor } from "../friction/gate/decide";
+import { evaluateGates, gateFor, gatesFor } from "../friction/gate/decide";
 import { evaluateMomentGate } from "../friction/gate/moment";
 import type { Runtime } from "wxt/browser";
 
@@ -234,8 +234,9 @@ export function startActivityWriter(): void {
           if (moment !== null) {
             return moment;
           }
-          const gate = gateFor(await dwellGates.getValue(), domain);
-          return gate === null ? { fire: false } : evaluateGate(gate);
+          // Every gate on the domain, not the first — see `evaluateGates`. A second
+          // rule used to be dropped on the floor here.
+          return evaluateGates(gatesFor(await dwellGates.getValue(), domain));
         })
         .catch(() => ({ fire: false }));
     }

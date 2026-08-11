@@ -13,13 +13,51 @@
  * stopping cue rather than a notification.
  */
 
+import type { GateFriction } from "./decide";
+
 const HOST_ID = "keel-gate-host";
 
+/** One inhale-exhale, in seconds. Six per minute is the resonant-breathing figure the
+ * evidence clusters around; the gate is not a breathing app, it just needs the pace to
+ * be a real one rather than a number chosen to look small. */
+const BREATH_CYCLE_SECONDS = 10;
+
 export interface GateOptions {
-  readonly prompt: string;
+  readonly friction: GateFriction;
   readonly dwellMinutes: number;
   readonly proceedLabel: string;
   readonly abortLabel: string;
+}
+
+/** What the card says. Pure. */
+export function gatePrompt(friction: GateFriction): string {
+  switch (friction.type) {
+    case "intention":
+      return friction.prompt;
+    case "confirmation":
+      return "Continue?";
+    case "delay":
+      return "A beat, then it's yours.";
+    case "breath":
+      return friction.cycles === 1 ? "One breath." : `${friction.cycles} breaths.`;
+  }
+}
+
+/**
+ * How long the PROCEED affordance stays closed. Pure.
+ *
+ * Only continuing is ever delayed. Leaving is live from the first frame — a delay on
+ * the exit is punishment, and punishment both fails on the evidence (Mark 2018) and
+ * teaches the person to route around the tool.
+ */
+export function holdSeconds(friction: GateFriction): number {
+  if (friction.type === "delay") {
+    return Math.max(0, Math.round(friction.seconds));
+  }
+  if (friction.type === "breath") {
+    return Math.max(0, Math.round(friction.cycles * BREATH_CYCLE_SECONDS));
+  }
+  return 0;
 }
 
 /** Pause every playing media element; returns the ones actually paused. */
@@ -62,6 +100,20 @@ button {
 }
 .proceed { background: transparent; border-color: #52525b; color: #e4e4e7; }
 .proceed:hover { border-color: #a1a1aa; }
+.proceed[disabled] { opacity: 0.45; cursor: default; border-color: #3f3f46; }
+.proceed[disabled]:hover { border-color: #3f3f46; }
+/* Breath only. A delay is a wait; a breath is a pace, and the pace has to be visible
+   or the person is just staring at a number. */
+.breath {
+  width: 3.5rem; height: 3.5rem; margin: 0 auto 1.75rem; border-radius: 50%;
+  background: currentColor; opacity: 0.16;
+  animation: breathe 10s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%, 100% { transform: scale(0.55); }
+  40%, 60% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .breath { animation: none; transform: scale(0.8); } }
 .abort { background: #f4f4f5; color: #18181b; }
 .abort:hover { background: #ffffff; }
 @media (prefers-color-scheme: light) {
@@ -104,9 +156,15 @@ export function showGate(options: GateOptions): Promise<boolean> {
   dwell.className = "dwell";
   dwell.textContent = `${options.dwellMinutes} minutes here today`;
 
+  if (options.friction.type === "breath") {
+    const pacer = document.createElement("div");
+    pacer.className = "breath";
+    card.append(pacer);
+  }
+
   const prompt = document.createElement("p");
   prompt.className = "prompt";
-  prompt.textContent = options.prompt;
+  prompt.textContent = gatePrompt(options.friction);
 
   const actions = document.createElement("div");
   actions.className = "actions";
@@ -120,17 +178,44 @@ export function showGate(options: GateOptions): Promise<boolean> {
   abort.textContent = options.abortLabel;
 
   actions.append(proceed, abort);
-  card.append(dwell, prompt, actions);
+  card.insertBefore(dwell, card.firstChild);
+  card.append(prompt, actions);
   backdrop.append(card);
   root.append(style, backdrop);
   document.documentElement.append(host);
 
+  // Hold the proceed affordance closed for `delay` and `breath`. The countdown is
+  // rendered into the button's own label rather than a separate timer, so the thing
+  // you are waiting for is the thing you are looking at.
+  const hold = holdSeconds(options.friction);
+  let ticker: ReturnType<typeof setInterval> | undefined;
+  if (hold > 0) {
+    let left = hold;
+    proceed.disabled = true;
+    proceed.textContent = `${options.proceedLabel} (${left}s)`;
+    ticker = setInterval(() => {
+      left -= 1;
+      if (left > 0) {
+        proceed.textContent = `${options.proceedLabel} (${left}s)`;
+        return;
+      }
+      clearInterval(ticker);
+      ticker = undefined;
+      proceed.disabled = false;
+      proceed.textContent = options.proceedLabel;
+    }, 1000);
+  }
+
   // Focus the *abort* affordance: the default action should be the one you'd
-  // choose with a clear head, not the one momentum wants.
+  // choose with a clear head, not the one momentum wants. It is also the only
+  // affordance that is ever live immediately — leaving is never delayed.
   abort.focus();
 
   return new Promise<boolean>((resolve) => {
     const close = (proceeded: boolean): void => {
+      if (ticker !== undefined) {
+        clearInterval(ticker);
+      }
       host.remove();
       if (proceeded) {
         for (const media of paused) {
