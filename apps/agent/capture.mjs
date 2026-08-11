@@ -6,6 +6,8 @@
 // a life *area* was not — see
 // docs/superpowers/specs/2026-08-08-capture-kind-classifier-design.md.
 
+import { buildEvent, capValue } from "./core.mjs";
+
 /** The closed set of capture kinds. Each implies a lane, so adding one is a
  * deliberate edit, not an accretion. */
 export const CAPTURE_KINDS = ["agent_command", "team_issue", "personal_action", "reference"];
@@ -53,4 +55,80 @@ export function tallyVotes(votes) {
   const distinct = Object.keys(distribution);
   const unanimous = votes.length > 0 && distinct.length === 1 && distinct[0] !== "unclear";
   return { kind: unanimous ? distinct[0] : "unclear", distribution };
+}
+
+/** One log event per classified capture. Past-tense kind — a *completion*
+ * under the event-taxonomy grammar.
+ * @param {{ id: string, ts: number, sessionId?: string, captureId: string,
+ *   title: string, kind: string, distribution: Record<string, number>,
+ *   model: string }} a */
+export function buildClassifiedEvent({ id, ts, sessionId = "", captureId, title, kind, distribution, model }) {
+  return buildEvent({
+    id, kind: "capture_classified", ts, sessionId,
+    payload: {
+      captureId,
+      title: capValue(title, TITLE_CAP),
+      classifiedKind: kind,
+      votes: distribution,
+      model,
+    },
+  });
+}
+
+/** @param {unknown} t — a title payload, possibly capped into an object */
+function titleText(t) {
+  if (typeof t === "string") {
+    return t;
+  }
+  if (t && typeof t === "object" && typeof (/** @type {any} */ (t).value) === "string") {
+    return /** @type {any} */ (t).value;
+  }
+  return "";
+}
+
+/** Render one day's classifications, grouped by kind.
+ *
+ * `agent_command` entries carry a ready-to-fire invocation. It deliberately
+ * does NOT name a repository: inferring the target repo is a second
+ * classification problem with the same entity-knowledge weakness that sank
+ * area routing. Run it from wherever you already are.
+ * @param {any[]} events @param {string} date */
+export function renderDigest(events, date) {
+  /** @type {Map<string, any[]>} */
+  const byKind = new Map();
+  for (const e of events) {
+    if (e?.kind !== "capture_classified") {
+      continue;
+    }
+    const k = e.payload?.classifiedKind ?? "unclear";
+    if (!byKind.has(k)) {
+      byKind.set(k, []);
+    }
+    byKind.get(k).push(e);
+  }
+
+  const lines = [`# Captures — ${date}`, ""];
+  let total = 0;
+  for (const k of [...CAPTURE_KINDS, "unclear"]) {
+    const items = byKind.get(k) ?? [];
+    if (items.length === 0) {
+      continue;
+    }
+    total += items.length;
+    lines.push(`## ${k} (${items.length})`, "");
+    for (const e of items) {
+      const title = titleText(e.payload?.title);
+      const votes = Object.entries(e.payload?.votes ?? {})
+        .map(([kk, n]) => `${kk} ${n}`).join(", ");
+      lines.push(`- ${title}  _(${votes})_`);
+      if (k === "agent_command") {
+        lines.push("", "  ```", `  claude -p ${JSON.stringify(title)}`, "  ```", "");
+      }
+    }
+    lines.push("");
+  }
+  if (total === 0) {
+    lines.push("_No captures classified._", "");
+  }
+  return lines.join("\n");
 }
