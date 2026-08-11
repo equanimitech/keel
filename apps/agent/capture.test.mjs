@@ -100,3 +100,58 @@ test("renderDigest shows the vote distribution for a split", () => {
   assert.ok(out.includes("agent_command 3"));
   assert.ok(out.includes("reference 2"));
 });
+
+// ── Things inbox reader + offset ──────────────────────────────
+
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { readInboxSince, loadOffset, saveOffset } from "./capture-store.mjs";
+
+/** Build a throwaway database shaped like the Things schema we read. */
+function fixtureDb() {
+  const dir = mkdtempSync(join(tmpdir(), "keel-things-"));
+  const path = join(dir, "main.sqlite");
+  const db = new DatabaseSync(path);
+  db.exec(`CREATE TABLE TMTask (uuid TEXT, title TEXT, creationDate REAL,
+    type INT, status INT, trashed INT, start INT)`);
+  const ins = db.prepare(`INSERT INTO TMTask VALUES (?,?,?,?,?,?,?)`);
+  ins.run("a", "older inbox item", 100.0, 0, 0, 0, 0);
+  ins.run("b", "newer inbox item", 200.0, 0, 0, 0, 0);
+  ins.run("c", "completed inbox item", 300.0, 0, 3, 0, 0);
+  ins.run("d", "filed elsewhere", 400.0, 0, 0, 0, 1);
+  ins.run("e", "trashed", 500.0, 0, 0, 1, 0);
+  ins.run("f", "a project not a task", 600.0, 1, 0, 0, 0);
+  db.close();
+  return path;
+}
+
+test("readInboxSince returns only open, untrashed inbox tasks, oldest first", () => {
+  const rows = readInboxSince(fixtureDb(), 0);
+  assert.deepEqual(rows.map((r) => r.uuid), ["a", "b"]);
+  assert.equal(rows[0].title, "older inbox item");
+});
+
+test("readInboxSince respects the offset", () => {
+  const rows = readInboxSince(fixtureDb(), 100.0);
+  assert.deepEqual(rows.map((r) => r.uuid), ["b"]);
+});
+
+test("readInboxSince honours the limit", () => {
+  const rows = readInboxSince(fixtureDb(), 0, 1);
+  assert.deepEqual(rows.map((r) => r.uuid), ["a"]);
+});
+
+test("offset round-trips, and a missing file reads as 0", () => {
+  const p = join(mkdtempSync(join(tmpdir(), "keel-off-")), "offset.json");
+  assert.equal(loadOffset(p), 0);
+  saveOffset(1234.5, p);
+  assert.equal(loadOffset(p), 1234.5);
+});
+
+test("a corrupt offset file reads as 0 rather than throwing", () => {
+  const p = join(mkdtempSync(join(tmpdir(), "keel-off-")), "offset.json");
+  writeFileSync(p, "not json");
+  assert.equal(loadOffset(p), 0);
+});
