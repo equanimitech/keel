@@ -51,10 +51,14 @@ Drift is deliberately not a semantic judgement. It is:
 > There is a declared heading right now, **and** attended time in an area tagged
 > `weeds` has passed a floor within this watch.
 
+Operationally this is a *detector* of drift, where drift is the delta between
+expectation and reality (`2026-08-07-keel-drift-design.md`): weedy dwell past the
+floor is the proxy that the delta is widening. The helm reacts; the report measures.
+
 No model call, no matching of heading text against domains. `Entertainement` is
 already tagged `weeds` in the kernel, which is the entire reason that tag exists
 in a shared contract. This is the deterministic baseline; a semantic helm is a
-later layer and this is what it must beat.
+later layer and this is what it must beat (§8).
 
 **The known weakness, stated rather than hidden:** a heading that legitimately
 lives in a weedy area (researching YouTube, an evening deliberately spent in
@@ -307,7 +311,7 @@ signal now, model it later. It is also the only way to answer "would calendar
 ingestion actually help?" with data rather than conviction.
 
 **Out, deliberately:**
-- Any semantic reading of the heading (that is the AI helm, a later layer).
+- Any semantic reading of the heading (the AI helm — §8, a later layer).
 - Calendar ingestion itself (§4.6 makes it a source swap; it is its own build).
 - Reading zenborg's vault. The heading comes from keel's own state; zenborg is
   a possible future *source* of it, not a dependency. This preserves what the
@@ -317,7 +321,63 @@ ingestion actually help?" with data rather than conviction.
 - Renaming `drogue`, `intention`, `granularity`. Rides with the deletion pass.
 - `weeds` is **kept** as the kernel tag — decided 2026-08-06, zero migration.
 
-## 8. Open
+## 8. The AI tier — later, through MCP
+
+§3's deterministic floor is the v1 helm. The AI tier is a second layer **on top
+of it, not a replacement**: the same trigger, then a harness that adjudicates and
+writes the copy. It is deliberately not built now — the spec's own rule applies:
+the deterministic baseline must accrue history first, and "it must beat" (§3) is
+unmeasurable without it.
+
+**The split:**
+
+- **Deterministic, stays in the gate (never through a model):** the detector.
+  Heading present + weedy dwell past `floorMs` is the trigger. It stays fast,
+  always-on, fail-soft, and inside the privacy posture — domains and timings only.
+- **Through the harness (later):** the adjudication and the copy. When the floor
+  is met, the browser relays a drift query; the harness answers the one question
+  the deterministic layer cannot — *is this actually drift?* (the §3 known
+  weakness: researching YouTube on youtube.com) — and writes the prompt naming
+  the heading. The verdict rides the existing policy mirror back to the gate:
+  no new actuator, no new channel.
+
+**MCP is the seam.** The drift spec reserves `--json` → MCP for the read side;
+this extends the pattern to the actuation side. Concretely:
+
+- `keel_helm_reading` — the deterministic facts (heading, weedy minutes, current
+  domain). Fast, local; the whole answer to "should a model be consulted?".
+- The verdict is written back the way the heading arrived — through the policy
+  pull — so the gate never blocks on a model.
+
+**A set of agents, used sparingly.** The gate verdict is a one-shot judgment —
+one judge call, not a fleet; a reader → judge → composer pipeline at the drift
+cadence is overhead. Where a set of agents earns its keep is the **read side**:
+drift report review, where a reader (pull facts) + an analyzer (what does the
+delta mean) is genuine division of labor. Do not build the fleet to serve the gate.
+
+**Three constraints, settled now so the later build doesn't revisit them:**
+
+1. **Session vs always-on.** The gate is always-on; a harness is a session. The
+   browser must never depend on a live agent. Either the native host shells a
+   headless `claude -p` when the floor is met, or — preferred — the harness is
+   already in session (Claude Code is open during the craft time where drift
+   happens) and the verdict is one tool call. Both keep the gate non-blocking;
+   the headless path is the fallback, not the default.
+2. **Privacy widening is a design decision, not an implementation detail.**
+   Heading text + domain cross into the model. Local inference, or
+   accepted-and-recorded. The 2026-06-12 posture governs payloads, not just
+   storage.
+3. **The drift spec's injection warning applies doubled.** If the same harness
+   measures drift *and* nudges, declaring an intention gains a second,
+   unseparable effect on the agent. Record the injection in the event
+   (`intention_switched` is the seam) or the declared-interval join becomes
+   unmeasurable.
+
+**Trigger for building:** ~21 days of baseline history, and the AI tier is then
+specifiable as *"it fires less often on legitimately-weedy headings, without
+firing later on real drift."* Until then it stays in this section.
+
+## 9. Open
 
 1. Whether the helm should also read the *tide label* (`drifting` / `restless`)
    rather than weedy dwell alone. Deferred: dwell is the simpler signal and the

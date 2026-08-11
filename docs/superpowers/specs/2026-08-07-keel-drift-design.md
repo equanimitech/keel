@@ -3,6 +3,9 @@
 **Date:** 2026-08-07
 **Surface:** keel agent (`keel drift`) + `@keel/domain` (pure derivation)
 **Status:** proposed
+**Definition:** drift is the **delta between expectation and reality** — what was
+meant versus what was observed. This spec measures it; the helm
+(`2026-08-06-helm-design.md`) detects a proxy of it.
 **Related:** `2026-08-06-helm-design.md` (how heading/tide/helm/gate compose),
 `2026-08-07-active-moment-intention-design.md` (the moment that IS the intention),
 `packages/domain/docs/event-taxonomy.md` (the writers' contract),
@@ -286,9 +289,14 @@ injection must be recorded in the event so it can be controlled for.
 - **An MCP tool** — `--json` is the seam. Add the wrapper when an agent needs it
   without a shell.
 
-## Open question
+## The name
 
-`drift` reads as slightly negative for something deliberately non-judgmental. It is
-kept because the corpus already defines it (2026-06-14: "being pulled off the
-cycle's heading") and inventing a synonym would fragment the vocabulary. Revisit
-only if the rendered output feels like it is grading the day.
+`drift` reads as slightly negative for something deliberately non-judgmental — but
+drift *is* the delta between expectation and reality, and this report is the
+measurement of that delta. The corpus already pointed at it (2026-06-14: "being
+pulled off the cycle's heading"). It is kept.
+
+The helm uses the same word in a different register: its `drifting` verdict is the
+**detector** — weedy dwell past a floor is the operational proxy that the delta is
+widening, not the delta itself. The report measures; the helm reacts. Revisit the
+name only if the rendered output feels like it is grading the day.
