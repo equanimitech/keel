@@ -20,10 +20,20 @@
 <plist version="1.0">
 <dict>
   <key>Label</key><string>tech.equanimi.keel.classify</string>
+  <!--
+    Absolute path to node, NOT `/usr/bin/env node`. A launchd agent inherits a
+    minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin), so `env node` exits 127 and
+    launchd surfaces that only as LastExitStatus 32512 — the job otherwise
+    looks perfectly healthy, which is how this survived review and was caught
+    only by loading it for real.
+
+    This is the pnpm shim rather than the versioned binary underneath it
+    (.../nodejs/24.18.0/bin/node), so a Node upgrade does not silently break
+    the agent.
+  -->
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/bin/env</string>
-    <string>node</string>
+    <string>/Users/rafa/Library/pnpm/node</string>
     <string>/Users/rafa/Developer/equanimitech/keel/apps/agent/keel-classify.mjs</string>
   </array>
   <key>WatchPaths</key>
