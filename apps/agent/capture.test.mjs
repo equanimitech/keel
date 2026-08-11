@@ -155,3 +155,147 @@ test("a corrupt offset file reads as 0 rather than throwing", () => {
   writeFileSync(p, "not json");
   assert.equal(loadOffset(p), 0);
 });
+
+// ── ollama sampling ───────────────────────────────────────────
+
+import { voteKind, unloadModel, MODEL, SAMPLES } from "./capture-store.mjs";
+
+/** A fetch stub that replays canned kinds and records every request body. */
+function stubFetch(kinds) {
+  const calls = [];
+  let i = 0;
+  const fn = async (url, init) => {
+    calls.push({ url, body: JSON.parse(init.body) });
+    const kind = kinds[Math.min(i, kinds.length - 1)];
+    i += 1;
+    return { ok: true, json: async () => ({ response: JSON.stringify({ kind }) }) };
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+test("voteKind samples the model N times and returns every vote", async () => {
+  const f = stubFetch(["agent_command", "agent_command", "reference"]);
+  const votes = await voteKind("do a thing", { samples: 3, fetchImpl: f });
+  assert.deepEqual(votes, ["agent_command", "agent_command", "reference"]);
+  assert.equal(f.calls.length, 3);
+});
+
+test("voteKind sends the load-bearing ollama options", async () => {
+  const f = stubFetch(["reference"]);
+  await voteKind("some note", { samples: 1, fetchImpl: f });
+  const b = f.calls[0].body;
+  assert.equal(b.model, MODEL);
+  assert.equal(b.stream, false);
+  assert.equal(b.think, false);
+  assert.equal(b.keep_alive, "5m");
+  assert.equal(b.options.num_ctx, 2048);
+  assert.equal(b.options.temperature, 0.8);
+  assert.equal(b.format.properties.kind.type, "string");
+  assert.ok(b.prompt.includes("some note"));
+});
+
+test("voteKind throws when ollama returns an error status", async () => {
+  const f = async () => ({ ok: false, status: 500, json: async () => ({}) });
+  await assert.rejects(() => voteKind("x", { samples: 1, fetchImpl: f }), /ollama 500/);
+});
+
+test("voteKind throws when the response is not the expected JSON", async () => {
+  const f = async () => ({ ok: true, json: async () => ({ response: "not json" }) });
+  await assert.rejects(() => voteKind("x", { samples: 1, fetchImpl: f }));
+});
+
+test("unloadModel asks ollama to drop the model immediately", async () => {
+  const f = stubFetch(["reference"]);
+  await unloadModel({ fetchImpl: f });
+  assert.equal(f.calls[0].body.keep_alive, 0);
+  assert.equal(f.calls[0].body.model, MODEL);
+});
+
+test("SAMPLES is the measured five-vote gate", () => {
+  assert.equal(SAMPLES, 5);
+});
+
+// ── the classify run ──────────────────────────────────────────
+
+import { classifyCaptures } from "./capture.mjs";
+
+const caps = [
+  { uuid: "c1", title: "sort the dropdown", creationDate: 100 },
+  { uuid: "c2", title: "pay the invoice", creationDate: 200 },
+];
+
+function harness(voteFn) {
+  const events = [];
+  const offsets = [];
+  let n = 0;
+  return {
+    events, offsets,
+    run: (captures) => classifyCaptures({
+      captures,
+      vote: voteFn,
+      appendEvent: (e) => { events.push(e); },
+      saveOffset: (o) => { offsets.push(o); },
+      now: () => 1_700_000_000_000,
+      newId: () => `id-${(n += 1)}`,
+    }),
+  };
+}
+
+test("classifyCaptures writes one event per capture with the tallied kind", async () => {
+  const h = harness(async () => ["agent_command", "agent_command", "agent_command", "agent_command", "agent_command"]);
+  const r = await h.run(caps);
+  assert.equal(r.classified, 2);
+  assert.equal(r.failed, 0);
+  assert.equal(h.events.length, 2);
+  assert.equal(h.events[0].payload.classifiedKind, "agent_command");
+  assert.equal(h.events[0].payload.captureId, "c1");
+});
+
+test("classifyCaptures advances the offset before writing the event", async () => {
+  const order = [];
+  await classifyCaptures({
+    captures: [caps[0]],
+    vote: async () => ["reference"],
+    appendEvent: () => { order.push("event"); },
+    saveOffset: () => { order.push("offset"); },
+    now: () => 1, newId: () => "x",
+  });
+  assert.deepEqual(order, ["offset", "event"],
+    "a crash must skip a capture, never double-classify it");
+});
+
+test("classifyCaptures records a split as unclear", async () => {
+  const h = harness(async () => ["agent_command", "reference", "agent_command", "reference", "reference"]);
+  await h.run([caps[0]]);
+  assert.equal(h.events[0].payload.classifiedKind, "unclear");
+  assert.deepEqual(h.events[0].payload.votes, { agent_command: 2, reference: 3 });
+});
+
+test("classifyCaptures survives a model failure and keeps going", async () => {
+  let call = 0;
+  const events = [];
+  const r = await classifyCaptures({
+    captures: caps,
+    vote: async () => {
+      call += 1;
+      if (call === 1) {
+        throw new Error("ollama down");
+      }
+      return ["reference", "reference", "reference", "reference", "reference"];
+    },
+    appendEvent: (e) => { events.push(e); },
+    saveOffset: () => {},
+    now: () => 1, newId: () => "x",
+  });
+  assert.equal(r.failed, 1);
+  assert.equal(r.classified, 1);
+  assert.equal(events.length, 1, "the failed capture produces no event");
+});
+
+test("classifyCaptures on an empty list does nothing", async () => {
+  const h = harness(async () => ["reference"]);
+  const r = await h.run([]);
+  assert.deepEqual(r, { classified: 0, failed: 0 });
+  assert.equal(h.offsets.length, 0);
+});

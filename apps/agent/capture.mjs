@@ -132,3 +132,40 @@ export function renderDigest(events, date) {
   }
   return lines.join("\n");
 }
+
+/** Classify a batch of captures, writing one event each.
+ *
+ * The offset advances *before* the event is written, so a crash mid-capture
+ * skips it rather than classifying it twice. A skipped capture is visible in
+ * the inbox; a duplicated digest line is silent noise.
+ *
+ * A model failure is per-capture: it is counted, produces no event, and the
+ * run continues. Every failure mode degrades to "this capture is not
+ * labelled", which is the status quo before this component exists.
+ *
+ * @param {{ captures: Array<{uuid: string, title: string, creationDate: number}>,
+ *   vote: (title: string) => Promise<string[]>,
+ *   appendEvent: (e: any) => void,
+ *   saveOffset: (creationDate: number) => void,
+ *   now: () => number, newId: () => string, model?: string }} a */
+export async function classifyCaptures({ captures, vote, appendEvent, saveOffset, now, newId, model = "qwen3.6:35b" }) {
+  let classified = 0;
+  let failed = 0;
+  for (const c of captures) {
+    let votes;
+    try {
+      votes = await vote(c.title);
+    } catch {
+      failed += 1;
+      continue;
+    }
+    const { kind, distribution } = tallyVotes(votes);
+    saveOffset(c.creationDate);
+    appendEvent(buildClassifiedEvent({
+      id: newId(), ts: now(), captureId: c.uuid, title: c.title,
+      kind, distribution, model,
+    }));
+    classified += 1;
+  }
+  return { classified, failed };
+}
