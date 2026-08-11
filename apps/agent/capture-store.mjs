@@ -124,6 +124,24 @@ export async function voteKind(title, opts = {}) {
   return votes;
 }
 
+/** Is the local model server reachable?
+ *
+ * Found during verification: `ollama serve` is started by hand on this machine
+ * — no brew service, no launch agent — so it can simply be absent when launchd
+ * fires. Without this check every capture burns SAMPLES failed requests and
+ * fails individually. With it the run exits early, touches no offset, and
+ * retries whole on the next fire.
+ * @param {{endpoint?: string, fetchImpl?: typeof fetch}} [opts] */
+export async function modelUp(opts = {}) {
+  const { endpoint = "http://127.0.0.1:11434/api/tags", fetchImpl = fetch } = opts;
+  try {
+    const res = await fetchImpl(endpoint);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 /** Drop the model from memory. Idle draw returns to zero between batches —
  * this is what keeps a 23 GB model compatible with an always-on watcher.
  * @param {{model?: string, endpoint?: string, fetchImpl?: typeof fetch}} [opts] */

@@ -216,6 +216,17 @@ test("SAMPLES is the measured five-vote gate", () => {
   assert.equal(SAMPLES, 5);
 });
 
+test("modelUp is true when the server answers", async () => {
+  const { modelUp } = await import("./capture-store.mjs");
+  assert.equal(await modelUp({ fetchImpl: async () => ({ ok: true }) }), true);
+});
+
+test("modelUp is false when the server is down or erroring", async () => {
+  const { modelUp } = await import("./capture-store.mjs");
+  assert.equal(await modelUp({ fetchImpl: async () => { throw new Error("ECONNREFUSED"); } }), false);
+  assert.equal(await modelUp({ fetchImpl: async () => ({ ok: false }) }), false);
+});
+
 // ── the classify run ──────────────────────────────────────────
 
 import { classifyCaptures } from "./capture.mjs";
