@@ -176,3 +176,37 @@ Two invariants this creates, both load-bearing:
 
 The menu re-reads on the 30s rollup rather than on open: the CLI can move the
 dial, and the waking day rolls, without anyone touching the tray.
+
+## Addendum (2026-08-12): the ceiling is re-asserted when it moves
+
+Making the dial reachable exposed the next link in the chain. The ceiling was
+injected into the agent exactly once, at `session-start`; after that it lived
+only in the statusline HUD — *"ambient by design: indicators live in the
+statusline, not injected per-turn."* That held while the dial was CLI-only and
+changed about once a day. It stopped holding the moment the tray put it one
+click away: a ceiling moved mid-session never reached the agent, which kept
+answering at the level it was told at open.
+
+The symptom was not subtle, and it is worth recording in the operator's words:
+**"I feel like the responses aren't really governed by the attention level no?"**
+They were not. Ambience is a channel to the *principal's eyes*; it was being
+counted on as a channel to the *agent's context*, and those are not the same
+place.
+
+`granularityNotice` keeps the ambience and closes the gap: silent on any turn
+whose ceiling matches what that session was last told, re-surfaced the first
+time a session meets a level it has not been told — including the 04:00 lapse
+back to the default.
+
+**Per session, not global.** With several sessions open (nine, the day this was
+found), a global "already shown" flag would tell one and silence the rest,
+leaving most of them steering by a stale contract. The marks are keyed by
+session id, bounded by a day's TTL and a count, and last-writer-wins on a race —
+the worst outcome is a session being told twice, which is why this is a notice
+and not a gate.
+
+**Still no enforcement, deliberately.** Nothing makes the agent obey. The spec's
+existing guard is against silent *under*-delivery; over-delivery has no trip
+wire at all. Being told is a precondition for obeying, not a substitute — if
+over-delivery persists now that the telling is reliable, that is a separate and
+better-posed problem.

@@ -11,7 +11,8 @@
 /** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, granularity: Granularity }} Voice */
 /** @typedef {Record<string, string>} Watches  name → start time "HH:MM" */
 /** @typedef {{ rules: Rule[], orient: Orient, voice: Voice, watches: Watches, windDown: string, signOnGate: boolean }} Target */
-/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, inferNudgedTs: number, granularity: string, granularityDay: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number, lastMomentId: string }} State */
+/** @typedef {{ level: string, ts: number }} GranularitySeen  the ceiling a session was last told, and when */
+/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, inferNudgedTs: number, granularity: string, granularityDay: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number, lastMomentId: string, granularitySeen?: Record<string, GranularitySeen> }} State */
 
 /** Named time-of-day watches (intention blocks) → start time. The active watch is the
  * latest start ≤ now, wrapping past midnight to the last watch. The `night` watch is the
@@ -55,7 +56,7 @@ export const DEFAULT_TARGET = {
 export const emptyState = () => ({
   sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, inferNudgedTs: 0,
   granularity: "", granularityDay: "", focus: false, focusTs: 0, focusSession: "",
-  lastRuleHash: "", consentShownTs: 0, lastMomentId: "",
+  lastRuleHash: "", consentShownTs: 0, lastMomentId: "", granularitySeen: {},
 });
 
 /** Merge a partial target config over the defaults. @param {any} t @returns {Target} */
@@ -418,6 +419,68 @@ export function exceedsCeiling(want, state, now = Date.now()) {
 export function granularityLine(state, now = Date.now()) {
   const g = activeGranularity(state, now);
   return `[keel] ▤ granularity ceiling: ${g} — ${GRANULARITY_LEVELS[g]} Below it, fit the answer to the ask. Per-response signal still overrides ("page it", "in a sentence").`;
+}
+
+// ── Re-asserting the ceiling when it moves ──────────────────────
+//
+// The ceiling used to reach the agent exactly once, at session-start, and live
+// afterwards only in the statusline HUD — ambient by design, on the assumption
+// that a day-scoped dial changes rarely enough for one telling to hold.
+//
+// The tray submenu (2026-08-12) broke that assumption: the dial is now a click
+// away, so it moves mid-session, and every move after session-start was
+// invisible to the agent. It kept answering to the level it was told at open,
+// which is indistinguishable from ignoring the dial — and was, in fact, first
+// noticed as "the responses aren't governed by this at all".
+//
+// So: still silent on an unchanged turn (no per-turn noise), but re-surfaced
+// the first time a session sees a level it has not been told. Per session, not
+// global — with several sessions open, telling one and silencing the rest would
+// leave most of them steering by a stale contract.
+
+/** How long a session's "already told" mark survives. A day outlives the
+ * longest plausible session and keeps the map from growing without bound. */
+export const GRANULARITY_SEEN_TTL_MS = 24 * 3600_000;
+
+/** Hard cap on tracked sessions, newest kept. Belt to the TTL's braces: many
+ * short sessions in one day must not turn this into an unbounded ledger. */
+export const GRANULARITY_SEEN_MAX = 64;
+
+/** Drop marks past the TTL, then keep the newest `GRANULARITY_SEEN_MAX`.
+ * @param {Record<string, {level: string, ts: number}>} seen @param {number} now */
+export function pruneGranularitySeen(seen, now = Date.now()) {
+  const fresh = Object.entries(seen ?? {})
+    .filter(([, v]) => v && now - (v.ts ?? 0) < GRANULARITY_SEEN_TTL_MS)
+    .sort((a, b) => (b[1].ts ?? 0) - (a[1].ts ?? 0))
+    .slice(0, GRANULARITY_SEEN_MAX);
+  return Object.fromEntries(fresh);
+}
+
+/** The ceiling line owed to THIS session this turn, and the state that records
+ * having told it. Empty line whenever the session already holds the level in
+ * force, so an unchanged turn stays silent.
+ *
+ * A session with no id (the CLI, an unidentified hook) shares one bucket: it
+ * still gets told on a change, it just cannot be distinguished from its peers.
+ *
+ * Concurrent writers race on the state file, last write wins, and the worst
+ * outcome is a session being told twice — which is why this is a notice and not
+ * a gate.
+ *
+ * @param {State} state @param {string|undefined} sessionId @param {number} [now]
+ * @returns {{ line: string, state: State }} */
+export function granularityNotice(state, sessionId, now = Date.now()) {
+  const key = sessionId || "";
+  const level = activeGranularity(state, now);
+  const seen = state.granularitySeen ?? {};
+  if (seen[key]?.level === level) return { line: "", state };
+  return {
+    line: granularityLine(state, now),
+    state: {
+      ...state,
+      granularitySeen: pruneGranularitySeen({ ...seen, [key]: { level, ts: now } }, now),
+    },
+  };
 }
 
 // ── Deep-focus mode (single-stream commitment, opt-in, owner-claimed) ──
