@@ -9,7 +9,7 @@ import {
   denyReason, renderOrient, focusDayKey,
   signOnBlocks, SIGNON_ALLOW, SIGNON_DENY,
   resolveActiveMoment, todaysMoments, activeWatch, intentionLine, intentionNudge, intentionSwitch,
-  setGranularity, normalizeGranularity, activeGranularity, granularityLine, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
+  setGranularity, normalizeGranularity, activeGranularity, granularityLine, granularityNotice, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
   setFocus, focusLine, claimFocus, focusBlocks, FOCUS_DENY,
   isAllowedPath,
   buildEvent, capPayload, summarizeEvents, matchDispatch, targetHash, renderRules, consentLines,
@@ -121,10 +121,15 @@ async function handleUserSubmit(now) {
   state.turnLockedTs = phase === "lockdown" ? state.lastPromptTs : 0;
 
   // Ambient by design: indicators live in the statusline HUD (`keel hud`), not injected per-turn.
-  // The one exception — fired once per session, on turn 2+, only while nothing is active:
-  // prompt the agent to infer what this session is doing and PROPOSE a moment. It proposes;
-  // zenborg writes; keel only ever reads. (Granularity needs no inference — a ceiling is
-  // always in force, and it is day-scoped rather than set per session.)
+  // Two exceptions, both silent on an ordinary turn:
+  //
+  // 1. Once per session, on turn 2+, only while nothing is active: prompt the agent to infer
+  //    what this session is doing and PROPOSE a moment. It proposes; zenborg writes; keel only
+  //    ever reads.
+  // 2. The granularity ceiling, whenever it no longer matches what THIS session was last told.
+  //    Session-start alone stopped being enough once the tray made the dial a click away: a
+  //    ceiling moved mid-session never reached the agent, which then answered at the level it
+  //    was told at open — indistinguishable from ignoring the dial entirely.
   const freshTurn = state.sessionStartTs === now;        // the session's first prompt
   const moments = loadMoments();
   const pointer = loadActiveMomentPointer();
@@ -143,10 +148,13 @@ async function handleUserSubmit(now) {
   }
   // First prompt while focus is on + unclaimed → this session becomes the focus owner.
   state = claimFocus(state, input?.session_id);
+  // Empty unless the ceiling moved since this session was last told (incl. the 04:00 lapse).
+  const gran = granularityNotice(state, input?.session_id, now);
+  state = gran.state;
   saveState(state);
   // Deep-focus cue rides the same turn-boundary channel — breath in the owner session, a
   // held-elsewhere note in blocked ones. Empty unless `keel focus` is on.
-  return emitText([nudge, focusLine(state, input?.session_id)].filter(Boolean).join("\n"));
+  return emitText([nudge, gran.line, focusLine(state, input?.session_id)].filter(Boolean).join("\n"));
 }
 
 async function handleSessionStart(now) {
@@ -184,8 +192,12 @@ async function handleSessionStart(now) {
     logHookEvent("intention_switched", now, input, { extra: switched.extra });
     state = { ...state, lastMomentId: switched.lastMomentId };
   }
+  // Always renders here (a fresh session has been told nothing yet) and records
+  // the telling, so the user-submit notice stays quiet until the dial moves.
+  const gran = granularityNotice(state, input?.session_id, now);
+  state = gran.state;
   saveState(state);
-  return emitText([...consent, intentionLine(moment), granularityLine(state, now)].filter(Boolean).join("\n"));
+  return emitText([...consent, intentionLine(moment), gran.line].filter(Boolean).join("\n"));
 }
 
 function cmdStatus(now) {

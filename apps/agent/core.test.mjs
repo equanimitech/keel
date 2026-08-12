@@ -6,6 +6,7 @@ import {
   mergeTarget, emptyState, frictionNow,
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
   effectiveGranularity, exceedsCeiling, granularityLine,
+  granularityNotice, pruneGranularitySeen, GRANULARITY_SEEN_MAX, GRANULARITY_SEEN_TTL_MS,
   resolveActiveMoment, todaysMoments, intentionLine, focusDayKey,
   setFocus, claimFocus, focusBlocks, focusLine,
   seedAllowFromRefs, momentFrictionAt, intentionSwitch,
@@ -49,6 +50,76 @@ test("granularityLine: names a ceiling and the resting rule, never a floor", () 
   assert.doesNotMatch(granularityLine(setGranularity(emptyState(), "tldr", now), now), /floor/);
   // And it tracks the day's setting, so the line can be watched for movement.
   assert.match(granularityLine(setGranularity(emptyState(), "sentence", now), now), /sentence/);
+});
+
+test("granularityNotice: tells a session that has been told nothing", () => {
+  const now = Date.parse("2026-08-10T10:00:00");
+  const { line, state } = granularityNotice(emptyState(), "s1", now);
+  assert.match(line, /granularity ceiling/);
+  assert.equal(state.granularitySeen.s1.level, DEFAULT_GRANULARITY);
+});
+
+test("granularityNotice: silent while the session already holds the level", () => {
+  const now = Date.parse("2026-08-10T10:00:00");
+  const first = granularityNotice(emptyState(), "s1", now);
+  const second = granularityNotice(first.state, "s1", now + 60_000);
+  assert.equal(second.line, "");
+  // And it does not churn the state on a quiet turn.
+  assert.equal(second.state, first.state);
+});
+
+test("granularityNotice: re-tells when the dial moves mid-session", () => {
+  // The bug this exists for: the tray moves the ceiling, the agent never hears.
+  const now = Date.parse("2026-08-10T10:00:00");
+  const told = granularityNotice(emptyState(), "s1", now).state;
+  const moved = setGranularity(told, "sentence", now + 60_000);
+  const { line } = granularityNotice(moved, "s1", now + 61_000);
+  assert.match(line, /sentence/);
+});
+
+test("granularityNotice: every session is told, not just the first one", () => {
+  // With several sessions open, telling one and silencing the rest would leave
+  // most of them answering to a stale contract.
+  const now = Date.parse("2026-08-10T10:00:00");
+  const moved = setGranularity(emptyState(), "tldr", now);
+  const a = granularityNotice(moved, "s1", now);
+  const b = granularityNotice(a.state, "s2", now);
+  const c = granularityNotice(b.state, "s3", now);
+  assert.match(a.line, /tldr/);
+  assert.match(b.line, /tldr/);
+  assert.match(c.line, /tldr/);
+});
+
+test("granularityNotice: the 04:00 lapse back to the default is itself a change", () => {
+  const mon = Date.parse("2026-08-10T10:00:00");
+  const told = granularityNotice(setGranularity(emptyState(), "sentence", mon), "s1", mon).state;
+  // Next waking-day: the stamp lapsed, so the ceiling is the default again.
+  const tue = Date.parse("2026-08-11T10:00:00");
+  const { line } = granularityNotice(told, "s1", tue);
+  assert.match(line, new RegExp(DEFAULT_GRANULARITY));
+});
+
+test("granularityNotice: an unidentified session still gets told on a change", () => {
+  const now = Date.parse("2026-08-10T10:00:00");
+  const first = granularityNotice(emptyState(), undefined, now);
+  assert.match(first.line, /granularity ceiling/);
+  assert.equal(granularityNotice(first.state, "", now).line, "");
+  const moved = setGranularity(first.state, "report", now);
+  assert.match(granularityNotice(moved, undefined, now).line, /report/);
+});
+
+test("pruneGranularitySeen: bounded by age and by count", () => {
+  const now = Date.parse("2026-08-10T10:00:00");
+  const stale = { old: { level: "page", ts: now - GRANULARITY_SEEN_TTL_MS - 1 }, live: { level: "page", ts: now } };
+  assert.deepEqual(Object.keys(pruneGranularitySeen(stale, now)), ["live"]);
+
+  const many = Object.fromEntries(
+    Array.from({ length: GRANULARITY_SEEN_MAX + 20 }, (_, i) => [`s${i}`, { level: "page", ts: now - i * 1000 }]),
+  );
+  const kept = pruneGranularitySeen(many, now);
+  assert.equal(Object.keys(kept).length, GRANULARITY_SEEN_MAX);
+  assert.ok(kept.s0, "the newest mark survives");
+  assert.ok(!kept[`s${GRANULARITY_SEEN_MAX + 10}`], "the oldest are dropped");
 });
 
 test("exceedsCeiling: true only when the ask outruns the day", () => {
