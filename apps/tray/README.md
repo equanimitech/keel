@@ -95,26 +95,65 @@ leaves `writer_paused` in the log, so a deliberate stop is recorded as data
 rather than becoming an indistinguishable hole. The LaunchAgent restarts a
 quit process for exactly that reason.
 
+## Installing a new build
+
+```bash
+pnpm install:tray     # build → sign → install → restart under launchd → verify
+```
+
+Do not hand-roll this. Three traps, each of which fails quietly:
+
+- **The DMG bundler moves the app.** A default `tauri build` hands `keel.app` to
+  the disk-image step, which takes it out of `bundle/macos/`; a copy written
+  afterwards finds nothing there. The script builds `--bundles app`.
+- **An unsigned rebuild loses the Screen Recording grant** (see below).
+- **Bootstrapping over a live instance starts a respawn loop** — launchd's copy
+  hits the single-instance guard, exits 0, and KeepAlive tries again forever.
+  The script boots out, kills strays, then bootstraps, and checks the pid is
+  stable rather than trusting one `job state` sample.
+
+Rollback: the previous app is kept at
+`~/Library/Application Support/keel-backups/keel.app.previous`.
+
 ## How to verify
 
 ```bash
-tail -f ~/.keel/log/*.desktop.jsonl
+pnpm check:tray       # or: node scripts/tray-title-health.mjs 10
 ```
 
-The menubar status line shows "keel — N events today".
+**`tail -f` cannot verify this writer**, and neither can the menubar. Without
+the Screen Recording grant, x-win still returns `Ok` and every window title
+arrives as `""` — events keep landing at a healthy rate and the whole thing
+looks fine. The only honest check is whether titles are non-empty, which is what
+`check:tray` counts (counts only; titles are private and never printed).
 
 ## Permissions
 
 macOS requires Screen Recording permission for window *titles* (x-win). If the
 sensor errors, the tray stays alive, logs nothing, and the menu grows a
-"permission needed — click to open settings" item. First launch may also
-prompt for Accessibility.
+"permission needed — click to open settings" item plus "Relaunch keel". First
+launch may also prompt for Accessibility.
+
+**A fresh grant cannot take effect in a running process.**
+`CGPreflightScreenCaptureAccess()` keeps returning false until restart, which is
+why the menu offers the relaunch next to the settings link: grant, *then*
+relaunch.
+
+**Why the app is signed with a Developer ID.** macOS keys the grant to the app's
+code identity. An ad-hoc signed build gets a fresh identity on every rebuild, so
+each install silently dropped the permission — the Settings toggle kept pointing
+at the previous binary, and re-toggling it changed nothing. Signing with a
+stable Developer ID certificate makes the grant survive rebuilds.
+`install-tray.sh` reads the identity out of the keychain rather than hardcoding
+one, and refuses to install an ad-hoc build unless you insist with
+`APPLE_SIGNING_IDENTITY="-"`.
 
 ## Dev
 
 ```bash
 pnpm dev:tray                                    # tauri dev (user runs this)
-pnpm build:tray                                  # tauri build
+pnpm build:tray                                  # tauri build (all bundles)
+pnpm install:tray                                # build, sign, install, restart
 cargo test --manifest-path src-tauri/Cargo.toml  # domain unit tests
 ```
 

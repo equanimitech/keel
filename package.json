@@ -10,6 +10,8 @@
     "build:browser": "pnpm --filter @keel/browser build",
     "deploy:browser": "pnpm --filter @keel/browser run deploy",
     "build:tray": "pnpm --filter @keel/tray bundle",
+    "install:tray": "./scripts/install-tray.sh",
+    "check:tray": "node scripts/tray-title-health.mjs",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "changeset": "changeset",
