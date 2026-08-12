@@ -73,12 +73,19 @@ if [ "${1:-}" != "--no-build" ]; then
   if ! xattr -h >/dev/null 2>&1; then
     echo "  note: the \`xattr\` in PATH is broken; using /usr/bin/xattr for the build"
   fi
+  # Start from an empty bundle directory so a previous build's output can never
+  # be mistaken for this one's — the install step copies whatever sits there.
+  rm -rf "$(dirname "$APP_SRC")"
   (cd "$REPO" && PATH="/usr/bin:$PATH" pnpm --filter @keel/tray tauri build --bundles app)
 fi
 [ -d "$APP_SRC" ] || die "no app at $APP_SRC — did the build fail?"
 
+# Not ceremony: a build that ran without APPLE_SIGNING_IDENTITY comes out
+# unsealed (no `_CodeSignature`, "code has no resources but signature indicates
+# they must be present"), and installing it would silently drop the Screen
+# Recording grant all over again. Fail here instead, before anything is touched.
 step "Verifying the signature"
-codesign --verify --strict --deep "$APP_SRC" || die "signature does not verify"
+codesign --verify --strict --deep "$APP_SRC" || die "signature does not verify — was the build run without APPLE_SIGNING_IDENTITY?"
 codesign -dvv "$APP_SRC" 2>&1 | grep -E 'Identifier=|Authority=|TeamIdentifier=' | sed 's/^/  /'
 
 # ── 3. Stop everything that could hold the single-instance slot ──
