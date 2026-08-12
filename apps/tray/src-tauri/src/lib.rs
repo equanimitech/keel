@@ -16,7 +16,7 @@ use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::json;
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{AppHandle, Manager, RunEvent, Wry};
 use user_idle::UserIdle;
 use x_win::get_active_window;
@@ -30,6 +30,9 @@ const POLL_INTERVAL: Duration = Duration::from_millis(1500);
 const INPUT_POLLS_PER_BIN: usize = 2;
 const INPUT_POLLS_PER_ROLLUP: usize = 20;
 const INPUT_BIN_MS: u64 = 3_000;
+
+/// Menu-item id prefix for the granularity submenu (`gran:tldr`, `gran:reset`).
+const GRAN_ID_PREFIX: &str = "gran:";
 
 // ── CoreGraphics HID event counters (counts only — the API cannot
 // expose keycodes or content; verified to read without the Input
@@ -126,6 +129,10 @@ struct TrayUi {
     toggle: MenuItem<Wry>,
     permission: MenuItem<Wry>,
     relaunch: MenuItem<Wry>,
+    /// The granularity submenu; its title carries the ceiling in force.
+    granularity: Submenu<Wry>,
+    /// `(level, row)` in `GRANULARITY_ORDER`, exactly one of them checked.
+    granularity_rows: Vec<(String, CheckMenuItem<Wry>)>,
 }
 
 /// Ambient status carries STATE only — alive or paused, no numbers.
@@ -148,6 +155,38 @@ fn toggle_pause(app: &AppHandle) {
         .toggle
         .set_text(if was_paused { "Pause logging" } else { "Resume logging" });
     set_status(app, !was_paused);
+}
+
+// ── Granularity ceiling (the tray's one write to agent state) ───
+//
+// The dial is day-scoped and lives in `state.json`, which the agent CLI also
+// writes. Two consequences the menu has to respect: the picture can go stale
+// without anyone touching the tray (a `keel granularity` call elsewhere, or the
+// 04:00 roll), and a write must never be based on a cached document.
+
+/// Re-read the ceiling from disk and re-tick the menu. Cheap enough to run on
+/// the rollup cadence — one small file read every 30s.
+fn refresh_granularity(app: &AppHandle) {
+    let active = domain::active_granularity(&writer::read_state(&writer::keel_dir()), now_ms());
+    let ui = app.state::<TrayUi>();
+    // The title carries STATE, in keeping with the rest of this menu: which
+    // contract is in force, never how deep an answer was.
+    let _ = ui.granularity.set_text(format!("Granularity — {active}"));
+    for (level, row) in &ui.granularity_rows {
+        let _ = row.set_checked(level == &active);
+    }
+}
+
+/// Stamp a new ceiling for the waking day. An empty `level` is the reset, the
+/// same document `keel granularity reset` writes. Read → modify → write in one
+/// breath: the CLI owns every other field, so a cached copy would roll back
+/// whatever it changed since. Fail-open — a failed write leaves the menu
+/// showing what the file actually says.
+fn set_ceiling(app: &AppHandle, level: &str) {
+    let dir = writer::keel_dir();
+    let next = domain::set_granularity(&writer::read_state(&dir), level, now_ms());
+    let _ = writer::write_state(&dir, &next);
+    refresh_granularity(app);
 }
 
 /// x-win failed, or preflight reports no Screen Recording grant: surface the
@@ -188,8 +227,20 @@ fn spawn_sensors(app: AppHandle) {
         let mut input_deltas: Vec<[u64; 4]> = Vec::new();
         let mut ticks: usize = 0;
 
+        let mut menu_ticks: usize = 0;
+
         loop {
             thread::sleep(POLL_INTERVAL);
+
+            // The ceiling changes under the tray — the CLI writes the same file
+            // and the waking day rolls at 04:00. Re-read on the rollup cadence,
+            // and ABOVE the pause check: pausing the sensors stops logging, it
+            // does not freeze the menu's picture of the dial.
+            menu_ticks = menu_ticks.wrapping_add(1);
+            if menu_ticks % INPUT_POLLS_PER_ROLLUP == 0 {
+                refresh_granularity(&app);
+            }
+
             let logger = app.state::<Logger>();
             if logger.paused.load(Ordering::SeqCst) {
                 // Drop sensor state so resuming re-emits the current focus
@@ -331,7 +382,45 @@ pub fn run() {
             let open = MenuItem::with_id(app, "open", "Open data folder", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
-            let menu = Menu::with_items(app, &[&status, &toggle, &open, &separator, &quit])?;
+
+            // Granularity: one checked row per level, ascending depth, plus the
+            // reset. Rows start unchecked and are ticked by the refresh below,
+            // so the menu's first paint reads the file rather than guessing.
+            let granularity_rows = domain::GRANULARITY_ORDER
+                .iter()
+                .map(|level| {
+                    CheckMenuItem::with_id(
+                        app,
+                        format!("{GRAN_ID_PREFIX}{level}"),
+                        format!("{level}  ·  {}", domain::granularity_label(level)),
+                        true,
+                        false,
+                        None::<&str>,
+                    )
+                    .map(|row| ((*level).to_string(), row))
+                })
+                .collect::<tauri::Result<Vec<_>>>()?;
+            let granularity_reset = MenuItem::with_id(
+                app,
+                format!("{GRAN_ID_PREFIX}reset"),
+                format!("Reset to default ({})", domain::DEFAULT_GRANULARITY),
+                true,
+                None::<&str>,
+            )?;
+            let granularity_separator = PredefinedMenuItem::separator(app)?;
+            let mut granularity_items: Vec<&dyn IsMenuItem<Wry>> =
+                granularity_rows.iter().map(|(_, row)| row as &dyn IsMenuItem<Wry>).collect();
+            granularity_items.push(&granularity_separator);
+            granularity_items.push(&granularity_reset);
+            let granularity = Submenu::with_items(
+                app,
+                format!("Granularity — {}", domain::DEFAULT_GRANULARITY),
+                true,
+                &granularity_items,
+            )?;
+
+            let menu =
+                Menu::with_items(app, &[&status, &toggle, &granularity, &open, &separator, &quit])?;
 
             let tray = app
                 .tray_by_id("main")
@@ -350,10 +439,25 @@ pub fn run() {
                 // process, so relaunch is the one click that activates it.
                 "relaunch" => app.restart(),
                 "quit" => app.exit(0),
+                // `gran:<level>` sets the ceiling; `gran:reset` clears it.
+                id if id.starts_with(GRAN_ID_PREFIX) => {
+                    let level = id.trim_start_matches(GRAN_ID_PREFIX);
+                    set_ceiling(app, if level == "reset" { "" } else { level });
+                }
                 _ => {}
             });
 
-            app.manage(TrayUi { menu, status, toggle, permission, relaunch });
+            app.manage(TrayUi {
+                menu,
+                status,
+                toggle,
+                permission,
+                relaunch,
+                granularity,
+                granularity_rows,
+            });
+            // First paint: tick whatever the file already says.
+            refresh_granularity(app.handle());
 
             // Without Screen Recording, titles log as "" forever and no
             // prompt ever appears (the API never errors). Ask explicitly.
