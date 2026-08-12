@@ -47,7 +47,7 @@ export const DEFAULT_TARGET = {
     signoffNudge: "",
     granularity: {
       windDown: "Keep it high-level — summaries and next steps, not deep multi-file dives.",
-      lockdown: "Coarsest only — one-line status + tomorrow's first step; no detail.",
+      lockdown: "L1 only — one-line status + tomorrow's first step; no detail.",
     },
   },
 };
@@ -353,12 +353,13 @@ export const GRANULARITY_LEVELS = {
   sentence: "L1 — one sentence, claim only.",
   tldr:     "L2 — one paragraph, claim + mechanism.",
   page:     "L3 — ~a page: claim + mechanism + worked example, scannable.",
+  essay:    "L4 — ~800-1500 words: the claim in tension with the alternatives it beats.",
   report:   "L5 — multi-section, citations, edge cases. Defensible.",
 };
 
 /** Levels in ascending depth. The order is the whole comparison — `min` over this index
  * is how every ceiling composes. */
-export const GRANULARITY_ORDER = ["sentence", "tldr", "page", "report"];
+export const GRANULARITY_ORDER = ["sentence", "tldr", "page", "essay", "report"];
 
 /** The ceiling in force when none is set for the day. Deliberately `page`, not `tldr`:
  * a `tldr` default is a floor by another name, and a floor is a constant — which is
@@ -370,7 +371,8 @@ export function normalizeGranularity(raw) {
   const s = String(raw ?? "").trim().toLowerCase().replace(/[\s_;-]+/g, "");
   if (s === "sentence" || s === "1" || s === "l1" || s === "oneliner" || s === "line") return "sentence";
   if (s === "tldr" || s === "2" || s === "l2" || s === "paragraph" || s === "brief" || s === "summary") return "tldr";
-  if (s === "page" || s === "3" || s === "l3" || s === "medium" || s === "usable") return "page";
+  if (s === "page" || s === "3" || s === "l3" || s === "usable") return "page";
+  if (s === "essay" || s === "4" || s === "l4" || s === "argue" || s === "blogpost" || s === "post") return "essay";
   if (s === "report" || s === "5" || s === "l5" || s === "full" || s === "detailed" || s === "deep") return "report";
   return "";
 }

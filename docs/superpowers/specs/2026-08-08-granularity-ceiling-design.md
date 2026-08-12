@@ -27,6 +27,15 @@ does not make it vary.
 The four levels themselves are fine and stay as they are — `sentence` (L1),
 `tldr` (L2), `page` (L3), `report` (L5), mapping to semantic-zoom.
 
+> **Amended 2026-08-12.** A fifth position, `essay` (L4), was added when
+> semantic-zoom's ladder was re-cut to five artifact-named rungs (sentence ·
+> paragraph · page · essay · report). Under v1 the missing rung was the
+> medium-specific "blog post"; as "essay — the claim in tension with the
+> alternatives it beats" it is a ceiling worth holding for a session. The dial is
+> now `sentence` (L1), `tldr` (L2), `page` (L3), `essay` (L4), `report` (L5).
+> Nothing else in this spec changes — the diagnosis below (a floor is a constant)
+> and the default of `page` both stand.
+
 ## Why one dial cannot be precise
 
 Depth varies at three different frequencies. keel currently models only the
@@ -133,7 +142,8 @@ activity log rather than by impression.
   honours the floor of the day, not its ambition.
 - **Per-response signal still works.** "page it", "in a sentence" continue to
   override for one turn, under the ceiling.
-- **The four levels and their semantic-zoom mapping** are unchanged.
+- **The four levels and their semantic-zoom mapping** are unchanged. (Five since
+  the 2026-08-12 amendment above; the mapping still holds.)
 
 ## Why this is not a mood feature
 

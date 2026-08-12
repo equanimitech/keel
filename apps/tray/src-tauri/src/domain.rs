@@ -209,7 +209,7 @@ pub fn idle_transition(
 // than having no tray control at all. Change one, change both.
 
 /// Levels in ascending depth. The order IS the comparison (`GRANULARITY_ORDER`).
-pub const GRANULARITY_ORDER: [&str; 4] = ["sentence", "tldr", "page", "report"];
+pub const GRANULARITY_ORDER: [&str; 5] = ["sentence", "tldr", "page", "essay", "report"];
 
 /// The ceiling in force when none is set for the day. `page`, not `tldr`:
 /// a shallow default is a floor by another name, and a floor never moves.
@@ -226,6 +226,7 @@ pub fn granularity_label(level: &str) -> &'static str {
         "sentence" => "L1 — one sentence",
         "tldr" => "L2 — one paragraph",
         "page" => "L3 — about a page",
+        "essay" => "L4 — an argued essay",
         "report" => "L5 — multi-section",
         _ => "",
     }

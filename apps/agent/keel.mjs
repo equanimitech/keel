@@ -427,7 +427,7 @@ async function main() {
   if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
   if (cmd === "watchlist" && sub === "scan") return cmdWatchlistScan();
-  console.log("usage: keel <hook pre-tool|user-submit|session-start | signoff | intention (read-only; set it in zenborg) | granularity [sentence|tldr|page|report|reset] | focus [on|off] | rules | log status | status | watchlist scan>");
+  console.log("usage: keel <hook pre-tool|user-submit|session-start | signoff | intention (read-only; set it in zenborg) | granularity [sentence|tldr|page|essay|report|reset] | focus [on|off] | rules | log status | status | watchlist scan>");
 }
 
 main().catch(() => process.exit(0)); // fail-open

@@ -34,6 +34,16 @@ test("granularity: the day's level caps the ask rather than pinning it", () => {
   assert.equal(effectiveGranularity("report", light, now), "tldr");
 });
 
+test("granularity: essay (L4) sits between page and report in the order", () => {
+  const now = Date.parse("2026-08-10T10:00:00");
+  // The array index IS the comparison, so L4's position is the whole contract.
+  const essay = setGranularity(emptyState(), "essay", now);
+  assert.equal(effectiveGranularity("page", essay, now), "page");      // below → the ask decides
+  assert.equal(effectiveGranularity("report", essay, now), "essay");   // above → the ceiling bites
+  const page = setGranularity(emptyState(), "page", now);
+  assert.equal(effectiveGranularity("essay", page, now), "page");      // essay is deeper than page
+});
+
 test("granularity: with nothing set the ceiling is page, not the old tldr floor", () => {
   const now = Date.parse("2026-08-10T10:00:00");
   assert.equal(activeGranularity(emptyState(), now), "page");
@@ -134,6 +144,9 @@ test("exceedsCeiling: true only when the ask outruns the day", () => {
 test("granularity: parses aliases, falls back to the floor, never empty", () => {
   assert.equal(normalizeGranularity("tl;dr"), "tldr");
   assert.equal(normalizeGranularity("L3"), "page");
+  assert.equal(normalizeGranularity("essay"), "essay");
+  assert.equal(normalizeGranularity("L4"), "essay");
+  assert.equal(normalizeGranularity("blog post"), "essay"); // v1 called L4 "blog post"
   assert.equal(normalizeGranularity("detailed"), "report");
   assert.equal(normalizeGranularity("garbage"), "");        // unrecognized → caller keeps current
   // The floor: unset or invalid state still yields a contract, never "".
@@ -316,7 +329,7 @@ test("renderOrient: silent by day, voiced otherwise", () => {
   assert.match(wd, /high-level/); // wind-down granularity nudge
   const locked = renderOrient(t, "lockdown", { ...emptyState(), lastPromptTs: now }, now);
   assert.match(locked, /paused until 09:00/);   // reset = morning watch (default 09:00)
-  assert.match(locked, /Coarsest only/); // lockdown granularity nudge
+  assert.match(locked, /L1 only/); // lockdown granularity nudge
 });
 
 // ── Moment friction (refs → allow list) ─────────────────────────

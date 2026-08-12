@@ -40,7 +40,7 @@
         "identity": "",
         "granularity": {
           "windDown": "Keep it high-level — summaries and next steps, not deep multi-file dives.",
-          "lockdown": "Coarsest only — one-line status + tomorrow's first step; no detail."
+          "lockdown": "L1 only — one-line status + tomorrow's first step; no detail."
         }
       }
     }
