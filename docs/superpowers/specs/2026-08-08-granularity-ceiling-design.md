@@ -153,3 +153,26 @@ dial. Rejected, and worth recording why:
 Body state may *inform* the ceiling later — a short night easing it — but per the
 Garmin writer's own conclusion, body state is **a covariate, not a tide**. It never
 drives.
+
+## Addendum (2026-08-12): the tray sets it too
+
+The dial was CLI-only, which is a reachability bug for a dial meant to move
+daily: setting it cost a terminal, and the cheapest thing to do with a cost is
+not pay it. The menubar tray now carries a `Granularity` submenu — the ceiling
+in force in its title, one checked row per level, and a reset.
+
+Two invariants this creates, both load-bearing:
+
+- **The tray restates, it does not decide.** `apps/tray/src-tauri/src/domain.rs`
+  mirrors `GRANULARITY_ORDER`, `DEFAULT_GRANULARITY`, and the 04:00 `focusDayKey`
+  from `apps/agent/core.mjs`. Change one, change both. Two writers disagreeing
+  about today's ceiling would be worse than leaving the tray out of it.
+- **`state.json` now has two writers.** The tray owns exactly two fields and
+  reads the whole document before writing it, so the agent's focus lock and
+  session timestamps survive. It is still last-writer-wins on a collision, which
+  is acceptable only because both writes are read-modify-write in one breath —
+  never from a cached copy. A tray that held state in memory would silently roll
+  back whatever the CLI changed since it opened.
+
+The menu re-reads on the 30s rollup rather than on open: the CLI can move the
+dial, and the waking day rolls, without anyone touching the tray.

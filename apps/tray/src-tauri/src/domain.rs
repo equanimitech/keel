@@ -200,6 +200,79 @@ pub fn idle_transition(
     }
 }
 
+// ── Granularity ceiling (the response-depth dial) ───────────────
+//
+// The dial is the agent surface's (`apps/agent/core.mjs`); the tray is a second
+// hand on the same face, not a second clock. Every rule below is a restatement
+// of that file — level set, order, default, and the 04:00 waking-day stamp —
+// because two writers disagreeing about what today's ceiling is would be worse
+// than having no tray control at all. Change one, change both.
+
+/// Levels in ascending depth. The order IS the comparison (`GRANULARITY_ORDER`).
+pub const GRANULARITY_ORDER: [&str; 4] = ["sentence", "tldr", "page", "report"];
+
+/// The ceiling in force when none is set for the day. `page`, not `tldr`:
+/// a shallow default is a floor by another name, and a floor never moves.
+pub const DEFAULT_GRANULARITY: &str = "page";
+
+/// The logical day flips at 04:00, not midnight — a 02:00 session still belongs
+/// to the prior day (`DAY_START_HOUR`).
+pub const DAY_START_HOUR: i64 = 4;
+
+/// Menu-row label for a level: the depth contract, short enough to read at a
+/// glance. The prose lives in `GRANULARITY_LEVELS`; a menu is not the place for it.
+pub fn granularity_label(level: &str) -> &'static str {
+    match level {
+        "sentence" => "L1 — one sentence",
+        "tldr" => "L2 — one paragraph",
+        "page" => "L3 — about a page",
+        "report" => "L5 — multi-section",
+        _ => "",
+    }
+}
+
+/// The waking-day key a granularity stamp carries: the LOCAL date after rolling
+/// back `DAY_START_HOUR`. Mirrors `focusDayKey`.
+pub fn focus_day_key(ts_ms: u64) -> String {
+    let shifted = (ts_ms as i64).saturating_sub(DAY_START_HOUR * 3_600_000);
+    let date = Local
+        .timestamp_millis_opt(shifted)
+        .single()
+        .map(|dt| dt.date_naive())
+        .unwrap_or_else(|| Local::now().date_naive());
+    date.format("%Y-%m-%d").to_string()
+}
+
+/// The ceiling actually in force: the level set this waking-day, or the default
+/// when unset, unrecognized, or stamped with an earlier day. Never empty — a
+/// contract is always in force. Mirrors `activeGranularity`.
+pub fn active_granularity(state: &Value, now_ms: u64) -> String {
+    let today = focus_day_key(now_ms);
+    let fresh = state
+        .get("granularityDay")
+        .and_then(Value::as_str)
+        .is_some_and(|d| d == today);
+    let set = state.get("granularity").and_then(Value::as_str).unwrap_or("");
+    if fresh && GRANULARITY_ORDER.contains(&set) {
+        set.to_string()
+    } else {
+        DEFAULT_GRANULARITY.to_string()
+    }
+}
+
+/// Stamp a new ceiling onto the state document, preserving every key the tray
+/// knows nothing about (focus, session timestamps, watchlist bookkeeping) — the
+/// tray owns two fields of a document the agent owns. An empty `level` is the
+/// reset, exactly as `keel granularity reset` writes it: the stamp stays, the
+/// level goes blank, and `active_granularity` falls back to the default.
+/// Mirrors `setGranularity`.
+pub fn set_granularity(state: &Value, level: &str, now_ms: u64) -> Value {
+    let mut next = state.as_object().cloned().unwrap_or_default();
+    next.insert("granularity".into(), json!(level));
+    next.insert("granularityDay".into(), json!(focus_day_key(now_ms)));
+    Value::Object(next)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -411,5 +484,96 @@ mod tests {
             ev,
             Some(IdleTransition::End { ts: 1_048_000, duration_ms: 178_000 })
         );
+    }
+
+    // ── granularity ceiling ─────────────────────────────────────
+    //
+    // The stamp is a LOCAL waking-day key, so these tests build their
+    // timestamps from `Local` rather than hardcoding epochs — a fixed epoch
+    // would pass in one timezone and fail in the next.
+
+    /// Epoch-ms `hours_ago` before now, for building day-stamped states.
+    fn ms_ago(hours: i64) -> u64 {
+        (Local::now().timestamp_millis() - hours * 3_600_000).max(0) as u64
+    }
+
+    fn now_ms() -> u64 {
+        Local::now().timestamp_millis().max(0) as u64
+    }
+
+    #[test]
+    fn unset_state_sits_at_the_default_ceiling() {
+        assert_eq!(active_granularity(&json!({}), now_ms()), DEFAULT_GRANULARITY);
+    }
+
+    #[test]
+    fn a_level_set_today_is_the_active_ceiling() {
+        let now = now_ms();
+        let state = set_granularity(&json!({}), "tldr", now);
+        assert_eq!(active_granularity(&state, now), "tldr");
+    }
+
+    #[test]
+    fn yesterdays_stamp_expires_back_to_the_default() {
+        // Stamped a full day ago, read now: the day rolled, the ceiling lapsed.
+        let state = set_granularity(&json!({}), "sentence", ms_ago(25));
+        assert_eq!(active_granularity(&state, now_ms()), DEFAULT_GRANULARITY);
+    }
+
+    #[test]
+    fn an_unrecognized_level_falls_back_rather_than_sticking() {
+        let now = now_ms();
+        let state = set_granularity(&json!({}), "novel", now);
+        assert_eq!(active_granularity(&state, now), DEFAULT_GRANULARITY);
+    }
+
+    #[test]
+    fn reset_writes_a_blank_level_and_falls_back() {
+        // Exactly what `keel granularity reset` persists: stamp kept, level blank.
+        let now = now_ms();
+        let set = set_granularity(&json!({}), "report", now);
+        let cleared = set_granularity(&set, "", now);
+        assert_eq!(cleared["granularity"], json!(""));
+        assert_eq!(active_granularity(&cleared, now), DEFAULT_GRANULARITY);
+    }
+
+    #[test]
+    fn setting_the_ceiling_preserves_keys_the_tray_does_not_own() {
+        // The regression that matters: the tray must not clobber the agent's
+        // half of state.json (focus locks, session timestamps).
+        let prior = json!({ "focus": true, "focusSession": "abc", "lastPromptTs": 42 });
+        let next = set_granularity(&prior, "page", now_ms());
+        assert_eq!(next["focus"], json!(true));
+        assert_eq!(next["focusSession"], json!("abc"));
+        assert_eq!(next["lastPromptTs"], json!(42));
+    }
+
+    #[test]
+    fn a_garbled_state_document_still_yields_a_ceiling() {
+        // Fail-open: an unreadable state degrades to the default, never to none.
+        assert_eq!(active_granularity(&json!("nonsense"), now_ms()), DEFAULT_GRANULARITY);
+        let recovered = set_granularity(&json!("nonsense"), "tldr", now_ms());
+        assert_eq!(active_granularity(&recovered, now_ms()), "tldr");
+    }
+
+    #[test]
+    fn the_waking_day_rolls_at_four_not_midnight() {
+        // 02:00 and the preceding 22:00 are the same waking day; 06:00 is not.
+        let two_am = Local::now()
+            .date_naive()
+            .and_hms_opt(2, 0, 0)
+            .and_then(|d| Local.from_local_datetime(&d).single())
+            .expect("2am is representable");
+        let ts = two_am.timestamp_millis().max(0) as u64;
+        assert_eq!(focus_day_key(ts), focus_day_key(ts.saturating_sub(4 * 3_600_000)));
+        assert_ne!(focus_day_key(ts), focus_day_key(ts + 4 * 3_600_000));
+    }
+
+    #[test]
+    fn every_level_has_a_menu_label() {
+        for level in GRANULARITY_ORDER {
+            assert!(!granularity_label(level).is_empty(), "{level} has no label");
+        }
+        assert!(granularity_label("novel").is_empty());
     }
 }

@@ -65,6 +65,26 @@ running* silently biases every hour-of-day derivation on the read side, and
 makes a daily rhythm unidentifiable no matter how good the model is. Coverage
 is a precondition for the analysis, not a nice-to-have.
 
+## Setting the granularity ceiling
+
+Menubar icon → **Granularity** — the same day-scoped response-depth dial as
+`keel granularity <level>`, moved to where it can be reached without a terminal.
+The submenu title carries the ceiling in force (`Granularity — tldr`), one row
+per level is checked, and "Reset to default (page)" clears it.
+
+The dial itself is still the agent surface's: this menu is a second hand on the
+same face. It writes exactly two fields of `~/.keel/state.json` (`granularity`
+and its waking-day stamp `granularityDay`), reading the document first so the
+agent's other fields — focus lock, session timestamps — survive. The rules are
+restated in `domain.rs` from `apps/agent/core.mjs`: the four levels, the `page`
+default, and the 04:00 day roll. **Change one, change both** — two writers
+disagreeing about today's ceiling would be worse than no tray control at all.
+
+Because the CLI writes the same file, and the waking day rolls under a menu
+nobody clicked, the tray re-reads state every 30s (the rollup cadence) and
+re-ticks the rows. That refresh runs above the pause check on purpose: pausing
+the sensors stops logging, it does not freeze the menu's picture of the dial.
+
 ## How to pause
 
 Menubar icon → "Pause logging" (toggles to "Resume logging"). Pausing and
@@ -99,5 +119,6 @@ cargo test --manifest-path src-tauri/Cargo.toml  # domain unit tests
 ```
 
 Rust split: `src-tauri/src/domain.rs` is pure (event building, dedupe,
-day-file naming, title capping, idle pairing — unit-tested);
-`src-tauri/src/writer.rs` is the only file I/O; `lib.rs` wires sensors + tray.
+day-file naming, title capping, idle pairing, the granularity ceiling —
+unit-tested); `src-tauri/src/writer.rs` is the only file I/O (append-only log,
+plus the read/modify/write of `state.json`); `lib.rs` wires sensors + tray.
