@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "step-away",
-  "description": "The step-away cooldown window's one privilege: closing itself. That is the unlock path (`unlock_with_intention`) reaching back into the app — without it the window would be a block with no way out, which @keel/domain refuses. Scoped to the step-away windows by label, so nothing else in the app gains it.",
+  "description": "Two privileges for the step-away wheel, both scoped to its own windows by label. `close` is the unlock path (`unlock_with_intention`) reaching back into the app — without it the window would be a block with no way out, which @keel/domain refuses. `emit` is how the wheel reports where your throw landed: the outcome is decided by the hand, not pre-chosen, so it has to travel inward for the log to be true.",
   "windows": ["step-away-*"],
-  "permissions": ["core:window:allow-close"]
+  "permissions": ["core:window:allow-close", "core:event:allow-emit"]
 }

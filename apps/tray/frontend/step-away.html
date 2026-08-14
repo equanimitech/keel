@@ -4,10 +4,9 @@
     <meta charset="utf-8" />
     <title>keel — step away</title>
     <style>
-      /* Deliberately one fixed look: this window is a dark screen by design,
-         not a themed surface. Nothing here counts down on its own — a visible
-         countdown makes waiting the salient activity, so the clock is revealed
-         only when asked for. */
+      /* Two phases, one window. The wheel is a brief, coloured moment of
+         choosing; what follows is the calm dark screen that is the actual
+         mechanism. The colour belongs to the first and must not outlast it. */
       html,
       body {
         margin: 0;
@@ -17,7 +16,6 @@
         color: #e8e4dc;
         font: 400 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
           sans-serif;
-        cursor: none;
         -webkit-user-select: none;
         user-select: none;
       }
@@ -26,10 +24,64 @@
         align-items: center;
         justify-content: center;
       }
+
+      /* ── the wheel ─────────────────────────────────────────── */
+      #stage {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        cursor: grab;
+        transition: opacity 0.7s ease, transform 0.7s ease;
+      }
+      #stage.throwing {
+        cursor: grabbing;
+      }
+      #stage.gone {
+        opacity: 0;
+        transform: scale(0.92);
+        pointer-events: none;
+      }
+      #wheel {
+        width: min(64vh, 64vw);
+        height: min(64vh, 64vw);
+        display: block;
+        overflow: visible;
+      }
+      #pointer {
+        margin-bottom: -1.1rem;
+        font-size: 1.1rem;
+        line-height: 1;
+        color: #e8e4dc;
+        opacity: 0.85;
+        z-index: 2;
+      }
+      .seg-name {
+        font-size: 13px;
+        font-weight: 500;
+        fill: #0b0c0e;
+        opacity: 0.82;
+      }
+      .seg-emoji {
+        font-size: 26px;
+      }
+      #grab-hint {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 3.2rem;
+        text-align: center;
+        font-size: 0.85rem;
+        color: #4d4941;
+        transition: opacity 0.5s ease;
+      }
+
+      /* ── the settled screen ────────────────────────────────── */
       /* The area's colour, as a trace rather than a field. The screen going
          dark is the mechanism; flooding it with a saturated hue would put back
-         the stimulus we just removed. So: a soft bloom behind the card, at a
-         tenth strength, on the same near-black. Absent tint = plain black. */
+         the stimulus we just removed. */
       #tint {
         position: fixed;
         inset: 0;
@@ -39,9 +91,10 @@
           var(--tint, transparent) 0%,
           transparent 72%
         );
-        animation: bloom 2.4s ease forwards;
         pointer-events: none;
-        transition: background 0.18s linear;
+      }
+      body.settled #tint {
+        animation: bloom 2.4s ease forwards;
       }
       @keyframes bloom {
         to {
@@ -52,6 +105,14 @@
         max-width: 34rem;
         padding: 2rem;
         text-align: center;
+        opacity: 0;
+        transition: opacity 1.1s ease;
+      }
+      body.settled {
+        cursor: none;
+      }
+      body.settled .card {
+        opacity: 1;
       }
       .emoji {
         font-size: 4.5rem;
@@ -63,22 +124,6 @@
         font-size: 2.25rem;
         font-weight: 500;
         letter-spacing: -0.02em;
-      }
-      /* The draw settles rather than lands: no flash, no bounce, no scale-up.
-         A wheel that celebrates on landing is a slot machine, and a slot
-         machine is the variable-ratio reward this whole design refuses. */
-      .card.drawing .emoji,
-      .card.drawing .name {
-        opacity: 0.62;
-      }
-      .card .note,
-      #hint {
-        opacity: 0;
-        transition: opacity 0.9s ease;
-      }
-      .card.settled .note,
-      body.settled #hint {
-        opacity: 1;
       }
       .note {
         margin: 0;
@@ -96,8 +141,7 @@
         color: #8d877d;
       }
       /* Naming the way to ask is not the same as answering. The clock stays on
-         request; what is always visible is only that asking is possible —
-         otherwise "on request" is indistinguishable from hidden. */
+         request; what is always visible is only that asking is possible. */
       #hint {
         position: fixed;
         left: 0;
@@ -107,8 +151,12 @@
         font-size: 0.8rem;
         letter-spacing: 0.02em;
         color: #2f2c27;
+        opacity: 0;
+        transition: opacity 0.9s ease;
       }
-      /* The on-request reveal. Hidden until you ask, then fades back out. */
+      body.settled #hint {
+        opacity: 1;
+      }
       #clock {
         position: fixed;
         left: 0;
@@ -133,6 +181,7 @@
         justify-content: center;
         background: #07080a;
         cursor: auto;
+        z-index: 5;
       }
       #exit.shown {
         display: flex;
@@ -162,19 +211,26 @@
         font-size: 0.85rem;
         color: #4d4941;
       }
-      /* Someone who has asked for less motion gets the result, not the draw. */
       @media (prefers-reduced-motion: reduce) {
+        #stage,
         #tint,
-        .card .note,
+        .card,
         #hint {
-          animation: none;
           transition: none;
+          animation: none;
         }
       }
     </style>
   </head>
   <body>
     <div id="tint"></div>
+
+    <div id="stage">
+      <div id="pointer">▼</div>
+      <svg id="wheel" viewBox="-110 -110 220 220" aria-hidden="true"></svg>
+    </div>
+    <div id="grab-hint">drag to spin</div>
+
     <div class="card" id="card"></div>
     <div id="clock"></div>
     <div id="hint">any key · time left &nbsp; esc · go back</div>
@@ -195,132 +251,285 @@
     </div>
 
     <script>
-      // Injected by the tray as an initialization script, so emoji and spaces
-      // arrive intact with no percent-encoding to get wrong.
       var gap = window.__STEP_AWAY__ || {};
-      var draw = gap.draw || {};
-      var options = draw.options || [];
-      var picked = typeof draw.pickedIndex === "number" ? draw.pickedIndex : -1;
-      var startedAt = Date.now();
+      var options = (gap.wheel && gap.wheel.options) || [];
+      var startAt = (gap.wheel && gap.wheel.startAt) || 0;
 
+      var stage = document.getElementById("stage");
+      var svg = document.getElementById("wheel");
+      var grabHint = document.getElementById("grab-hint");
       var card = document.getElementById("card");
-      var tintLayer = document.getElementById("tint");
       var clock = document.getElementById("clock");
       var exit = document.getElementById("exit");
       var intention = document.getElementById("intention");
       document.getElementById("prompt").textContent =
         gap.prompt || "what are you going back to?";
 
-      // Declared up here, not inside the branch below: the key and click
-      // handlers close over them, and a block-scoped function declaration is
-      // not something to rely on.
-      var timers = [];
-      var drawing = false;
-      var settle = function () {};
-
       var HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
-      function setTint(value) {
-        // Hex-validated in the domain before it gets here; re-checked because
-        // this value lands in a stylesheet.
-        if (value && HEX.test(value)) {
-          document.documentElement.style.setProperty("--tint", value);
+      var NS = "http://www.w3.org/2000/svg";
+      var drawn = null; // the landed option, once the wheel stops
+      var startedAt = 0; // when the hold began — i.e. when it landed
+
+      function el(tag, attrs) {
+        var node = document.createElementNS(NS, tag);
+        for (var k in attrs) {
+          node.setAttribute(k, attrs[k]);
+        }
+        return node;
+      }
+      function safeColor(value, fallback) {
+        return value && HEX.test(value) ? value : fallback;
+      }
+
+      // ── drawing the wheel ──────────────────────────────────────
+      var R = 100;
+      var step = options.length ? 360 / options.length : 360;
+
+      function buildWheel() {
+        var group = el("g", { id: "spin" });
+        for (var i = 0; i < options.length; i++) {
+          var a0 = (i * step - 90) * (Math.PI / 180);
+          var a1 = ((i + 1) * step - 90) * (Math.PI / 180);
+          var large = step > 180 ? 1 : 0;
+          var d =
+            "M 0 0 L " +
+            R * Math.cos(a0) +
+            " " +
+            R * Math.sin(a0) +
+            " A " +
+            R +
+            " " +
+            R +
+            " 0 " +
+            large +
+            " 1 " +
+            R * Math.cos(a1) +
+            " " +
+            R * Math.sin(a1) +
+            " Z";
+          group.appendChild(
+            el("path", {
+              d: d,
+              fill: safeColor(options[i].tint, "#3f3a33"),
+              stroke: "#07080a",
+              "stroke-width": "1.5",
+            })
+          );
+
+          // Labels sit upright along the segment's midline.
+          var mid = (i + 0.5) * step - 90;
+          var rad = mid * (Math.PI / 180);
+          if (options[i].emoji) {
+            var e = el("text", {
+              x: R * 0.58 * Math.cos(rad),
+              y: R * 0.58 * Math.sin(rad),
+              "text-anchor": "middle",
+              "dominant-baseline": "central",
+              class: "seg-emoji",
+            });
+            e.textContent = options[i].emoji;
+            group.appendChild(e);
+          }
+          var label = el("text", {
+            x: R * 0.86 * Math.cos(rad),
+            y: R * 0.86 * Math.sin(rad),
+            "text-anchor": "middle",
+            "dominant-baseline": "central",
+            class: "seg-name",
+            transform:
+              "rotate(" +
+              (mid + 90) +
+              " " +
+              R * 0.86 * Math.cos(rad) +
+              " " +
+              R * 0.86 * Math.sin(rad) +
+              ")",
+          });
+          label.textContent = options[i].habit;
+          group.appendChild(label);
+        }
+        group.appendChild(el("circle", { r: 7, fill: "#07080a" }));
+        svg.appendChild(group);
+      }
+
+      // ── the throw ──────────────────────────────────────────────
+      var rotation = startAt * step * -1; // rest on a different face each time
+      var velocity = 0; // degrees per ms
+      var dragging = false;
+      var lastAngle = 0;
+      var lastMove = 0;
+      var raf = null;
+      var idleThrow = null;
+
+      function applyRotation() {
+        var g = document.getElementById("spin");
+        if (g) {
+          g.setAttribute("transform", "rotate(" + rotation + ")");
         }
       }
 
-      // ── the empty wheel ────────────────────────────────────────
-      if (!gap.habit || picked < 0 || !options.length) {
-        card.className = "card empty settled";
-        var name = document.createElement("p");
-        name.className = "name";
-        name.textContent = "nothing on the wheel";
-        card.appendChild(name);
-        var hint = document.createElement("p");
-        hint.className = "note";
-        hint.appendChild(document.createTextNode("tag a zenborg habit "));
-        var tag = document.createElement("code");
-        tag.textContent = "gap";
-        hint.appendChild(tag);
-        hint.appendChild(document.createTextNode(" to fill it."));
-        card.appendChild(hint);
-        document.body.classList.add("settled");
-      } else {
-        // ── the draw ─────────────────────────────────────────────
-        var emojiEl = document.createElement("div");
-        emojiEl.className = "emoji";
-        var nameEl = document.createElement("p");
-        nameEl.className = "name";
-        var noteEl = document.createElement("p");
-        noteEl.className = "note";
-        card.appendChild(emojiEl);
-        card.appendChild(nameEl);
-        card.appendChild(noteEl);
+      /** Which segment sits under the pointer at 12 o'clock. */
+      function landedIndex() {
+        var at = ((-rotation % 360) + 360) % 360;
+        return Math.floor(at / step) % options.length;
+      }
 
-        function paint(option) {
-          emojiEl.textContent = option.emoji || "";
-          nameEl.textContent = option.habit;
-          setTint(option.tint);
+      function pointerAngle(event) {
+        var box = svg.getBoundingClientRect();
+        var cx = box.left + box.width / 2;
+        var cy = box.top + box.height / 2;
+        return (
+          Math.atan2(event.clientY - cy, event.clientX - cx) * (180 / Math.PI)
+        );
+      }
+
+      function armWheel() {
+        applyRotation();
+        // If it is never touched, it throws itself — the tool should not
+        // require ceremony from someone who just wants to step away.
+        idleThrow = setTimeout(function () {
+          velocity = 0.55 + Math.random() * 0.5;
+          spinDown();
+        }, 6000);
+      }
+
+      function cancelIdleThrow() {
+        if (idleThrow) {
+          clearTimeout(idleThrow);
+          idleThrow = null;
+        }
+      }
+
+      document.addEventListener("mousedown", function (event) {
+        if (drawn || exit.classList.contains("shown") || !options.length) return;
+        cancelIdleThrow();
+        if (raf) {
+          cancelAnimationFrame(raf);
+          raf = null;
+        }
+        dragging = true;
+        velocity = 0;
+        lastAngle = pointerAngle(event);
+        lastMove = Date.now();
+        stage.classList.add("throwing");
+      });
+
+      document.addEventListener("mousemove", function (event) {
+        if (!dragging) return;
+        var angle = pointerAngle(event);
+        var delta = angle - lastAngle;
+        // Shortest way round, so crossing the 180° seam does not fling it.
+        while (delta > 180) delta -= 360;
+        while (delta < -180) delta += 360;
+        var now = Date.now();
+        var dt = Math.max(1, now - lastMove);
+        rotation += delta;
+        velocity = delta / dt;
+        lastAngle = angle;
+        lastMove = now;
+        applyRotation();
+      });
+
+      document.addEventListener("mouseup", function () {
+        if (!dragging) return;
+        dragging = false;
+        stage.classList.remove("throwing");
+        // Stale grip: let go without moving and it simply stays put.
+        if (Date.now() - lastMove > 120) velocity = 0;
+        spinDown();
+      });
+
+      /**
+       * Friction only — the wheel loses speed and stops wherever it stops.
+       * Nothing steers it toward a chosen segment: a wheel you throw that
+       * lands where the machine already decided is a rigged wheel, and a
+       * fake agency affordance is worse than no wheel at all.
+       */
+      function spinDown() {
+        var last = Date.now();
+        function frame() {
+          var now = Date.now();
+          var dt = Math.min(48, now - last);
+          last = now;
+          rotation += velocity * dt;
+          velocity *= Math.pow(0.9915, dt);
+          applyRotation();
+          if (Math.abs(velocity) > 0.012) {
+            raf = requestAnimationFrame(frame);
+          } else {
+            raf = null;
+            land();
+          }
+        }
+        raf = requestAnimationFrame(frame);
+      }
+
+      function land() {
+        if (drawn) return;
+        drawn = options[landedIndex()];
+        startedAt = Date.now();
+
+        // Report where the throw ended up. The outcome is the hand's, so it
+        // travels inward to be logged — the tray never pre-chose it.
+        try {
+          window.__TAURI__.event.emit(
+            gap.drawnEvent || "step-away://drawn",
+            landedIndex()
+          );
+        } catch (err) {
+          // Fail-open: the screen still dims, the gap just goes unlogged.
         }
 
-        settle = function () {
-          for (var t = 0; t < timers.length; t++) {
-            clearTimeout(timers[t]);
+        if (drawn.tint && HEX.test(drawn.tint)) {
+          document.documentElement.style.setProperty("--tint", drawn.tint);
+        }
+
+        // The colour was for choosing. What remains is the dark screen.
+        setTimeout(function () {
+          stage.classList.add("gone");
+          grabHint.style.opacity = 0;
+          if (drawn.emoji) {
+            var e = document.createElement("div");
+            e.className = "emoji";
+            e.textContent = drawn.emoji;
+            card.appendChild(e);
           }
-          timers = [];
-          drawing = false;
-          paint(options[picked]);
-          card.classList.remove("drawing");
-          card.classList.add("settled");
-          document.body.classList.add("settled");
-          noteEl.textContent = gap.offScreen
+          var n = document.createElement("p");
+          n.className = "name";
+          n.textContent = drawn.habit;
+          card.appendChild(n);
+          var note = document.createElement("p");
+          note.className = "note";
+          note.textContent = drawn.offScreen
             ? "the screen will wait."
             : "on the screen — this closes in a moment.";
-        };
-
-        var reduceMotion =
-          window.matchMedia &&
-          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-        if (reduceMotion || options.length < 2) {
-          settle();
-        } else {
-          drawing = true;
-          card.classList.add("drawing");
-          var SPIN_MS = 1500;
-          var steps = Math.max(8, options.length * 2);
-          // Deceleration only — no wind-up, no near-miss, no bounce past the
-          // result. Names come fast at first and spread out as they settle,
-          // so it reads as coming to rest rather than building tension.
-          for (var i = 0; i < steps; i++) {
-            (function (step) {
-              var at = SPIN_MS * (1 - Math.pow(1 - step / steps, 1 / 3));
-              timers.push(
-                setTimeout(function () {
-                  var idx =
-                    (((picked - (steps - 1) + step) % options.length) +
-                      options.length) %
-                    options.length;
-                  paint(options[idx]);
-                }, at)
-              );
-            })(i);
-          }
-          timers.push(setTimeout(settle, SPIN_MS));
-        }
+          card.appendChild(note);
+          document.body.classList.add("settled");
+        }, 650);
       }
 
+      // ── the hold, once something has been drawn ────────────────
+      function holdMs() {
+        if (!drawn) return 0;
+        // Mirrors domain::GapHabit::hold_ms — off-screen waits the habit's own
+        // size (capped), on-screen only long enough to read the name.
+        if (!drawn.offScreen) return 5000;
+        if (!drawn.expectedMin) return 60000;
+        return Math.min(drawn.expectedMin * 60000, 15 * 60000);
+      }
       function remainingMs() {
-        return Math.max(0, (gap.holdMs || 0) - (Date.now() - startedAt));
+        if (!startedAt) return 0;
+        return Math.max(0, holdMs() - (Date.now() - startedAt));
       }
-
       function label(ms) {
         var total = Math.ceil(ms / 1000);
         var secs = total % 60;
         return Math.floor(total / 60) + ":" + (secs < 10 ? "0" : "") + secs;
       }
 
-      // Ask and it answers, then goes quiet again.
       var hideClock;
       function revealRemaining() {
+        if (!drawn) return;
         var left = remainingMs();
         clock.textContent = left > 0 ? label(left) + " left" : "the hold is done";
         clock.classList.add("shown");
@@ -335,8 +544,7 @@
         try {
           window.__TAURI__.window.getCurrentWindow().close();
         } catch (err) {
-          // Fail-open: if the bridge is unavailable the tray's "Return" still
-          // works once the hold is up. Never trap the machine.
+          // Fail-open: the tray's "Return" still works once the hold is up.
         }
       }
 
@@ -347,14 +555,14 @@
             intention.value = "";
           } else if (event.key === "Enter" && intention.value.trim()) {
             // The intention is never logged — it does its work in the typing.
-            // Only the fact that this exit was taken lands in the log.
             release();
           }
           return;
         }
-        // Sovereignty: nobody is made to watch the draw finish.
-        if (typeof drawing !== "undefined" && drawing) {
-          settle();
+        // Before anything is drawn there is no gap to leave: Esc just closes,
+        // and nothing is logged, because spinning is not stepping away.
+        if (!drawn) {
+          if (event.key === "Escape") release();
           return;
         }
         if (event.key === "Escape") {
@@ -366,12 +574,32 @@
       });
 
       document.addEventListener("click", function () {
-        if (typeof drawing !== "undefined" && drawing) {
-          settle();
-          return;
-        }
-        revealRemaining();
+        if (drawn) revealRemaining();
       });
-    </script>
+
+      // ── start ──────────────────────────────────────────────────
+      // Last, so every declaration above it has actually been assigned.
+      if (!options.length) {
+        stage.classList.add("gone");
+        grabHint.style.opacity = 0;
+        card.className = "card empty";
+        var n0 = document.createElement("p");
+        n0.className = "name";
+        n0.textContent = "nothing on the wheel";
+        card.appendChild(n0);
+        var h0 = document.createElement("p");
+        h0.className = "note";
+        h0.appendChild(document.createTextNode("tag a zenborg habit "));
+        var c0 = document.createElement("code");
+        c0.textContent = "gap";
+        h0.appendChild(c0);
+        h0.appendChild(document.createTextNode(" to fill it."));
+        card.appendChild(h0);
+        document.body.classList.add("settled");
+      } else {
+        buildWheel();
+        armWheel();
+      }
+</script>
   </body>
 </html>

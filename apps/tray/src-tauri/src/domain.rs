@@ -479,17 +479,15 @@ pub fn picked_index(wheel: &[GapHabit], roll: usize) -> Option<usize> {
     Some(roll % wheel.len())
 }
 
-/// Spin the wheel.
-pub fn pick_gap_habit(wheel: &[GapHabit], roll: usize) -> Option<&GapHabit> {
-    wheel.get(picked_index(wheel, roll)?)
-}
-
-/// The whole wheel plus the slot the roll landed on, for the window's draw.
+/// The whole wheel, for a window the user spins by hand.
 ///
-/// The animation is presentation only: the pick is already decided here, so
-/// what lands in the log and what appears on screen can never disagree. Only
-/// the fields the card renders travel — no durations, no `gap-screen`, nothing
-/// the animation has no use for.
+/// The outcome is NOT decided here. A wheel you throw that lands where the
+/// machine already chose is a rigged wheel — a fake agency affordance, and a
+/// worse dishonesty than having no wheel at all. So every option travels, the
+/// hand decides, and the landed slot comes back to be logged.
+///
+/// `roll` seeds only the wheel's *resting rotation*, so it does not present the
+/// same face every time. It has no bearing on where a throw ends up.
 pub fn wheel_payload(wheel: &[GapHabit], roll: usize) -> Value {
     let options: Vec<Value> = wheel
         .iter()
@@ -498,13 +496,22 @@ pub fn wheel_payload(wheel: &[GapHabit], roll: usize) -> Value {
                 "habit": habit.name,
                 "emoji": habit.emoji,
                 "tint": habit.tint,
+                "offScreen": habit.off_screen,
+                "expectedMin": habit.expected_min,
             })
         })
         .collect();
     json!({
         "options": options,
-        "pickedIndex": picked_index(wheel, roll),
+        "startAt": picked_index(wheel, roll),
     })
+}
+
+/// The habit the wheel came to rest on. `None` for an out-of-range slot, which
+/// is treated as no draw at all rather than silently snapping to a neighbour —
+/// the log must never claim a habit the wheel did not land on.
+pub fn drawn_habit(wheel: &[GapHabit], landed: usize) -> Option<&GapHabit> {
+    wheel.get(landed)
 }
 
 /// The early exit, and the reason this is a cooldown rather than a bare hold.
@@ -1016,53 +1023,63 @@ mod tests {
     }
 
     #[test]
-    fn the_roll_wraps_and_reaches_every_option() {
+    fn the_seed_wraps_rather_than_falling_off_the_end() {
         let wheel = gap_habits(&habits_fixture());
-        let picked: Vec<&str> =
-            (0..wheel.len()).filter_map(|r| pick_gap_habit(&wheel, r)).map(|h| h.name.as_str()).collect();
-        assert_eq!(picked, vec!["breathwork", "chess", "origami"]);
-        // Rolls past the end wrap rather than falling off.
-        assert_eq!(pick_gap_habit(&wheel, wheel.len()).map(|h| h.name.as_str()), Some("breathwork"));
-        assert_eq!(pick_gap_habit(&wheel, usize::MAX).is_some(), true);
+        assert_eq!(picked_index(&wheel, wheel.len()), Some(0));
+        assert!(picked_index(&wheel, usize::MAX).is_some());
     }
 
     #[test]
-    fn an_empty_wheel_picks_nothing_without_panicking() {
-        assert!(pick_gap_habit(&[], 0).is_none());
-        assert!(pick_gap_habit(&[], 99).is_none());
+    fn an_empty_wheel_draws_nothing_without_panicking() {
         assert!(picked_index(&[], 0).is_none());
-        assert_eq!(wheel_payload(&[], 7), json!({ "options": [], "pickedIndex": null }));
+        assert!(drawn_habit(&[], 0).is_none());
+        assert_eq!(wheel_payload(&[], 7), json!({ "options": [], "startAt": null }));
     }
 
     #[test]
-    fn the_draw_shows_the_same_habit_it_logs() {
-        // The animation must never decide. Whatever slot the payload points at
-        // has to be the habit `pick_gap_habit` hands the logger.
-        let wheel = gap_habits(&habits_fixture());
-        for roll in [0usize, 1, 2, 3, 17, 4096, usize::MAX] {
-            let drawn = wheel_payload(&wheel, roll);
-            let index = drawn["pickedIndex"].as_u64().expect("a slot") as usize;
-            let shown = drawn["options"][index]["habit"].as_str().expect("a name");
-            let logged = pick_gap_habit(&wheel, roll).expect("a habit");
-            assert_eq!(shown, logged.name, "roll {roll} showed and logged different habits");
-        }
-    }
-
-    #[test]
-    fn the_draw_carries_every_option_so_the_wheel_can_cycle() {
+    fn the_wheel_carries_every_option_so_the_hand_can_choose() {
         let wheel = gap_habits(&habits_fixture());
         let drawn = wheel_payload(&wheel, 0);
         let options = drawn["options"].as_array().expect("options");
         assert_eq!(options.len(), wheel.len());
-        // Only what the card renders travels — never the whole habit record.
+        // Only what the wheel renders and reports travels — never the record.
         let keys: Vec<&String> = options[0].as_object().expect("an option").keys().collect();
-        assert_eq!(keys, vec!["emoji", "habit", "tint"]);
+        assert_eq!(keys, vec!["emoji", "expectedMin", "habit", "offScreen", "tint"]);
+    }
+
+    #[test]
+    fn the_seed_moves_the_resting_face_without_deciding_the_throw() {
+        // `startAt` only rotates the wheel so it does not present the same face
+        // every time. Nothing about the outcome is settled here.
+        let wheel = gap_habits(&habits_fixture());
+        let faces: std::collections::HashSet<u64> = (0..wheel.len())
+            .map(|roll| wheel_payload(&wheel, roll)["startAt"].as_u64().expect("a slot"))
+            .collect();
+        assert_eq!(faces.len(), wheel.len(), "the seed should reach every face");
+    }
+
+    #[test]
+    fn the_landed_slot_resolves_to_exactly_that_habit() {
+        let wheel = gap_habits(&habits_fixture());
+        for (index, habit) in wheel.iter().enumerate() {
+            assert_eq!(drawn_habit(&wheel, index).map(|h| &h.name), Some(&habit.name));
+        }
+    }
+
+    #[test]
+    fn an_out_of_range_landing_draws_nothing_rather_than_a_neighbour() {
+        // The log must never claim a habit the wheel did not land on, so a
+        // nonsense slot is no draw — not a silent snap to the nearest one.
+        let wheel = gap_habits(&habits_fixture());
+        assert!(drawn_habit(&wheel, wheel.len()).is_none());
+        assert!(drawn_habit(&wheel, 9_999).is_none());
+        assert!(drawn_habit(&[], 0).is_none());
     }
 
     #[test]
     fn the_start_payload_carries_the_habit_and_its_mechanism() {
         let wheel = gap_habits(&habits_fixture());
-        let habit = pick_gap_habit(&wheel, 0).expect("a habit");
+        let habit = drawn_habit(&wheel, 0).expect("a habit");
         assert_eq!(
             step_away_payload(Some(habit), habit.hold_ms()),
             json!({

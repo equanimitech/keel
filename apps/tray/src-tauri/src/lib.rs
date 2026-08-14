@@ -18,7 +18,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::json;
 use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, Wry};
+use tauri::{AppHandle, Listener, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, Wry};
 use user_idle::UserIdle;
 use x_win::get_active_window;
 
@@ -176,17 +176,28 @@ fn toggle_pause(app: &AppHandle) {
 /// Window label prefix — one dimmed window per monitor.
 const STEP_AWAY_LABEL: &str = "step-away";
 
+/// Event the wheel emits when it comes to rest, carrying the landed slot.
+const STEP_AWAY_DRAWN: &str = "step-away://drawn";
+
 /// The open gap, or `None` when the screens are the user's again.
 #[derive(Default)]
 struct StepAway(Mutex<Option<OpenGap>>);
 
 struct OpenGap {
+    labels: Vec<String>,
+    /// The wheel, held so the landed slot can be resolved when it reports in.
+    wheel: Vec<domain::GapHabit>,
+    /// `None` while the wheel is still turning. The gap has not started yet —
+    /// spinning is not stepping away, and the log should not pretend it is.
+    drawn: Option<DrawnGap>,
+}
+
+struct DrawnGap {
     started_ms: u64,
     hold_ms: u64,
     /// The `step_away_start` payload, replayed on the end event so the pair
     /// carries the same habit and mechanism.
     payload: serde_json::Value,
-    labels: Vec<String>,
 }
 
 /// Dim every monitor and name one thing worth doing.
@@ -203,33 +214,16 @@ fn start_step_away(app: &AppHandle) {
         &writer::read_habits(),
         &domain::area_colors(&writer::read_areas()),
     );
-    // The caller owns the roll; the domain stays free of randomness, the same
-    // rule `build_event` follows for ids.
+    // Seeds the wheel's resting face only, so it does not present the same
+    // segment every time. Where a throw ends up is the hand's business.
     let roll = uuid::Uuid::new_v4().as_u128() as usize;
-    let habit = domain::pick_gap_habit(&wheel, roll);
-    let draw = domain::wheel_payload(&wheel, roll);
-    let hold_ms = habit.map_or(domain::HOLD_OFF_SCREEN_MS, |h| h.hold_ms());
-    let off_screen = habit.map_or(true, |h| h.off_screen);
-    let payload = domain::step_away_payload(habit, hold_ms);
-
+    let card = json!({
+        "wheel": domain::wheel_payload(&wheel, roll),
+        "prompt": domain::UNLOCK_PROMPT,
+        "drawnEvent": STEP_AWAY_DRAWN,
+    });
     // Passed as a global rather than a query string: no percent-encoding to get
     // wrong, and emoji survive intact.
-    let card = json!({
-        "habit": habit.map(|h| h.name.clone()),
-        "emoji": habit.and_then(|h| h.emoji.clone()),
-        "offScreen": off_screen,
-        // The window owns the on-request reveal and the unlock prompt, so it
-        // needs the hold — never to paint a countdown, only to answer when asked.
-        "holdMs": hold_ms,
-        "prompt": domain::UNLOCK_PROMPT,
-        // A trace of the area's colour, not a wash of it. Validated as hex in
-        // the domain before it ever reaches a stylesheet.
-        "tint": habit.and_then(|h| h.tint.clone()),
-        // Every option plus the slot the roll landed on, so the window can
-        // cycle the names before settling. Presentation only — the pick above
-        // is what gets logged, whatever the animation does.
-        "draw": draw,
-    });
     let script = format!("window.__STEP_AWAY__ = {card};");
 
     let mut labels = Vec::new();
@@ -263,14 +257,42 @@ fn start_step_away(app: &AppHandle) {
         }
     }
 
-    let now = now_ms();
-    app.state::<Logger>().emit("step_away_start", now, payload.clone(), None);
     *app.state::<StepAway>().0.lock().expect("step-away lock") =
-        Some(OpenGap { started_ms: now, hold_ms, payload, labels });
+        Some(OpenGap { labels, wheel, drawn: None });
 
     let ui = app.state::<TrayUi>();
-    let _ = ui.step_away.set_text("Return");
+    let _ = ui.step_away.set_text("Spinning…");
     let _ = ui.step_away.set_enabled(false);
+}
+
+/// The wheel came to rest. THIS is where the gap starts — spinning is not
+/// stepping away, so nothing is logged until something was actually drawn.
+fn on_wheel_drawn(app: &AppHandle, landed: usize) {
+    let now = now_ms();
+    let started = {
+        let state = app.state::<StepAway>();
+        let mut open = state.0.lock().expect("step-away lock");
+        let Some(gap) = open.as_mut() else {
+            return; // the window is already gone
+        };
+        if gap.drawn.is_some() {
+            return; // one draw per gap; a second report is a duplicate
+        }
+        // An out-of-range slot draws nothing rather than snapping to a
+        // neighbour — the log must never claim a habit the wheel missed.
+        let Some(habit) = domain::drawn_habit(&gap.wheel, landed) else {
+            return;
+        };
+        let hold_ms = habit.hold_ms();
+        let off_screen = habit.off_screen;
+        let payload = domain::step_away_payload(Some(habit), hold_ms);
+        gap.drawn = Some(DrawnGap { started_ms: now, hold_ms, payload: payload.clone() });
+        (payload, hold_ms, off_screen)
+    };
+    let (payload, hold_ms, off_screen) = started;
+
+    app.state::<Logger>().emit("step_away_start", now, payload, None);
+    let _ = app.state::<TrayUi>().step_away.set_text("Return");
 
     // One ticker owns both jobs: carrying the remaining time onto the menu item
     // (you have to open the menubar to read it — on request, never ambient) and
@@ -282,10 +304,12 @@ fn start_step_away(app: &AppHandle) {
         let open = {
             let state = handle.state::<StepAway>();
             let gap = state.0.lock().expect("step-away lock");
-            gap.as_ref().map(|g| (g.started_ms, g.hold_ms))
+            gap.as_ref()
+                .and_then(|g| g.drawn.as_ref())
+                .map(|d| (d.started_ms, d.hold_ms))
         };
         // Released early — the unlock path already closed the span.
-        let Some((started_ms, hold_ms)) = open else {
+        let Some((started_ms, _)) = open else {
             return;
         };
         let left = domain::remaining_ms(started_ms, hold_ms, now_ms());
@@ -317,17 +341,21 @@ fn end_step_away(app: &AppHandle) {
         }
     }
 
-    let now = now_ms();
-    // Which exit was taken. Early means the unlock path was used; otherwise the
-    // cooldown simply ran out. A week of these two numbers is what tells us
-    // whether this works or whether it just gets skipped.
-    let released_early = domain::remaining_ms(gap.started_ms, gap.hold_ms, now) > 0;
-    app.state::<Logger>().emit(
-        "step_away_end",
-        now,
-        domain::step_away_end_payload(&gap.payload, released_early),
-        Some(now.saturating_sub(gap.started_ms)),
-    );
+    // Closed before the wheel ever landed: nothing was drawn, so there is no
+    // span to close and nothing to log. Spinning is not stepping away.
+    if let Some(drawn) = gap.drawn {
+        let now = now_ms();
+        // Which exit was taken. Early means the unlock path was used; otherwise
+        // the cooldown simply ran out. A week of these two numbers is what tells
+        // us whether this works or whether it just gets skipped.
+        let released_early = domain::remaining_ms(drawn.started_ms, drawn.hold_ms, now) > 0;
+        app.state::<Logger>().emit(
+            "step_away_end",
+            now,
+            domain::step_away_end_payload(&drawn.payload, released_early),
+            Some(now.saturating_sub(drawn.started_ms)),
+        );
+    }
 
     let ui = app.state::<TrayUi>();
     let _ = ui.step_away.set_text("Step away");
@@ -650,6 +678,17 @@ pub fn run() {
                 step_away,
             });
             app.manage(StepAway::default());
+
+            // The wheel reporting where the throw landed. The outcome is the
+            // hand's, not ours, so it has to travel inward for the log to be
+            // true. Anything unparseable is ignored — a bad payload must never
+            // invent a draw.
+            let drawn_handle = app.handle().clone();
+            app.listen(STEP_AWAY_DRAWN, move |event| {
+                if let Ok(landed) = serde_json::from_str::<usize>(event.payload()) {
+                    on_wheel_drawn(&drawn_handle, landed);
+                }
+            });
             // First paint: tick whatever the file already says.
             refresh_granularity(app.handle());
 
