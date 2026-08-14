@@ -64,6 +64,19 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         color: #8d877d;
       }
+      /* Naming the way to ask is not the same as answering. The clock stays on
+         request; what is always visible is only that asking is possible —
+         otherwise "on request" is indistinguishable from hidden. */
+      #hint {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 1.75rem;
+        text-align: center;
+        font-size: 0.8rem;
+        letter-spacing: 0.02em;
+        color: #2f2c27;
+      }
       /* The on-request reveal. Hidden until you ask, then fades back out. */
       #clock {
         position: fixed;
@@ -123,6 +136,7 @@
   <body>
     <div class="card" id="card"></div>
     <div id="clock"></div>
+    <div id="hint">any key · time left &nbsp; esc · go back</div>
 
     <!-- unlock_with_intention: the required way out. Naming what you are going
          back to is the friction — it hands the moment from System 1 to System 2

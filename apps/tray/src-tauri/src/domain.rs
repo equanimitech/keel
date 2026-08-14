@@ -294,13 +294,27 @@ pub const GAP_TAG: &str = "gap";
 /// Marks a `gap` habit you do ON the screen — the window gets out of the way.
 pub const GAP_SCREEN_TAG: &str = "gap-screen";
 
-/// How long an off-screen pick holds the screen before "Return" enables.
+/// Duration shim: a `gap-5m` tag means "this usually takes about five minutes".
+///
+/// A stand-in, not the destination. zenborg has no per-habit duration: its
+/// `durationMin` rides on `Habit.schedule`, which is a clock-time commitment
+/// (therapy, Mondays, 16:00) that an ambient gap habit does not and should not
+/// have. The real fix is an `expectedMin` field on the habit; until then the
+/// tag namespace we already use for `gap-screen` carries it.
+pub const GAP_MINUTES_PREFIX: &str = "gap-";
+
+/// Hold for an off-screen pick that declares no duration.
 /// A delay, never a block: Cmd-Q always works, and we say so rather than
 /// pretending otherwise.
 pub const HOLD_OFF_SCREEN_MS: u64 = 60_000;
 
 /// An on-screen pick only needs long enough to read the name.
 pub const HOLD_ON_SCREEN_MS: u64 = 5_000;
+
+/// Ceiling on the hold, whatever a tag claims. A mistyped `gap-90m` must not
+/// dim every monitor for an hour and a half — and per Contract 3 a cooldown
+/// "marks a limit; it is not a sentence".
+pub const HOLD_CAP_MS: u64 = 15 * 60_000;
 
 /// One option on the wheel.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -309,18 +323,44 @@ pub struct GapHabit {
     pub emoji: Option<String>,
     /// `true` unless the habit carries `gap-screen`.
     pub off_screen: bool,
+    /// Minutes this usually takes, from a `gap-<N>m` tag. `None` when untagged.
+    pub expected_min: Option<u64>,
 }
 
 impl GapHabit {
-    /// The hold this pick earns — the whole behavioural difference between
-    /// the two mechanisms, in one number.
+    /// The hold this pick earns.
+    ///
+    /// Off-screen: the habit's own size, capped — you are away from the desk,
+    /// so the screen waiting costs nothing, and the unlock path is always there.
+    /// On-screen: a fixed reveal, because the duration describes the activity,
+    /// not the dimming, and the window has to step aside either way.
     pub fn hold_ms(&self) -> u64 {
-        if self.off_screen {
-            HOLD_OFF_SCREEN_MS
-        } else {
-            HOLD_ON_SCREEN_MS
+        if !self.off_screen {
+            return HOLD_ON_SCREEN_MS;
+        }
+        match self.expected_min {
+            Some(minutes) => minutes.saturating_mul(60_000).min(HOLD_CAP_MS),
+            None => HOLD_OFF_SCREEN_MS,
         }
     }
+}
+
+/// Minutes from the first well-formed `gap-<N>m` tag. `gap-screen` cannot
+/// collide with this — it shares the prefix but not the `m` suffix.
+fn expected_min_from_tags(tags: &[&str]) -> Option<u64> {
+    for tag in tags {
+        let Some(rest) = tag.strip_prefix(GAP_MINUTES_PREFIX) else {
+            continue;
+        };
+        let Some(digits) = rest.strip_suffix('m') else {
+            continue;
+        };
+        match digits.parse::<u64>() {
+            Ok(minutes) if minutes > 0 => return Some(minutes),
+            _ => continue,
+        }
+    }
+    None
 }
 
 /// Every non-archived habit tagged `gap`, sorted by name so the wheel is a
@@ -365,6 +405,7 @@ pub fn gap_habits(habits_json: &str) -> Vec<GapHabit> {
             name: name.to_string(),
             emoji: habit.get("emoji").and_then(Value::as_str).map(str::to_string),
             off_screen: !tags.contains(&GAP_SCREEN_TAG),
+            expected_min: expected_min_from_tags(&tags),
         });
     }
     wheel.sort_by(|a, b| a.name.cmp(&b.name));
@@ -411,6 +452,7 @@ pub fn step_away_payload(habit: Option<&GapHabit>, hold_ms: u64) -> Value {
     json!({
         "habit": habit.map(|h| h.name.clone()),
         "offScreen": habit.map(|h| h.off_screen),
+        "expectedMin": habit.and_then(|h| h.expected_min),
         "holdMs": hold_ms,
         "unlockPath": UNLOCK_PATH,
     })
@@ -738,9 +780,9 @@ mod tests {
     /// A trimmed `habits.json` — zenborg keys the document by habit id.
     fn habits_fixture() -> String {
         json!({
-            "id-breathwork": { "name": "breathwork", "emoji": "🌬️", "tags": ["gap"], "isArchived": false },
+            "id-breathwork": { "name": "breathwork", "emoji": "🌬️", "tags": ["gap", "gap-2m"], "isArchived": false },
             "id-origami":    { "name": "origami", "emoji": "🦢", "tags": ["gap"], "isArchived": false },
-            "id-chess":      { "name": "chess", "emoji": "♟️", "tags": ["gap", "gap-screen"], "isArchived": false },
+            "id-chess":      { "name": "chess", "emoji": "♟️", "tags": ["gap", "gap-screen", "gap-10m"], "isArchived": false },
             "id-gym":        { "name": "gym", "emoji": "💪", "tags": ["strength"], "isArchived": false },
             "id-retired":    { "name": "retired thing", "tags": ["gap"], "isArchived": true },
             "id-untagged":   { "name": "poetry", "emoji": "📜", "tags": [] }
@@ -760,12 +802,53 @@ mod tests {
     fn gap_screen_marks_a_habit_as_on_screen() {
         let wheel = gap_habits(&habits_fixture());
         let by_name = |n: &str| wheel.iter().find(|h| h.name == n).expect("on the wheel").clone();
-        // Substitution: you need the screen, so the window gets out of the way.
+        // Substitution: you need the screen, so the window gets out of the way —
+        // regardless of how long the activity itself takes.
         assert!(!by_name("chess").off_screen);
+        assert_eq!(by_name("chess").expected_min, Some(10));
         assert_eq!(by_name("chess").hold_ms(), HOLD_ON_SCREEN_MS);
-        // Cue removal: the window holds, and the delay is the intervention.
+        // Cue removal: the window holds for the habit's own size.
         assert!(by_name("breathwork").off_screen);
-        assert_eq!(by_name("breathwork").hold_ms(), HOLD_OFF_SCREEN_MS);
+        assert_eq!(by_name("breathwork").hold_ms(), 2 * 60_000);
+    }
+
+    #[test]
+    fn an_off_screen_habit_holds_for_its_declared_size() {
+        let wheel = gap_habits(&habits_fixture());
+        let by_name = |n: &str| wheel.iter().find(|h| h.name == n).expect("on the wheel").clone();
+        // Untagged falls back rather than guessing.
+        assert_eq!(by_name("origami").expected_min, None);
+        assert_eq!(by_name("origami").hold_ms(), HOLD_OFF_SCREEN_MS);
+    }
+
+    #[test]
+    fn the_duration_tag_is_parsed_and_gap_screen_cannot_collide_with_it() {
+        let only = |tags: serde_json::Value| {
+            gap_habits(&json!({ "x": { "name": "x", "tags": tags, "isArchived": false } }).to_string())
+                .pop()
+                .expect("on the wheel")
+        };
+        assert_eq!(only(json!(["gap", "gap-5m"])).expected_min, Some(5));
+        // Shares the prefix, but not the `m` suffix — must not read as minutes.
+        assert_eq!(only(json!(["gap", "gap-screen"])).expected_min, None);
+        // Malformed or nonsensical values are ignored, never fatal.
+        assert_eq!(only(json!(["gap", "gap-0m"])).expected_min, None);
+        assert_eq!(only(json!(["gap", "gap-abcm"])).expected_min, None);
+        assert_eq!(only(json!(["gap", "gap-"])).expected_min, None);
+        assert_eq!(only(json!(["gap"])).expected_min, None);
+    }
+
+    #[test]
+    fn a_long_duration_tag_cannot_dim_the_screen_for_an_hour() {
+        let long = gap_habits(
+            &json!({ "x": { "name": "x", "tags": ["gap", "gap-90m"], "isArchived": false } })
+                .to_string(),
+        )
+        .pop()
+        .expect("on the wheel");
+        assert_eq!(long.expected_min, Some(90));
+        // A cooldown marks a limit; it is not a sentence.
+        assert_eq!(long.hold_ms(), HOLD_CAP_MS);
     }
 
     #[test]
@@ -821,7 +904,8 @@ mod tests {
             json!({
                 "habit": "breathwork",
                 "offScreen": true,
-                "holdMs": HOLD_OFF_SCREEN_MS,
+                "expectedMin": 2,
+                "holdMs": 2 * 60_000,
                 "unlockPath": "unlock_with_intention",
             })
         );
@@ -835,6 +919,7 @@ mod tests {
             json!({
                 "habit": null,
                 "offScreen": null,
+                "expectedMin": null,
                 "holdMs": HOLD_OFF_SCREEN_MS,
                 "unlockPath": "unlock_with_intention",
             })
