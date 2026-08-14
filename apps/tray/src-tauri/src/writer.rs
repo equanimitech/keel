@@ -17,14 +17,27 @@ pub fn keel_dir() -> PathBuf {
     if let Some(keel) = std::env::var_os("KEEL_HOME") {
         return PathBuf::from(keel);
     }
-    let vault = match std::env::var_os("KAIROS_HOME") {
+    vault_dir().join("keel")
+}
+
+/// The kairos vault root: `$KAIROS_HOME` (default `~/.kairos`). The kernel's
+/// own collections live here. `KEEL_HOME` deliberately does NOT move it — that
+/// variable relocates keel's subtree, not the kernel's.
+pub fn vault_dir() -> PathBuf {
+    match std::env::var_os("KAIROS_HOME") {
         Some(vault) => PathBuf::from(vault),
         None => match std::env::var_os("HOME") {
             Some(home) => PathBuf::from(home).join(".kairos"),
             None => PathBuf::from(".kairos"),
         },
-    };
-    vault.join("keel")
+    }
+}
+
+/// `~/.kairos/habits.json` — kernel-owned, defined in zenborg. Read-only here:
+/// keel never writes the kernel's collections. Fail-open, so a missing vault
+/// yields an empty string and the wheel comes back empty rather than erroring.
+pub fn read_habits() -> String {
+    fs::read_to_string(vault_dir().join("habits.json")).unwrap_or_default()
 }
 
 /// `~/.kairos/keel/log` — same substrate directory as the agent surface.

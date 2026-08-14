@@ -274,6 +274,122 @@ pub fn set_granularity(state: &Value, level: &str, now_ms: u64) -> Value {
     Value::Object(next)
 }
 
+// ── Step away (the self-invoked gap window) ─────────────────────
+// A tray click dims the screens and names one thing worth doing, drawn from
+// the zenborg habits tagged `gap`. Self-invoked ONLY: nothing here reads a
+// tide, and no ambient path constructs it — the same invariant `@keel/domain`
+// enforces with `AmbientRule.primitives = Exclude<PrimitiveSpec, CooldownSpec>`.
+//
+// Two mechanisms share the surface, and the payload keeps them separable:
+//   off-screen (breathwork, origami, push-ups, hydration) → cue removal. The
+//     window HOLDS, and the delay is the intervention.
+//   on-screen  (`gap-screen`: chess, italian lessons, revision code) → behaviour
+//     substitution. The window reveals, then closes, because you need the screen.
+//
+// habits.json is kernel-owned (zenborg writes it, keel only reads it).
+
+/// The tag that puts a habit on the wheel.
+pub const GAP_TAG: &str = "gap";
+
+/// Marks a `gap` habit you do ON the screen — the window gets out of the way.
+pub const GAP_SCREEN_TAG: &str = "gap-screen";
+
+/// How long an off-screen pick holds the screen before "Return" enables.
+/// A delay, never a block: Cmd-Q always works, and we say so rather than
+/// pretending otherwise.
+pub const HOLD_OFF_SCREEN_MS: u64 = 60_000;
+
+/// An on-screen pick only needs long enough to read the name.
+pub const HOLD_ON_SCREEN_MS: u64 = 5_000;
+
+/// One option on the wheel.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GapHabit {
+    pub name: String,
+    pub emoji: Option<String>,
+    /// `true` unless the habit carries `gap-screen`.
+    pub off_screen: bool,
+}
+
+impl GapHabit {
+    /// The hold this pick earns — the whole behavioural difference between
+    /// the two mechanisms, in one number.
+    pub fn hold_ms(&self) -> u64 {
+        if self.off_screen {
+            HOLD_OFF_SCREEN_MS
+        } else {
+            HOLD_ON_SCREEN_MS
+        }
+    }
+}
+
+/// Every non-archived habit tagged `gap`, sorted by name so the wheel is a
+/// stable list and the roll is the only source of variation.
+///
+/// Fail-open: unreadable, garbled, or unexpected JSON yields an empty wheel,
+/// and an empty wheel still opens the window (just unnamed).
+///
+/// zenborg keys `habits.json` by id, so the document is an object of habit
+/// records — but we accept a bare array too. The vault is private-tier and not
+/// directly inspectable from every context, so tolerating both shapes costs one
+/// branch and removes a silent-empty-wheel failure mode.
+pub fn gap_habits(habits_json: &str) -> Vec<GapHabit> {
+    let Ok(doc) = serde_json::from_str::<Value>(habits_json) else {
+        return Vec::new();
+    };
+    let records: Vec<&Value> = match &doc {
+        Value::Object(map) => map.values().collect(),
+        Value::Array(list) => list.iter().collect(),
+        _ => return Vec::new(),
+    };
+    let mut wheel: Vec<GapHabit> = Vec::new();
+    for habit in records {
+        if habit.get("isArchived").and_then(Value::as_bool).unwrap_or(false) {
+            continue;
+        }
+        let tags: Vec<&str> =
+            match habit.get("tags").and_then(Value::as_array) {
+                Some(list) => list.iter().filter_map(Value::as_str).collect(),
+                None => continue,
+            };
+        if !tags.contains(&GAP_TAG) {
+            continue;
+        }
+        let Some(name) = habit.get("name").and_then(Value::as_str) else {
+            continue;
+        };
+        if name.is_empty() {
+            continue;
+        }
+        wheel.push(GapHabit {
+            name: name.to_string(),
+            emoji: habit.get("emoji").and_then(Value::as_str).map(str::to_string),
+            off_screen: !tags.contains(&GAP_SCREEN_TAG),
+        });
+    }
+    wheel.sort_by(|a, b| a.name.cmp(&b.name));
+    wheel
+}
+
+/// Spin the wheel. The caller supplies the roll, so the domain stays free of
+/// randomness — the same rule `build_event` follows for ids.
+pub fn pick_gap_habit(wheel: &[GapHabit], roll: usize) -> Option<&GapHabit> {
+    if wheel.is_empty() {
+        return None;
+    }
+    wheel.get(roll % wheel.len())
+}
+
+/// `step_away_start` payload. `habit` is null on an empty wheel — the window
+/// still opens, it just has nothing to name.
+pub fn step_away_payload(habit: Option<&GapHabit>, hold_ms: u64) -> Value {
+    json!({
+        "habit": habit.map(|h| h.name.clone()),
+        "offScreen": habit.map(|h| h.off_screen),
+        "holdMs": hold_ms,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -576,5 +692,103 @@ mod tests {
             assert!(!granularity_label(level).is_empty(), "{level} has no label");
         }
         assert!(granularity_label("novel").is_empty());
+    }
+
+    // ── step away (the gap wheel) ───────────────────────────────
+
+    /// A trimmed `habits.json` — zenborg keys the document by habit id.
+    fn habits_fixture() -> String {
+        json!({
+            "id-breathwork": { "name": "breathwork", "emoji": "🌬️", "tags": ["gap"], "isArchived": false },
+            "id-origami":    { "name": "origami", "emoji": "🦢", "tags": ["gap"], "isArchived": false },
+            "id-chess":      { "name": "chess", "emoji": "♟️", "tags": ["gap", "gap-screen"], "isArchived": false },
+            "id-gym":        { "name": "gym", "emoji": "💪", "tags": ["strength"], "isArchived": false },
+            "id-retired":    { "name": "retired thing", "tags": ["gap"], "isArchived": true },
+            "id-untagged":   { "name": "poetry", "emoji": "📜", "tags": [] }
+        })
+        .to_string()
+    }
+
+    #[test]
+    fn the_wheel_holds_only_live_gap_tagged_habits() {
+        let wheel = gap_habits(&habits_fixture());
+        let names: Vec<&str> = wheel.iter().map(|h| h.name.as_str()).collect();
+        // Sorted by name, so the roll is the only source of variation.
+        assert_eq!(names, vec!["breathwork", "chess", "origami"]);
+    }
+
+    #[test]
+    fn gap_screen_marks_a_habit_as_on_screen() {
+        let wheel = gap_habits(&habits_fixture());
+        let by_name = |n: &str| wheel.iter().find(|h| h.name == n).expect("on the wheel").clone();
+        // Substitution: you need the screen, so the window gets out of the way.
+        assert!(!by_name("chess").off_screen);
+        assert_eq!(by_name("chess").hold_ms(), HOLD_ON_SCREEN_MS);
+        // Cue removal: the window holds, and the delay is the intervention.
+        assert!(by_name("breathwork").off_screen);
+        assert_eq!(by_name("breathwork").hold_ms(), HOLD_OFF_SCREEN_MS);
+    }
+
+    #[test]
+    fn a_missing_or_garbled_habits_file_yields_an_empty_wheel() {
+        // Fail-open, like every other read on this surface.
+        assert!(gap_habits("").is_empty());
+        assert!(gap_habits("{ not json").is_empty());
+        assert!(gap_habits("[]").is_empty());
+        assert!(gap_habits("{}").is_empty());
+        assert!(gap_habits("\"a string\"").is_empty());
+        // A record missing the fields we need is skipped, not fatal.
+        assert!(gap_habits(&json!({ "id-x": { "tags": ["gap"] } }).to_string()).is_empty());
+    }
+
+    #[test]
+    fn the_wheel_reads_an_array_document_as_well_as_an_id_keyed_one() {
+        // The vault is private-tier; tolerating both shapes removes a
+        // silent-empty-wheel failure mode we cannot always inspect for.
+        let as_array = json!([
+            { "name": "breathwork", "emoji": "🌬️", "tags": ["gap"], "isArchived": false },
+            { "name": "chess", "emoji": "♟️", "tags": ["gap", "gap-screen"], "isArchived": false },
+            { "name": "gym", "tags": ["strength"], "isArchived": false }
+        ])
+        .to_string();
+        let wheel = gap_habits(&as_array);
+        assert_eq!(wheel.iter().map(|h| h.name.as_str()).collect::<Vec<_>>(), vec!["breathwork", "chess"]);
+        assert!(!wheel[1].off_screen);
+    }
+
+    #[test]
+    fn the_roll_wraps_and_reaches_every_option() {
+        let wheel = gap_habits(&habits_fixture());
+        let picked: Vec<&str> =
+            (0..wheel.len()).filter_map(|r| pick_gap_habit(&wheel, r)).map(|h| h.name.as_str()).collect();
+        assert_eq!(picked, vec!["breathwork", "chess", "origami"]);
+        // Rolls past the end wrap rather than falling off.
+        assert_eq!(pick_gap_habit(&wheel, wheel.len()).map(|h| h.name.as_str()), Some("breathwork"));
+        assert_eq!(pick_gap_habit(&wheel, usize::MAX).is_some(), true);
+    }
+
+    #[test]
+    fn an_empty_wheel_picks_nothing_without_panicking() {
+        assert!(pick_gap_habit(&[], 0).is_none());
+        assert!(pick_gap_habit(&[], 99).is_none());
+    }
+
+    #[test]
+    fn the_start_payload_carries_the_habit_and_its_mechanism() {
+        let wheel = gap_habits(&habits_fixture());
+        let habit = pick_gap_habit(&wheel, 0).expect("a habit");
+        assert_eq!(
+            step_away_payload(Some(habit), habit.hold_ms()),
+            json!({ "habit": "breathwork", "offScreen": true, "holdMs": HOLD_OFF_SCREEN_MS })
+        );
+    }
+
+    #[test]
+    fn an_unnamed_gap_still_produces_a_payload() {
+        // Empty wheel: the window opens anyway, so the event must too.
+        assert_eq!(
+            step_away_payload(None, HOLD_OFF_SCREEN_MS),
+            json!({ "habit": null, "offScreen": null, "holdMs": HOLD_OFF_SCREEN_MS })
+        );
     }
 }

@@ -12,12 +12,13 @@ mod writer;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use serde_json::json;
 use tauri::menu::{CheckMenuItem, IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::{AppHandle, Manager, RunEvent, Wry};
+use tauri::{AppHandle, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, Wry};
 use user_idle::UserIdle;
 use x_win::get_active_window;
 
@@ -133,6 +134,8 @@ struct TrayUi {
     granularity: Submenu<Wry>,
     /// `(level, row)` in `GRANULARITY_ORDER`, exactly one of them checked.
     granularity_rows: Vec<(String, CheckMenuItem<Wry>)>,
+    /// "Step away" when the screens are yours, "Return" while they are dimmed.
+    step_away: MenuItem<Wry>,
 }
 
 /// Ambient status carries STATE only — alive or paused, no numbers.
@@ -155,6 +158,131 @@ fn toggle_pause(app: &AppHandle) {
         .toggle
         .set_text(if was_paused { "Pause logging" } else { "Resume logging" });
     set_status(app, !was_paused);
+}
+
+// ── Step away (the self-invoked gap window) ─────────────────────
+//
+// One click dims every monitor and names one habit tagged `gap` in zenborg.
+// Self-invoked ONLY, by construction: nothing here reads a tide, and the sole
+// caller is the menu handler. That is the same invariant `@keel/domain` states
+// as `AmbientRule.primitives = Exclude<PrimitiveSpec, CooldownSpec>`.
+//
+// The delay IS the mechanism, so "Return" stays disabled through the hold. It
+// is a delay and not a block, and the design says so plainly: Cmd-Q ends the
+// app at any moment, and the window floats below the menubar so the way out
+// stays visible. Pretending otherwise is the anti-pattern this whole slice
+// exists to avoid.
+
+/// Window label prefix — one dimmed window per monitor.
+const STEP_AWAY_LABEL: &str = "step-away";
+
+/// The open gap, or `None` when the screens are the user's again.
+#[derive(Default)]
+struct StepAway(Mutex<Option<OpenGap>>);
+
+struct OpenGap {
+    started_ms: u64,
+    /// The `step_away_start` payload, replayed on the end event so the pair
+    /// carries the same habit and mechanism.
+    payload: serde_json::Value,
+    labels: Vec<String>,
+}
+
+/// Dim every monitor and name one thing worth doing.
+fn start_step_away(app: &AppHandle) {
+    {
+        let open = app.state::<StepAway>();
+        let open = open.0.lock().expect("step-away lock");
+        if open.is_some() {
+            return; // already away — the item reads "Return" now
+        }
+    }
+
+    let wheel = domain::gap_habits(&writer::read_habits());
+    // The caller owns the roll; the domain stays free of randomness, the same
+    // rule `build_event` follows for ids.
+    let roll = uuid::Uuid::new_v4().as_u128() as usize;
+    let habit = domain::pick_gap_habit(&wheel, roll);
+    let hold_ms = habit.map_or(domain::HOLD_OFF_SCREEN_MS, |h| h.hold_ms());
+    let off_screen = habit.map_or(true, |h| h.off_screen);
+    let payload = domain::step_away_payload(habit, hold_ms);
+
+    // Passed as a global rather than a query string: no percent-encoding to get
+    // wrong, and emoji survive intact.
+    let card = json!({
+        "habit": habit.map(|h| h.name.clone()),
+        "emoji": habit.and_then(|h| h.emoji.clone()),
+        "offScreen": off_screen,
+    });
+    let script = format!("window.__STEP_AWAY__ = {card};");
+
+    let mut labels = Vec::new();
+    for (i, monitor) in app.available_monitors().unwrap_or_default().iter().enumerate() {
+        let label = format!("{STEP_AWAY_LABEL}-{i}");
+        let scale = monitor.scale_factor();
+        let at = monitor.position().to_logical::<f64>(scale);
+        let size = monitor.size().to_logical::<f64>(scale);
+        let built =
+            WebviewWindowBuilder::new(app, &label, WebviewUrl::App("step-away.html".into()))
+                .title("keel")
+                .decorations(false)
+                .always_on_top(true)
+                .focused(i == 0)
+                .position(at.x, at.y)
+                .inner_size(size.width, size.height)
+                .initialization_script(&script)
+                .build();
+        if built.is_ok() {
+            labels.push(label);
+        }
+    }
+
+    let now = now_ms();
+    app.state::<Logger>().emit("step_away_start", now, payload.clone(), None);
+    *app.state::<StepAway>().0.lock().expect("step-away lock") =
+        Some(OpenGap { started_ms: now, payload, labels });
+
+    let ui = app.state::<TrayUi>();
+    let _ = ui.step_away.set_text("Return");
+    let _ = ui.step_away.set_enabled(false);
+
+    // The hold. Off-screen: the screen keeps waiting and "Return" unlocks.
+    // On-screen: you need the screen for it, so the window lets go itself.
+    let handle = app.clone();
+    thread::spawn(move || {
+        thread::sleep(Duration::from_millis(hold_ms));
+        if off_screen {
+            let _ = handle.state::<TrayUi>().step_away.set_enabled(true);
+        } else {
+            end_step_away(&handle);
+        }
+    });
+}
+
+/// Give the screens back and close the span.
+fn end_step_away(app: &AppHandle) {
+    let gap = app.state::<StepAway>().0.lock().expect("step-away lock").take();
+    let Some(gap) = gap else {
+        return;
+    };
+
+    for label in &gap.labels {
+        if let Some(window) = app.get_webview_window(label) {
+            let _ = window.close();
+        }
+    }
+
+    let now = now_ms();
+    app.state::<Logger>().emit(
+        "step_away_end",
+        now,
+        gap.payload,
+        Some(now.saturating_sub(gap.started_ms)),
+    );
+
+    let ui = app.state::<TrayUi>();
+    let _ = ui.step_away.set_text("Step away");
+    let _ = ui.step_away.set_enabled(true);
 }
 
 // ── Granularity ceiling (the tray's one write to agent state) ───
@@ -379,6 +507,8 @@ pub fn run() {
             )?;
             let relaunch =
                 MenuItem::with_id(app, "relaunch", "Relaunch keel", true, None::<&str>)?;
+            let step_away =
+                MenuItem::with_id(app, "step_away", "Step away", true, None::<&str>)?;
             let open = MenuItem::with_id(app, "open", "Open data folder", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
@@ -419,8 +549,10 @@ pub fn run() {
                 &granularity_items,
             )?;
 
-            let menu =
-                Menu::with_items(app, &[&status, &toggle, &granularity, &open, &separator, &quit])?;
+            let menu = Menu::with_items(
+                app,
+                &[&status, &toggle, &granularity, &step_away, &open, &separator, &quit],
+            )?;
 
             let tray = app
                 .tray_by_id("main")
@@ -428,6 +560,17 @@ pub fn run() {
             tray.set_menu(Some(menu.clone()))?;
             tray.on_menu_event(|app, event| match event.id().as_ref() {
                 "toggle" => toggle_pause(app),
+                // One item, both directions — the hold decides whether the
+                // "Return" half is reachable yet.
+                "step_away" => {
+                    let away =
+                        app.state::<StepAway>().0.lock().expect("step-away lock").is_some();
+                    if away {
+                        end_step_away(app);
+                    } else {
+                        start_step_away(app);
+                    }
+                }
                 "open" => {
                     let logger = app.state::<Logger>();
                     let _ = Command::new("open").arg(&logger.dir).spawn();
@@ -455,7 +598,9 @@ pub fn run() {
                 relaunch,
                 granularity,
                 granularity_rows,
+                step_away,
             });
+            app.manage(StepAway::default());
             // First paint: tick whatever the file already says.
             refresh_granularity(app.handle());
 

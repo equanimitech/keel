@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>keel — step away</title>
+    <style>
+      /* Deliberately one fixed look: this window is a dark screen by design,
+         not a themed surface. No countdown — a countdown makes waiting the
+         salient activity, which is the thing we are trying not to do. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #07080a;
+        color: #e8e4dc;
+        font: 400 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui,
+          sans-serif;
+        cursor: none;
+        -webkit-user-select: none;
+        user-select: none;
+      }
+      body {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .card {
+        max-width: 34rem;
+        padding: 2rem;
+        text-align: center;
+        opacity: 0;
+        animation: settle 1.4s ease forwards;
+      }
+      /* Slow fade-in: the screen going quiet should not itself be a jolt. */
+      @keyframes settle {
+        to {
+          opacity: 1;
+        }
+      }
+      .emoji {
+        font-size: 4.5rem;
+        line-height: 1;
+        margin-bottom: 1.75rem;
+      }
+      .name {
+        margin: 0 0 1rem;
+        font-size: 2.25rem;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+      }
+      .note {
+        margin: 0;
+        font-size: 0.95rem;
+        color: #6f6a62;
+      }
+      .empty .name {
+        font-size: 1.5rem;
+        font-weight: 400;
+        color: #6f6a62;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: #8d877d;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card" id="card"></div>
+    <script>
+      // Injected by the tray as an initialization script, so emoji and spaces
+      // arrive intact with no percent-encoding to get wrong.
+      var gap = window.__STEP_AWAY__ || {};
+      var card = document.getElementById("card");
+
+      function line(cls, text) {
+        var p = document.createElement("p");
+        p.className = cls;
+        p.textContent = text; // never innerHTML — the name comes from the vault
+        return p;
+      }
+
+      if (!gap.habit) {
+        card.className = "card empty";
+        card.appendChild(line("name", "nothing on the wheel"));
+        var hint = document.createElement("p");
+        hint.className = "note";
+        hint.appendChild(document.createTextNode("tag a zenborg habit "));
+        var tag = document.createElement("code");
+        tag.textContent = "gap";
+        hint.appendChild(tag);
+        hint.appendChild(document.createTextNode(" to fill it."));
+        card.appendChild(hint);
+      } else {
+        if (gap.emoji) {
+          var e = document.createElement("div");
+          e.className = "emoji";
+          e.textContent = gap.emoji;
+          card.appendChild(e);
+        }
+        card.appendChild(line("name", gap.habit));
+        card.appendChild(
+          line(
+            "note",
+            gap.offScreen
+              ? "the screen will wait."
+              : "on the screen — this closes in a moment."
+          )
+        );
+      }
+    </script>
+  </body>
+</html>
