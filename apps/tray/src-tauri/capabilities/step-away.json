@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "step-away",
+  "description": "The step-away cooldown window's one privilege: closing itself. That is the unlock path (`unlock_with_intention`) reaching back into the app — without it the window would be a block with no way out, which @keel/domain refuses. Scoped to the step-away windows by label, so nothing else in the app gains it.",
+  "windows": ["step-away-*"],
+  "permissions": ["core:window:allow-close"]
+}

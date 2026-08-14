@@ -22,7 +22,7 @@ slice_id: A
 
 - **Ambient firing.** Nothing arms this but a click. `AmbientRule.primitives` already excludes `CooldownSpec`; this honours that invariant by construction.
 - **Agent-return auto-dismiss.** The tray is write-only today — it never reads the log. Wiring that is its own bet.
-- **A countdown, a streak, a score.** A countdown makes waiting the salient activity.
+- **An ambient countdown, a streak, a score.** The clock is revealed on request, never painted.
 - **A real screen lock.** `pmset` plus a password taxes the return to work as hard as it taxes the drift.
 - **keel writing zenborg.** Habits are kernel-owned: keel reads `habits.json`, never writes it.
 
@@ -30,8 +30,9 @@ slice_id: A
 
 - **Tray item → gap window** (`apps/tray/src-tauri/src/lib.rs:383`, beside `open`). "Step away" opens a borderless, near-black `WebviewWindow` on every monitor; it becomes "Return", disabled for the hold. `tauri.conf.json` `app.windows` stays `[]` — windows are built at runtime. The window floats *below* the menubar, so the escape hatch stays visible and honest.
 - **The wheel** (`domain.rs`, pure). Read `~/.kairos/habits.json`; keep non-archived habits whose `tags` contain `gap`; pick one by a caller-supplied roll, so the domain stays free of randomness (same rule as `build_event`, `domain.rs:40`). `gap-screen` marks the on-screen ones. Empty list → the window still opens, unnamed. Fail-open like every other read.
-- **Delay, not block** (`lib.rs`). Off-screen habits hold the window 60s before "Return" enables — the delay *is* the mechanism. On-screen habits (chess, italian lessons, revision code) reveal for 5s then close, because you need the screen for them. Cmd-Q always works, and that is stated rather than hidden — misrepresenting the mechanism is the named anti-pattern.
-- **`step_away_start` / `step_away_end`** via `Logger::emit` (`lib.rs:105`). Payload carries habit name, `offScreen`, and `holdMs`; the end event carries `durationMs`. Spans, per the event-taxonomy contract. This is what tells us in a week whether it worked.
+- **A cooldown, with the way out the contract requires** (`lib.rs`). Off-screen habits hold 60s; on-screen ones reveal for 5s then let go. `CooldownSpec.unlockPath` is **required** in `@keel/domain` — Modification Rights — so the window takes the `unlock_with_intention` branch: Esc asks what you are going back to, and naming it releases. The typing is the friction; the text is never logged. Cmd-Q also always works, and that is stated rather than hidden.
+- **The clock, on request only** (`domain::remaining_label`). Nothing counts down on its own — a visible countdown makes waiting the salient activity. The menubar item reads `Return (0:42)`, so you must go look; in the window, any key reveals the remaining for 2.5s and it fades back out.
+- **`step_away_start` / `step_away_end`** via `Logger::emit` (`lib.rs:105`). Payload carries habit name, `offScreen`, `holdMs`, and `unlockPath`; the end event adds `release: "intention" | "elapsed"` and `durationMs`. That ratio is the honest test — if `intention` dominates while watched-dwell stays flat, the cooldown is a ritual and the design failed.
 
 ## Risks
 
@@ -50,9 +51,11 @@ slice_id: A
 2. The window names one habit tagged `gap`; across 20 opens, more than one distinct name appears.
 3. For an off-screen pick, "Return" is disabled for 60s, then enables and closes the windows.
 4. For an on-screen pick, the window closes on its own after ~5s.
-5. `step_away_start` and `step_away_end` land in the day's `.desktop.jsonl` with habit name, `offScreen`, and a `durationMs` on the end event.
-6. No zenborg file is written, and no tide path can open the window.
-7. `pnpm --filter @keel/tray test` passes, including wheel selection and the empty-list case.
+5. Esc opens the intention prompt; typing a line and pressing Enter releases the cooldown immediately. Esc again backs out and the hold continues.
+6. The menubar item reads `Return (m:ss)` while held; nothing counts down inside the window until a key or click asks.
+7. `step_away_start` and `step_away_end` land in the day's `.desktop.jsonl` with habit name, `offScreen`, `unlockPath`, `release`, and a `durationMs` on the end event. The typed intention appears nowhere.
+8. No zenborg file is written, and no tide path can open the window.
+9. `pnpm --filter @keel/tray test` passes, including wheel selection, the empty-list case, and the remaining-time maths.
 
 ---
 

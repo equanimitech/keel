@@ -5,8 +5,9 @@
     <title>keel — step away</title>
     <style>
       /* Deliberately one fixed look: this window is a dark screen by design,
-         not a themed surface. No countdown — a countdown makes waiting the
-         salient activity, which is the thing we are trying not to do. */
+         not a themed surface. Nothing here counts down on its own — a visible
+         countdown makes waiting the salient activity, so the clock is revealed
+         only when asked for. */
       html,
       body {
         margin: 0;
@@ -63,15 +64,93 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         color: #8d877d;
       }
+      /* The on-request reveal. Hidden until you ask, then fades back out. */
+      #clock {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 3rem;
+        text-align: center;
+        font: 400 0.95rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: #4d4941;
+        opacity: 0;
+        transition: opacity 0.6s ease;
+      }
+      #clock.shown {
+        opacity: 1;
+      }
+      /* The unlock path. Never offered up front — you have to reach for it. */
+      #exit {
+        position: fixed;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #07080a;
+        cursor: auto;
+      }
+      #exit.shown {
+        display: flex;
+      }
+      #exit p {
+        margin: 0 0 1.5rem;
+        font-size: 1.25rem;
+        color: #b8b2a8;
+      }
+      #intention {
+        width: min(28rem, 70vw);
+        padding: 0.75rem 0;
+        border: none;
+        border-bottom: 1px solid #2a2c30;
+        background: transparent;
+        color: #e8e4dc;
+        font: inherit;
+        font-size: 1.25rem;
+        text-align: center;
+        outline: none;
+      }
+      #intention::placeholder {
+        color: #3a3730;
+      }
+      #exit .hint {
+        margin: 1.5rem 0 0;
+        font-size: 0.85rem;
+        color: #4d4941;
+      }
     </style>
   </head>
   <body>
     <div class="card" id="card"></div>
+    <div id="clock"></div>
+
+    <!-- unlock_with_intention: the required way out. Naming what you are going
+         back to is the friction — it hands the moment from System 1 to System 2
+         and recruits values, rather than pretending there is no exit. -->
+    <div id="exit">
+      <p id="prompt"></p>
+      <input
+        id="intention"
+        type="text"
+        autocomplete="off"
+        spellcheck="false"
+        placeholder="…"
+      />
+      <p class="hint">enter to go back · esc to stay</p>
+    </div>
+
     <script>
       // Injected by the tray as an initialization script, so emoji and spaces
       // arrive intact with no percent-encoding to get wrong.
       var gap = window.__STEP_AWAY__ || {};
+      var startedAt = Date.now();
+
       var card = document.getElementById("card");
+      var clock = document.getElementById("clock");
+      var exit = document.getElementById("exit");
+      var intention = document.getElementById("intention");
+      document.getElementById("prompt").textContent =
+        gap.prompt || "what are you going back to?";
 
       function line(cls, text) {
         var p = document.createElement("p");
@@ -108,6 +187,60 @@
           )
         );
       }
+
+      function remainingMs() {
+        return Math.max(0, (gap.holdMs || 0) - (Date.now() - startedAt));
+      }
+
+      function label(ms) {
+        var total = Math.ceil(ms / 1000);
+        var secs = total % 60;
+        return Math.floor(total / 60) + ":" + (secs < 10 ? "0" : "") + secs;
+      }
+
+      // Ask and it answers, then goes quiet again.
+      var hideClock;
+      function revealRemaining() {
+        var left = remainingMs();
+        clock.textContent = left > 0 ? label(left) + " left" : "the hold is done";
+        clock.classList.add("shown");
+        clearTimeout(hideClock);
+        hideClock = setTimeout(function () {
+          clock.classList.remove("shown");
+        }, 2500);
+      }
+
+      function release() {
+        // Closing the window IS the release; the tray sees it and closes the span.
+        try {
+          window.__TAURI__.window.getCurrentWindow().close();
+        } catch (err) {
+          // Fail-open: if the bridge is unavailable the tray's "Return" still
+          // works once the hold is up. Never trap the machine.
+        }
+      }
+
+      document.addEventListener("keydown", function (event) {
+        if (exit.classList.contains("shown")) {
+          if (event.key === "Escape") {
+            exit.classList.remove("shown");
+            intention.value = "";
+          } else if (event.key === "Enter" && intention.value.trim()) {
+            // The intention is never logged — it does its work in the typing.
+            // Only the fact that this exit was taken lands in the log.
+            release();
+          }
+          return;
+        }
+        if (event.key === "Escape") {
+          exit.classList.add("shown");
+          intention.focus();
+          return;
+        }
+        revealRemaining();
+      });
+
+      document.addEventListener("click", revealRemaining);
     </script>
   </body>
 </html>

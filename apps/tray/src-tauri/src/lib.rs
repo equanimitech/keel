@@ -182,6 +182,7 @@ struct StepAway(Mutex<Option<OpenGap>>);
 
 struct OpenGap {
     started_ms: u64,
+    hold_ms: u64,
     /// The `step_away_start` payload, replayed on the end event so the pair
     /// carries the same habit and mechanism.
     payload: serde_json::Value,
@@ -213,6 +214,10 @@ fn start_step_away(app: &AppHandle) {
         "habit": habit.map(|h| h.name.clone()),
         "emoji": habit.and_then(|h| h.emoji.clone()),
         "offScreen": off_screen,
+        // The window owns the on-request reveal and the unlock prompt, so it
+        // needs the hold — never to paint a countdown, only to answer when asked.
+        "holdMs": hold_ms,
+        "prompt": domain::UNLOCK_PROMPT,
     });
     let script = format!("window.__STEP_AWAY__ = {card};");
 
@@ -232,7 +237,17 @@ fn start_step_away(app: &AppHandle) {
                 .inner_size(size.width, size.height)
                 .initialization_script(&script)
                 .build();
-        if built.is_ok() {
+        if let Ok(window) = built {
+            // The window taking its own unlock path closes itself; that is how
+            // the release reaches back here. Closing one ends the whole gap —
+            // `end_step_away` takes the state, so the sibling closes it triggers
+            // land on an already-empty slot and return.
+            let handle = app.clone();
+            window.on_window_event(move |event| {
+                if matches!(event, tauri::WindowEvent::Destroyed) {
+                    end_step_away(&handle);
+                }
+            });
             labels.push(label);
         }
     }
@@ -240,22 +255,41 @@ fn start_step_away(app: &AppHandle) {
     let now = now_ms();
     app.state::<Logger>().emit("step_away_start", now, payload.clone(), None);
     *app.state::<StepAway>().0.lock().expect("step-away lock") =
-        Some(OpenGap { started_ms: now, payload, labels });
+        Some(OpenGap { started_ms: now, hold_ms, payload, labels });
 
     let ui = app.state::<TrayUi>();
     let _ = ui.step_away.set_text("Return");
     let _ = ui.step_away.set_enabled(false);
 
-    // The hold. Off-screen: the screen keeps waiting and "Return" unlocks.
-    // On-screen: you need the screen for it, so the window lets go itself.
+    // One ticker owns both jobs: carrying the remaining time onto the menu item
+    // (you have to open the menubar to read it — on request, never ambient) and
+    // ending the hold. Off-screen: "Return" unlocks and the screen keeps
+    // waiting. On-screen: you need the screen, so the window lets go itself.
     let handle = app.clone();
-    thread::spawn(move || {
-        thread::sleep(Duration::from_millis(hold_ms));
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_millis(500));
+        let open = {
+            let state = handle.state::<StepAway>();
+            let gap = state.0.lock().expect("step-away lock");
+            gap.as_ref().map(|g| (g.started_ms, g.hold_ms))
+        };
+        // Released early — the unlock path already closed the span.
+        let Some((started_ms, hold_ms)) = open else {
+            return;
+        };
+        let left = domain::remaining_ms(started_ms, hold_ms, now_ms());
+        let ui = handle.state::<TrayUi>();
+        if left > 0 {
+            let _ = ui.step_away.set_text(format!("Return ({})", domain::remaining_label(left)));
+            continue;
+        }
         if off_screen {
-            let _ = handle.state::<TrayUi>().step_away.set_enabled(true);
+            let _ = ui.step_away.set_text("Return");
+            let _ = ui.step_away.set_enabled(true);
         } else {
             end_step_away(&handle);
         }
+        return;
     });
 }
 
@@ -273,10 +307,14 @@ fn end_step_away(app: &AppHandle) {
     }
 
     let now = now_ms();
+    // Which exit was taken. Early means the unlock path was used; otherwise the
+    // cooldown simply ran out. A week of these two numbers is what tells us
+    // whether this works or whether it just gets skipped.
+    let released_early = domain::remaining_ms(gap.started_ms, gap.hold_ms, now) > 0;
     app.state::<Logger>().emit(
         "step_away_end",
         now,
-        gap.payload,
+        domain::step_away_end_payload(&gap.payload, released_early),
         Some(now.saturating_sub(gap.started_ms)),
     );
 

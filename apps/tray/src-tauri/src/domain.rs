@@ -380,6 +380,31 @@ pub fn pick_gap_habit(wheel: &[GapHabit], roll: usize) -> Option<&GapHabit> {
     wheel.get(roll % wheel.len())
 }
 
+/// The early exit, and the reason this is a cooldown rather than a bare hold.
+///
+/// `CooldownSpec.unlockPath` is **required** in `@keel/domain` — Modification
+/// Rights: every block keel owns has a way out. We take the `unlock_with_intention`
+/// branch. Naming what you are going back to is the friction: it hands the moment
+/// from System 1 to System 2, which is the point, and it recruits values (BCT 1.9)
+/// instead of overriding judgement.
+pub const UNLOCK_PATH: &str = "unlock_with_intention";
+
+/// Asked in the window when you reach for the exit. Never punitive — a cooldown
+/// marks a boundary, it is not a sentence (Contract 3 refuses BCT 14.3).
+pub const UNLOCK_PROMPT: &str = "what are you going back to?";
+
+/// Milliseconds left on the hold, saturating at zero.
+pub fn remaining_ms(started_ms: u64, hold_ms: u64, now_ms: u64) -> u64 {
+    started_ms.saturating_add(hold_ms).saturating_sub(now_ms)
+}
+
+/// `m:ss`, for the on-request reveal. Never painted ambiently: a visible
+/// countdown makes waiting the salient activity, so you have to ask for it.
+pub fn remaining_label(remaining_ms: u64) -> String {
+    let total = remaining_ms.div_ceil(1_000);
+    format!("{}:{:02}", total / 60, total % 60)
+}
+
 /// `step_away_start` payload. `habit` is null on an empty wheel — the window
 /// still opens, it just has nothing to name.
 pub fn step_away_payload(habit: Option<&GapHabit>, hold_ms: u64) -> Value {
@@ -387,7 +412,21 @@ pub fn step_away_payload(habit: Option<&GapHabit>, hold_ms: u64) -> Value {
         "habit": habit.map(|h| h.name.clone()),
         "offScreen": habit.map(|h| h.off_screen),
         "holdMs": hold_ms,
+        "unlockPath": UNLOCK_PATH,
     })
+}
+
+/// `step_away_end` payload: the start payload plus how it ended. `intention`
+/// means the exit was taken deliberately before the hold ran out; `elapsed`
+/// means the cooldown simply finished. The pair is what separates "this works"
+/// from "he skips it every time" a week from now.
+pub fn step_away_end_payload(start_payload: &Value, released_early: bool) -> Value {
+    let mut end = start_payload.as_object().cloned().unwrap_or_default();
+    end.insert(
+        "release".into(),
+        json!(if released_early { "intention" } else { "elapsed" }),
+    );
+    Value::Object(end)
 }
 
 #[cfg(test)]
@@ -779,7 +818,12 @@ mod tests {
         let habit = pick_gap_habit(&wheel, 0).expect("a habit");
         assert_eq!(
             step_away_payload(Some(habit), habit.hold_ms()),
-            json!({ "habit": "breathwork", "offScreen": true, "holdMs": HOLD_OFF_SCREEN_MS })
+            json!({
+                "habit": "breathwork",
+                "offScreen": true,
+                "holdMs": HOLD_OFF_SCREEN_MS,
+                "unlockPath": "unlock_with_intention",
+            })
         );
     }
 
@@ -788,7 +832,50 @@ mod tests {
         // Empty wheel: the window opens anyway, so the event must too.
         assert_eq!(
             step_away_payload(None, HOLD_OFF_SCREEN_MS),
-            json!({ "habit": null, "offScreen": null, "holdMs": HOLD_OFF_SCREEN_MS })
+            json!({
+                "habit": null,
+                "offScreen": null,
+                "holdMs": HOLD_OFF_SCREEN_MS,
+                "unlockPath": "unlock_with_intention",
+            })
         );
+    }
+
+    #[test]
+    fn every_cooldown_declares_a_way_out() {
+        // Modification Rights: `CooldownSpec.unlockPath` is required in
+        // @keel/domain, so a step away that shipped without one would not be
+        // a cooldown at all — just a hold.
+        let payload = step_away_payload(None, HOLD_OFF_SCREEN_MS);
+        assert_eq!(payload["unlockPath"], json!(UNLOCK_PATH));
+        assert!(!UNLOCK_PROMPT.is_empty());
+    }
+
+    #[test]
+    fn the_end_payload_records_which_exit_was_taken() {
+        let start = step_away_payload(None, HOLD_OFF_SCREEN_MS);
+        assert_eq!(step_away_end_payload(&start, true)["release"], json!("intention"));
+        assert_eq!(step_away_end_payload(&start, false)["release"], json!("elapsed"));
+        // The habit and mechanism survive onto the end of the span.
+        assert_eq!(step_away_end_payload(&start, false)["holdMs"], json!(HOLD_OFF_SCREEN_MS));
+    }
+
+    #[test]
+    fn remaining_counts_down_and_never_goes_negative() {
+        let started = 1_000_000u64;
+        assert_eq!(remaining_ms(started, 60_000, started), 60_000);
+        assert_eq!(remaining_ms(started, 60_000, started + 18_000), 42_000);
+        // Past the end the hold is simply over, not negative.
+        assert_eq!(remaining_ms(started, 60_000, started + 90_000), 0);
+    }
+
+    #[test]
+    fn the_remaining_label_reads_as_a_clock() {
+        assert_eq!(remaining_label(60_000), "1:00");
+        assert_eq!(remaining_label(42_000), "0:42");
+        assert_eq!(remaining_label(0), "0:00");
+        // Round up, so it never shows 0:00 while the hold is still on.
+        assert_eq!(remaining_label(1), "0:01");
+        assert_eq!(remaining_label(59_400), "1:00");
     }
 }
