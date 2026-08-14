@@ -207,6 +207,7 @@ fn start_step_away(app: &AppHandle) {
     // rule `build_event` follows for ids.
     let roll = uuid::Uuid::new_v4().as_u128() as usize;
     let habit = domain::pick_gap_habit(&wheel, roll);
+    let draw = domain::wheel_payload(&wheel, roll);
     let hold_ms = habit.map_or(domain::HOLD_OFF_SCREEN_MS, |h| h.hold_ms());
     let off_screen = habit.map_or(true, |h| h.off_screen);
     let payload = domain::step_away_payload(habit, hold_ms);
@@ -224,6 +225,10 @@ fn start_step_away(app: &AppHandle) {
         // A trace of the area's colour, not a wash of it. Validated as hex in
         // the domain before it ever reaches a stylesheet.
         "tint": habit.and_then(|h| h.tint.clone()),
+        // Every option plus the slot the roll landed on, so the window can
+        // cycle the names before settling. Presentation only — the pick above
+        // is what gets logged, whatever the animation does.
+        "draw": draw,
     });
     let script = format!("window.__STEP_AWAY__ = {card};");
 

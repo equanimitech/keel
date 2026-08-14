@@ -41,6 +41,7 @@
         );
         animation: bloom 2.4s ease forwards;
         pointer-events: none;
+        transition: background 0.18s linear;
       }
       @keyframes bloom {
         to {
@@ -51,14 +52,6 @@
         max-width: 34rem;
         padding: 2rem;
         text-align: center;
-        opacity: 0;
-        animation: settle 1.4s ease forwards;
-      }
-      /* Slow fade-in: the screen going quiet should not itself be a jolt. */
-      @keyframes settle {
-        to {
-          opacity: 1;
-        }
       }
       .emoji {
         font-size: 4.5rem;
@@ -71,10 +64,27 @@
         font-weight: 500;
         letter-spacing: -0.02em;
       }
+      /* The draw settles rather than lands: no flash, no bounce, no scale-up.
+         A wheel that celebrates on landing is a slot machine, and a slot
+         machine is the variable-ratio reward this whole design refuses. */
+      .card.drawing .emoji,
+      .card.drawing .name {
+        opacity: 0.62;
+      }
+      .card .note,
+      #hint {
+        opacity: 0;
+        transition: opacity 0.9s ease;
+      }
+      .card.settled .note,
+      body.settled #hint {
+        opacity: 1;
+      }
       .note {
         margin: 0;
         font-size: 0.95rem;
         color: #6f6a62;
+        min-height: 1.6em;
       }
       .empty .name {
         font-size: 1.5rem;
@@ -152,6 +162,15 @@
         font-size: 0.85rem;
         color: #4d4941;
       }
+      /* Someone who has asked for less motion gets the result, not the draw. */
+      @media (prefers-reduced-motion: reduce) {
+        #tint,
+        .card .note,
+        #hint {
+          animation: none;
+          transition: none;
+        }
+      }
     </style>
   </head>
   <body>
@@ -179,32 +198,42 @@
       // Injected by the tray as an initialization script, so emoji and spaces
       // arrive intact with no percent-encoding to get wrong.
       var gap = window.__STEP_AWAY__ || {};
+      var draw = gap.draw || {};
+      var options = draw.options || [];
+      var picked = typeof draw.pickedIndex === "number" ? draw.pickedIndex : -1;
       var startedAt = Date.now();
 
       var card = document.getElementById("card");
+      var tintLayer = document.getElementById("tint");
       var clock = document.getElementById("clock");
-
-      // Hex-validated in the domain before it gets here; re-checked because
-      // this value lands in a stylesheet.
-      if (gap.tint && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(gap.tint)) {
-        document.documentElement.style.setProperty("--tint", gap.tint);
-      }
-
       var exit = document.getElementById("exit");
       var intention = document.getElementById("intention");
       document.getElementById("prompt").textContent =
         gap.prompt || "what are you going back to?";
 
-      function line(cls, text) {
-        var p = document.createElement("p");
-        p.className = cls;
-        p.textContent = text; // never innerHTML — the name comes from the vault
-        return p;
+      // Declared up here, not inside the branch below: the key and click
+      // handlers close over them, and a block-scoped function declaration is
+      // not something to rely on.
+      var timers = [];
+      var drawing = false;
+      var settle = function () {};
+
+      var HEX = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
+      function setTint(value) {
+        // Hex-validated in the domain before it gets here; re-checked because
+        // this value lands in a stylesheet.
+        if (value && HEX.test(value)) {
+          document.documentElement.style.setProperty("--tint", value);
+        }
       }
 
-      if (!gap.habit) {
-        card.className = "card empty";
-        card.appendChild(line("name", "nothing on the wheel"));
+      // ── the empty wheel ────────────────────────────────────────
+      if (!gap.habit || picked < 0 || !options.length) {
+        card.className = "card empty settled";
+        var name = document.createElement("p");
+        name.className = "name";
+        name.textContent = "nothing on the wheel";
+        card.appendChild(name);
         var hint = document.createElement("p");
         hint.className = "note";
         hint.appendChild(document.createTextNode("tag a zenborg habit "));
@@ -213,22 +242,70 @@
         hint.appendChild(tag);
         hint.appendChild(document.createTextNode(" to fill it."));
         card.appendChild(hint);
+        document.body.classList.add("settled");
       } else {
-        if (gap.emoji) {
-          var e = document.createElement("div");
-          e.className = "emoji";
-          e.textContent = gap.emoji;
-          card.appendChild(e);
+        // ── the draw ─────────────────────────────────────────────
+        var emojiEl = document.createElement("div");
+        emojiEl.className = "emoji";
+        var nameEl = document.createElement("p");
+        nameEl.className = "name";
+        var noteEl = document.createElement("p");
+        noteEl.className = "note";
+        card.appendChild(emojiEl);
+        card.appendChild(nameEl);
+        card.appendChild(noteEl);
+
+        function paint(option) {
+          emojiEl.textContent = option.emoji || "";
+          nameEl.textContent = option.habit;
+          setTint(option.tint);
         }
-        card.appendChild(line("name", gap.habit));
-        card.appendChild(
-          line(
-            "note",
-            gap.offScreen
-              ? "the screen will wait."
-              : "on the screen — this closes in a moment."
-          )
-        );
+
+        settle = function () {
+          for (var t = 0; t < timers.length; t++) {
+            clearTimeout(timers[t]);
+          }
+          timers = [];
+          drawing = false;
+          paint(options[picked]);
+          card.classList.remove("drawing");
+          card.classList.add("settled");
+          document.body.classList.add("settled");
+          noteEl.textContent = gap.offScreen
+            ? "the screen will wait."
+            : "on the screen — this closes in a moment.";
+        };
+
+        var reduceMotion =
+          window.matchMedia &&
+          window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+        if (reduceMotion || options.length < 2) {
+          settle();
+        } else {
+          drawing = true;
+          card.classList.add("drawing");
+          var SPIN_MS = 1500;
+          var steps = Math.max(8, options.length * 2);
+          // Deceleration only — no wind-up, no near-miss, no bounce past the
+          // result. Names come fast at first and spread out as they settle,
+          // so it reads as coming to rest rather than building tension.
+          for (var i = 0; i < steps; i++) {
+            (function (step) {
+              var at = SPIN_MS * (1 - Math.pow(1 - step / steps, 1 / 3));
+              timers.push(
+                setTimeout(function () {
+                  var idx =
+                    (((picked - (steps - 1) + step) % options.length) +
+                      options.length) %
+                    options.length;
+                  paint(options[idx]);
+                }, at)
+              );
+            })(i);
+          }
+          timers.push(setTimeout(settle, SPIN_MS));
+        }
       }
 
       function remainingMs() {
@@ -275,6 +352,11 @@
           }
           return;
         }
+        // Sovereignty: nobody is made to watch the draw finish.
+        if (typeof drawing !== "undefined" && drawing) {
+          settle();
+          return;
+        }
         if (event.key === "Escape") {
           exit.classList.add("shown");
           intention.focus();
@@ -283,7 +365,13 @@
         revealRemaining();
       });
 
-      document.addEventListener("click", revealRemaining);
+      document.addEventListener("click", function () {
+        if (typeof drawing !== "undefined" && drawing) {
+          settle();
+          return;
+        }
+        revealRemaining();
+      });
     </script>
   </body>
 </html>

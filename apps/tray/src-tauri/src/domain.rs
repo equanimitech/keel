@@ -470,13 +470,41 @@ pub fn gap_habits_with_colors(
     wheel
 }
 
-/// Spin the wheel. The caller supplies the roll, so the domain stays free of
-/// randomness — the same rule `build_event` follows for ids.
-pub fn pick_gap_habit(wheel: &[GapHabit], roll: usize) -> Option<&GapHabit> {
+/// Which slot the roll lands on. The caller supplies the roll, so the domain
+/// stays free of randomness — the same rule `build_event` follows for ids.
+pub fn picked_index(wheel: &[GapHabit], roll: usize) -> Option<usize> {
     if wheel.is_empty() {
         return None;
     }
-    wheel.get(roll % wheel.len())
+    Some(roll % wheel.len())
+}
+
+/// Spin the wheel.
+pub fn pick_gap_habit(wheel: &[GapHabit], roll: usize) -> Option<&GapHabit> {
+    wheel.get(picked_index(wheel, roll)?)
+}
+
+/// The whole wheel plus the slot the roll landed on, for the window's draw.
+///
+/// The animation is presentation only: the pick is already decided here, so
+/// what lands in the log and what appears on screen can never disagree. Only
+/// the fields the card renders travel — no durations, no `gap-screen`, nothing
+/// the animation has no use for.
+pub fn wheel_payload(wheel: &[GapHabit], roll: usize) -> Value {
+    let options: Vec<Value> = wheel
+        .iter()
+        .map(|habit| {
+            json!({
+                "habit": habit.name,
+                "emoji": habit.emoji,
+                "tint": habit.tint,
+            })
+        })
+        .collect();
+    json!({
+        "options": options,
+        "pickedIndex": picked_index(wheel, roll),
+    })
 }
 
 /// The early exit, and the reason this is a cooldown rather than a bare hold.
@@ -1002,6 +1030,33 @@ mod tests {
     fn an_empty_wheel_picks_nothing_without_panicking() {
         assert!(pick_gap_habit(&[], 0).is_none());
         assert!(pick_gap_habit(&[], 99).is_none());
+        assert!(picked_index(&[], 0).is_none());
+        assert_eq!(wheel_payload(&[], 7), json!({ "options": [], "pickedIndex": null }));
+    }
+
+    #[test]
+    fn the_draw_shows_the_same_habit_it_logs() {
+        // The animation must never decide. Whatever slot the payload points at
+        // has to be the habit `pick_gap_habit` hands the logger.
+        let wheel = gap_habits(&habits_fixture());
+        for roll in [0usize, 1, 2, 3, 17, 4096, usize::MAX] {
+            let drawn = wheel_payload(&wheel, roll);
+            let index = drawn["pickedIndex"].as_u64().expect("a slot") as usize;
+            let shown = drawn["options"][index]["habit"].as_str().expect("a name");
+            let logged = pick_gap_habit(&wheel, roll).expect("a habit");
+            assert_eq!(shown, logged.name, "roll {roll} showed and logged different habits");
+        }
+    }
+
+    #[test]
+    fn the_draw_carries_every_option_so_the_wheel_can_cycle() {
+        let wheel = gap_habits(&habits_fixture());
+        let drawn = wheel_payload(&wheel, 0);
+        let options = drawn["options"].as_array().expect("options");
+        assert_eq!(options.len(), wheel.len());
+        // Only what the card renders travels — never the whole habit record.
+        let keys: Vec<&String> = options[0].as_object().expect("an option").keys().collect();
+        assert_eq!(keys, vec!["emoji", "habit", "tint"]);
     }
 
     #[test]
