@@ -40,6 +40,13 @@ pub fn read_habits() -> String {
     fs::read_to_string(vault_dir().join("habits.json")).unwrap_or_default()
 }
 
+/// `~/.kairos/areas.json` — kernel-owned, same one-way seam as habits: zenborg
+/// edits, keel mirrors, never the reverse. Read for the area colour a habit
+/// inherits. Fail-open.
+pub fn read_areas() -> String {
+    fs::read_to_string(vault_dir().join("areas.json")).unwrap_or_default()
+}
+
 /// `~/.kairos/keel/log` — same substrate directory as the agent surface.
 pub fn log_dir() -> PathBuf {
     keel_dir().join("log")

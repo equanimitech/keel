@@ -26,6 +26,27 @@
         align-items: center;
         justify-content: center;
       }
+      /* The area's colour, as a trace rather than a field. The screen going
+         dark is the mechanism; flooding it with a saturated hue would put back
+         the stimulus we just removed. So: a soft bloom behind the card, at a
+         tenth strength, on the same near-black. Absent tint = plain black. */
+      #tint {
+        position: fixed;
+        inset: 0;
+        opacity: 0;
+        background: radial-gradient(
+          58% 48% at 50% 44%,
+          var(--tint, transparent) 0%,
+          transparent 72%
+        );
+        animation: bloom 2.4s ease forwards;
+        pointer-events: none;
+      }
+      @keyframes bloom {
+        to {
+          opacity: 0.1;
+        }
+      }
       .card {
         max-width: 34rem;
         padding: 2rem;
@@ -134,6 +155,7 @@
     </style>
   </head>
   <body>
+    <div id="tint"></div>
     <div class="card" id="card"></div>
     <div id="clock"></div>
     <div id="hint">any key · time left &nbsp; esc · go back</div>
@@ -161,6 +183,13 @@
 
       var card = document.getElementById("card");
       var clock = document.getElementById("clock");
+
+      // Hex-validated in the domain before it gets here; re-checked because
+      // this value lands in a stylesheet.
+      if (gap.tint && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(gap.tint)) {
+        document.documentElement.style.setProperty("--tint", gap.tint);
+      }
+
       var exit = document.getElementById("exit");
       var intention = document.getElementById("intention");
       document.getElementById("prompt").textContent =

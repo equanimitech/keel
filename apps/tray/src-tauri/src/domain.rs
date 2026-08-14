@@ -325,6 +325,11 @@ pub struct GapHabit {
     pub off_screen: bool,
     /// Minutes this usually takes, from a `gap-<N>m` tag. `None` when untagged.
     pub expected_min: Option<u64>,
+    /// The habit's area colour, used as a faint tint behind the card — never a
+    /// fill. The screen going dark is the mechanism; a saturated field would be
+    /// a stimulus, which is the thing we just removed. Rationed accent, per the
+    /// house palette. `None` when the area is unknown or carries no colour.
+    pub tint: Option<String>,
 }
 
 impl GapHabit {
@@ -373,7 +378,55 @@ fn expected_min_from_tags(tags: &[&str]) -> Option<u64> {
 /// records — but we accept a bare array too. The vault is private-tier and not
 /// directly inspectable from every context, so tolerating both shapes costs one
 /// branch and removes a silent-empty-wheel failure mode.
+/// `areaId -> colour`, from the kernel's `areas.json`. Accepts the same two
+/// document shapes as `gap_habits`. Anything unparseable yields no colours,
+/// and a habit without a colour simply has no tint.
+pub fn area_colors(areas_json: &str) -> std::collections::HashMap<String, String> {
+    let mut colors = std::collections::HashMap::new();
+    let Ok(doc) = serde_json::from_str::<Value>(areas_json) else {
+        return colors;
+    };
+    let records: Vec<&Value> = match &doc {
+        Value::Object(map) => map.values().collect(),
+        Value::Array(list) => list.iter().collect(),
+        _ => return colors,
+    };
+    for area in records {
+        let (Some(id), Some(color)) = (
+            area.get("id").and_then(Value::as_str),
+            area.get("color").and_then(Value::as_str),
+        ) else {
+            continue;
+        };
+        // Hex only — this string goes straight into a stylesheet.
+        if is_hex_color(color) {
+            colors.insert(id.to_string(), color.to_string());
+        }
+    }
+    colors
+}
+
+/// `#rgb` / `#rrggbb`, nothing else. The value is interpolated into CSS, so it
+/// is validated here rather than trusted.
+fn is_hex_color(value: &str) -> bool {
+    let Some(digits) = value.strip_prefix('#') else {
+        return false;
+    };
+    matches!(digits.len(), 3 | 6) && digits.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// The wheel with no area colours attached. Every caller has areas to hand, so
+/// this exists for the tests that are not about tinting.
+#[cfg(test)]
 pub fn gap_habits(habits_json: &str) -> Vec<GapHabit> {
+    gap_habits_with_colors(habits_json, &std::collections::HashMap::new())
+}
+
+/// `gap_habits`, with each habit's area colour attached as its tint.
+pub fn gap_habits_with_colors(
+    habits_json: &str,
+    colors: &std::collections::HashMap<String, String>,
+) -> Vec<GapHabit> {
     let Ok(doc) = serde_json::from_str::<Value>(habits_json) else {
         return Vec::new();
     };
@@ -406,6 +459,11 @@ pub fn gap_habits(habits_json: &str) -> Vec<GapHabit> {
             emoji: habit.get("emoji").and_then(Value::as_str).map(str::to_string),
             off_screen: !tags.contains(&GAP_SCREEN_TAG),
             expected_min: expected_min_from_tags(&tags),
+            tint: habit
+                .get("areaId")
+                .and_then(Value::as_str)
+                .and_then(|area| colors.get(area))
+                .cloned(),
         });
     }
     wheel.sort_by(|a, b| a.name.cmp(&b.name));
@@ -810,6 +868,57 @@ mod tests {
         // Cue removal: the window holds for the habit's own size.
         assert!(by_name("breathwork").off_screen);
         assert_eq!(by_name("breathwork").hold_ms(), 2 * 60_000);
+    }
+
+    #[test]
+    fn a_habit_inherits_its_areas_colour_as_a_tint() {
+        let areas = json!({
+            "area-mind": { "id": "area-mind", "name": "Mindfulness", "color": "#10b981" },
+            "area-play": { "id": "area-play", "name": "Playful", "color": "#eab308" }
+        })
+        .to_string();
+        let habits = json!({
+            "h1": { "name": "breathwork", "areaId": "area-mind", "tags": ["gap"], "isArchived": false },
+            "h2": { "name": "origami", "areaId": "area-play", "tags": ["gap"], "isArchived": false },
+            "h3": { "name": "orphan", "areaId": "area-gone", "tags": ["gap"], "isArchived": false }
+        })
+        .to_string();
+        let wheel = gap_habits_with_colors(&habits, &area_colors(&areas));
+        let by_name = |n: &str| wheel.iter().find(|h| h.name == n).expect("on the wheel").clone();
+        assert_eq!(by_name("breathwork").tint.as_deref(), Some("#10b981"));
+        assert_eq!(by_name("origami").tint.as_deref(), Some("#eab308"));
+        // An unknown area is simply untinted — never a broken style.
+        assert_eq!(by_name("orphan").tint, None);
+    }
+
+    #[test]
+    fn only_hex_colours_reach_the_stylesheet() {
+        // The value is interpolated into CSS, so anything else is dropped
+        // rather than trusted.
+        let areas = json!([
+            { "id": "ok-short", "color": "#abc" },
+            { "id": "ok-long", "color": "#10b981" },
+            { "id": "named", "color": "red" },
+            { "id": "injection", "color": "#fff; } body { display:none } .x{" },
+            { "id": "empty", "color": "" },
+            { "id": "no-colour", "name": "colourless" }
+        ])
+        .to_string();
+        let colors = area_colors(&areas);
+        assert_eq!(colors.get("ok-short").map(String::as_str), Some("#abc"));
+        assert_eq!(colors.get("ok-long").map(String::as_str), Some("#10b981"));
+        assert!(colors.get("named").is_none());
+        assert!(colors.get("injection").is_none());
+        assert!(colors.get("empty").is_none());
+        assert!(colors.get("no-colour").is_none());
+    }
+
+    #[test]
+    fn a_missing_areas_file_leaves_every_habit_untinted() {
+        assert!(area_colors("").is_empty());
+        assert!(area_colors("{ not json").is_empty());
+        let wheel = gap_habits(&habits_fixture());
+        assert!(wheel.iter().all(|h| h.tint.is_none()));
     }
 
     #[test]

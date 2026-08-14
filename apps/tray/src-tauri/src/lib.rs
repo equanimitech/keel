@@ -199,7 +199,10 @@ fn start_step_away(app: &AppHandle) {
         }
     }
 
-    let wheel = domain::gap_habits(&writer::read_habits());
+    let wheel = domain::gap_habits_with_colors(
+        &writer::read_habits(),
+        &domain::area_colors(&writer::read_areas()),
+    );
     // The caller owns the roll; the domain stays free of randomness, the same
     // rule `build_event` follows for ids.
     let roll = uuid::Uuid::new_v4().as_u128() as usize;
@@ -218,6 +221,9 @@ fn start_step_away(app: &AppHandle) {
         // needs the hold — never to paint a countdown, only to answer when asked.
         "holdMs": hold_ms,
         "prompt": domain::UNLOCK_PROMPT,
+        // A trace of the area's colour, not a wash of it. Validated as hex in
+        // the domain before it ever reaches a stylesheet.
+        "tint": habit.and_then(|h| h.tint.clone()),
     });
     let script = format!("window.__STEP_AWAY__ = {card};");
 
