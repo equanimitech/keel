@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- keel garmin sync — hourly poll.
-     Install:  cp apps/agent/com.equanimitech.keel.garmin.plist ~/Library/LaunchAgents/
+     Install:  cp integrations/garmin/com.equanimitech.keel.garmin.plist ~/Library/LaunchAgents/
                launchctl load ~/Library/LaunchAgents/com.equanimitech.keel.garmin.plist
      Replace REPLACE_WITH_REPO_PATH with the absolute repo path and
      REPLACE_WITH_HOME with $HOME before loading (sed both, they repeat).
@@ -15,7 +15,7 @@
          gets a near-empty PATH, so uv has to be findable explicitly. -->
     <key>ProgramArguments</key>
     <array>
-        <string>REPLACE_WITH_REPO_PATH/apps/agent/garmin_sync.py</string>
+        <string>REPLACE_WITH_REPO_PATH/integrations/garmin/garmin_sync.py</string>
     </array>
 
     <key>EnvironmentVariables</key>

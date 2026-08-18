@@ -1,0 +1,10 @@
+{
+  "name": "@keel/garmin",
+  "description": "keel garmin integration — a polling activity-log writer: body state, transcribed from Garmin Connect.",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "python3 -m unittest discover -p 'test_*.py'"
+  }
+}

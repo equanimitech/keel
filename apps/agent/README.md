@@ -83,36 +83,21 @@ Edit the `claude-code` target in `~/.keel/config.json`:
 
 A sibling commitment device (`keel vice <on|off|skip|status>`) blocks vice sites via an `/etc/hosts` lock, raised alongside the coding gate on `signoff`. It needs a one-time root install (a small LaunchDaemon that reconciles `/etc/hosts` to keel's desired state, so a manual `off` mid-window self-heals). Optional and off by default. See `vice-install.sh`.
 
-## Advanced: garmin sync (body state)
+## Body state (garmin)
 
-`garmin_sync.py` is a fourth activity-log writer — it polls Garmin Connect and appends `workout_completed`, `sleep_recorded`, `body_sampled`, `body_battery_changed`, `readiness_recorded` and `day_summarized` events to `~/.keel/log/YYYY-MM-DD.garmin.jsonl`. Polling, not push: Garmin has no local sync event, and push (the official Health API) needs partner approval and a public HTTPS endpoint — a server keel does not want.
-
-`body_sampled` is the one that matters: 5-minute bins of stress and body battery, rolled up one event per complete hour (~24/day, against desktop's ~2,900). Everything else Garmin offers was daily, which meant body state could never actually be joined to the intraday read side. The four body kinds, their bin semantics, and the list of what is deliberately *not* synced (badges and challenges, the athletic performance stack, nutrition and weigh-ins) are specified in `packages/domain/docs/event-taxonomy.md`.
-
-Steady-state cost is roughly four Garmin calls an hour: today's series, body-battery periods and readiness are re-polled while the day is open, and a past day is fetched once and then marked done in the cursor. Raw Garmin readers stay blocked for agents by `kairos/hooks/protect-kairos.sh` — this writer is how that data reaches keel, and the read side is how it is queried.
-
-Auth reuses the garth tokens already cached in `~/.garminconnect`; no credentials live in the repo. Deps are declared inline (PEP 723), so `uv` resolves them per-run — nothing to install.
-
-```bash
-cd apps/agent
-./garmin_sync.py --dry-run       # print events, write nothing
-./garmin_sync.py                 # incremental, since ~/.keel/garmin.cursor
-./garmin_sync.py --backfill 30   # widen the sleep window
-
-# hourly, via launchd — set the repo path in the plist first
-cp com.equanimitech.keel.garmin.plist ~/Library/LaunchAgents/
-launchctl load ~/Library/LaunchAgents/com.equanimitech.keel.garmin.plist
-```
-
-Payloads carry type and numbers only. Garmin bakes place names into `activityName` (e.g. "&lt;suburb&gt; Soccer/Football"); that field, `locationName`, and lat/lon are dropped at the writer.
+Body state is a separate writer and no longer lives here: see
+`integrations/garmin/`. It polls Garmin Connect on its own launchd schedule and
+appends to the same `~/.keel/log/`. It was moved out of this package on
+2026-08-18 because this directory is a published Claude Code plugin, so
+everything in it ships to every installer, and a Garmin poller is not part of
+what they installed.
 
 ## Dev
 
 ```bash
 cd apps/agent
-node --test                            # unit tests (pure core)
-python3 -m unittest test_garmin_sync   # garmin mapping + cursor (no network)
-pnpm typecheck                         # JSDoc + // @ts-check (no build)
+node --test      # unit tests (pure core)
+pnpm typecheck   # JSDoc + // @ts-check (no build)
 ```
 
 Pure domain lives in `core.mjs` (the part that later lifts into `@keel/domain`); I/O in `store.mjs`; hook orchestration in `keel.mjs`.

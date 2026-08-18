@@ -88,7 +88,9 @@ Rules:
   `video_paused`/`video_resumed` (settles past ~2.5s so ad breaks and scrubs
   do not register).
 
-- **garmin** (`apps/agent/garmin_sync.py`): `workout_completed` (ts = activity
+- **garmin** (`integrations/garmin/` — a *polling* writer, not an app; see
+  `integrations/README.md` for what that distinction licenses on the read side):
+  `workout_completed` (ts = activity
   start, `durationMs` = elapsed; payload `activityType`, `manual`, and whichever
   of `distanceM`/`calories`/`avgHrBpm`/`maxHrBpm`/`steps`/`movingDurationS`/
   `aerobicTrainingEffect` Garmin reported — absent metrics are omitted, never
