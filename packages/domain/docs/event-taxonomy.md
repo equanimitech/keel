@@ -110,8 +110,56 @@ Rules:
   `activityName` (e.g. "&lt;suburb&gt; Soccer/Football"); that field, plus
   `locationName` and `startLatitude`/`startLongitude`, are dropped at the writer.
 
+  Since 2026-08-18 the surface also carries four body-state kinds, added because
+  the daily two could not support the join this section claims:
+
+  - `body_sampled` — a **rollup**, one per complete local hour. `ts` = hour end,
+    `durationMs` = the hour, payload `calendarDate`, `hour`, `binMinutes` (5),
+    and the arrays `stress` / `bodyBattery` of `60 / binMinutes` entries. Same
+    device as desktop's `input_activity`: a dense series enters the log as a few
+    rollups, never one event per sample. **A bin with no reading is `null`, not
+    absent** — position carries the time offset, so dropping empties would shift
+    every later bin. An hour with no reading at all emits nothing. Garmin's
+    stress sentinels (`-1` no reading, `-2` inside an activity) mean *unknown*
+    and are dropped rather than read as calm.
+  - `body_battery_changed` — Garmin's own segmentation of the body-battery curve
+    into charge/drain periods. `ts` = period start, `durationMs` = the period,
+    payload `eventType`, `bodyBatteryImpact`.
+  - `readiness_recorded` — the morning reading joined with that night's HRV
+    summary. Payload carries `score`, `level`, the factor percentages,
+    `sleepScore`, `acuteLoad`, and `hrvLastNightMs` / `hrvWeeklyMs` /
+    `hrvStatus` / the balanced baseline. Both are kept on purpose: readiness is
+    Garmin's opaque composite, HRV status is the measure with a literature
+    behind it, and the 21-day baseline question needs the latter to stand alone.
+  - `day_summarized` — one per complete local day, `ts` = the day's last
+    instant. Payload is the daily scalars: `steps`, `sedentaryS`,
+    `highlyActiveS`, `restingHrBpm`, `avgStress`, body-battery charge/drain.
+    `sedentaryS` is the reason it exists: Garmin measuring, independently, the
+    same sitting the desktop surface measures.
+
+  `body_sampled` and `day_summarized` are emitted **only once their interval is
+  over**. A partial hour would be rewritten by the next poll with different
+  numbers under the same deterministic id, which is the exact ambiguity the id
+  exists to prevent.
+
+  A stillness activity (`yoga`, `meditation`, `breathwork`, …) gets a
+  `workout_completed` enriched with `stressBefore` / `stressAfter` /
+  `stressDelta` / `bodyBatteryDelta` instead of the exertion metrics, which say
+  nothing about a sit. Read from the series already fetched, so it costs no
+  extra call.
+
+  Deliberately **not** synced: badges, challenges and leaderboards (Garmin's
+  engagement surface, which is what keel exists to counter); the athletic
+  performance stack (VO2max, race predictions, FTP, power curves); nutrition,
+  hydration and weigh-ins; splits, FIT files and activity weather. Recorded here
+  as decisions, not oversights.
+
   Body state is the **covariate axis**, not the attention axis. Its value is the
-  join — bouts and wait gaps against sleep debt — not standalone.
+  join — bouts and wait gaps against sleep debt — not standalone. Before
+  2026-08-18 that join was not actually available: every Garmin kind was daily
+  while every read-side derivation (`bouts.ts`, `tide.ts`) is intraday, so there
+  was nothing at matching resolution to join against. `body_sampled` is what
+  makes the claim true.
 
 The per-area key-action metric each sensor exists to produce: minutes watched
 (video), posts seen (feed), games played (game), **products seen** (shopping).

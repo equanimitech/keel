@@ -85,7 +85,11 @@ A sibling commitment device (`keel vice <on|off|skip|status>`) blocks vice sites
 
 ## Advanced: garmin sync (body state)
 
-`garmin_sync.py` is a fourth activity-log writer — it polls Garmin Connect and appends `workout_completed` / `sleep_recorded` events to `~/.keel/log/YYYY-MM-DD.garmin.jsonl`. Polling, not push: Garmin has no local sync event, and push (the official Health API) needs partner approval and a public HTTPS endpoint — a server keel does not want.
+`garmin_sync.py` is a fourth activity-log writer — it polls Garmin Connect and appends `workout_completed`, `sleep_recorded`, `body_sampled`, `body_battery_changed`, `readiness_recorded` and `day_summarized` events to `~/.keel/log/YYYY-MM-DD.garmin.jsonl`. Polling, not push: Garmin has no local sync event, and push (the official Health API) needs partner approval and a public HTTPS endpoint — a server keel does not want.
+
+`body_sampled` is the one that matters: 5-minute bins of stress and body battery, rolled up one event per complete hour (~24/day, against desktop's ~2,900). Everything else Garmin offers was daily, which meant body state could never actually be joined to the intraday read side. The four body kinds, their bin semantics, and the list of what is deliberately *not* synced (badges and challenges, the athletic performance stack, nutrition and weigh-ins) are specified in `packages/domain/docs/event-taxonomy.md`.
+
+Steady-state cost is roughly four Garmin calls an hour: today's series, body-battery periods and readiness are re-polled while the day is open, and a past day is fetched once and then marked done in the cursor. Raw Garmin readers stay blocked for agents by `kairos/hooks/protect-kairos.sh` — this writer is how that data reaches keel, and the read side is how it is queried.
 
 Auth reuses the garth tokens already cached in `~/.garminconnect`; no credentials live in the repo. Deps are declared inline (PEP 723), so `uv` resolves them per-run — nothing to install.
 
