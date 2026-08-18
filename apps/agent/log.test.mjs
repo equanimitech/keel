@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -182,15 +182,35 @@ test("hook stop logs a turn_stop event", async () => {
   assert.equal(events.filter((e) => e.kind === "turn_stop" && e.sessionId === "sess-43").length, 1);
 });
 
-test("hook pre-tool logs the gate's decision context (rules observability)", async () => {
+test("hook pre-tool records the dispatch with its kairos band, and denies nothing", async () => {
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
-  runHook(home, "pre-tool", { session_id: "sess-47", tool_name: "Read", tool_input: {} });
+  mkdirSync(join(home, ".kairos"), { recursive: true });
+  // One band covering the whole clock, so the assertion holds whatever hour the suite runs at.
+  writeFileSync(join(home, ".kairos", "phaseConfigs.json"), JSON.stringify({
+    "id-1": { phase: "MORNING", startHour: 0, endHour: 24, order: 0 },
+  }));
+  const out = runHook(home, "pre-tool", { session_id: "sess-47", tool_name: "Bash", tool_input: {} });
+  assert.equal(out.trim(), "");   // no hookSpecificOutput at all — the gate is gone, not merely open
   const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
   const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   const d = events.find((e) => e.kind === "tool_dispatched");
-  assert.equal(typeof d.payload.keel_denied, "boolean");
-  assert.equal(typeof d.payload.keel_friction, "number");
-  assert.ok(["day", "wind_down", "lockdown"].includes(d.payload.keel_phase));
+  assert.equal(d.payload.keel_band, "MORNING");
+  // The retired vocabulary must not reappear under a new writer.
+  for (const dead of ["keel_denied", "keel_friction", "keel_phase", "keel_rule_notch",
+                      "keel_focus_block", "keel_signon_block"]) {
+    assert.equal(dead in d.payload, false, `${dead} should be gone from the payload`);
+  }
+});
+
+test("hook pre-tool still records the dispatch when the kernel's bands are unreadable", async () => {
+  const home = mkdtempSync(join(tmpdir(), "keel-home-"));
+  const out = runHook(home, "pre-tool", { session_id: "sess-48", tool_name: "Bash", tool_input: {} });
+  assert.equal(out.trim(), "");
+  const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
+  const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  const d = events.find((e) => e.kind === "tool_dispatched");
+  assert.ok(d);                                  // the event lands regardless
+  assert.equal("keel_band" in d.payload, false); // untagged rather than guessed
 });
 
 test("hook post-tool derives durationMs from the matching dispatch", async () => {
@@ -239,7 +259,7 @@ test("session-start logs rule_changed when the effective rules hash moves", asyn
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
   runHook(home, "session-start", { session_id: "s-r1" });
   const cfgPath = join(home, ".kairos", "keel","config.json");
-  writeFileSync(cfgPath, JSON.stringify({ targets: { "claude-code": { windDown: "60m" } } }));
+  writeFileSync(cfgPath, JSON.stringify({ targets: { "claude-code": { orient: { bellAfterMin: 60, sessionGapMin: 30 } } } }));
   runHook(home, "session-start", { session_id: "s-r2" });
   const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
   const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));

@@ -7,7 +7,7 @@ A pnpm monorepo of capability × surface apps (Claude Code agent, browser extens
 ```
 keel/
 ├── apps/
-│   ├── agent/            # Claude Code surface (@keel/agent) — focus gate + activity-log writer; ships as plugin
+│   ├── agent/            # Claude Code surface (@keel/agent) — activity-log writer + HUD, no gates; ships as plugin
 │   ├── browser/          # Chrome extension (WXT) — activity writer + per-domain sensors
 │   └── tray/             # macOS menubar-only app (Tauri, no windows) — desktop activity-log writer; ships as "keel"
 ├── packages/

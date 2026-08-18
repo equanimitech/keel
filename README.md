@@ -8,7 +8,7 @@ keel makes your attention visible: where your time goes, how your focus fragment
 
 keel is named by a capability × surface grammar — one core, many edges:
 
-- **keel agent** (`apps/agent`) — a Claude Code surface: a focus gate + activity-log writer. Ships as a Claude Code plugin.
+- **keel agent** (`apps/agent`) — a Claude Code surface: an activity-log writer + HUD. Gate-free since 2026-08-18; it observes and reports, and denies nothing. Ships as a Claude Code plugin.
 - **keel browser** (`apps/browser`) — a Chrome extension (WXT): an activity writer (coarse events) + watchlist-gated per-domain sensors (key-action completions) + the blocklist drogue, a commitment device.
 - **keel tray** (`apps/tray`) — a macOS menubar app (Tauri, no windows): the desktop activity-log writer. Ships as "keel".
 
@@ -41,7 +41,7 @@ Everything stays on your machine. Payloads carry **domains and timings, never fu
 ```
 keel/
 ├── apps/
-│   ├── agent/     # Claude Code plugin — focus gate + activity-log writer
+│   ├── agent/     # Claude Code plugin — activity-log writer + HUD (no gates)
 │   ├── browser/   # Chrome extension (WXT) — activity writer + sensors + drogue
 │   └── tray/      # macOS menubar activity-log writer (Tauri)
 ├── packages/
