@@ -1,140 +1,72 @@
 // @ts-check
 // keel agent core — pure domain. No I/O. The piece that later lifts into @keel/domain.
 
-/** @typedef {"day"|"wind_down"|"lockdown"} Phase */
-/** @typedef {"hide"|"dim"|"delay"|"blur"|"block"} Notch */
-/** @typedef {"immediate"|"breakpoint"} Arming */
-/** @typedef {number} Friction  0..1 */
-/** @typedef {{ notch: Notch, engagesAt: Friction, arming?: Arming, maxGraceMin?: number, tools: string[], allowPaths?: string[] }} Rule */
+/** @typedef {"MORNING"|"AFTERNOON"|"EVENING"|"NIGHT"|""} Band  a kairos phase band (kernel-owned) */
+/** @typedef {{ phase: string, startHour: number, endHour: number }} PhaseConfig */
 /** @typedef {{ bellAfterMin: number, sessionGapMin: number }} Orient */
-/** @typedef {{ windDown: string, lockdown: string }} Granularity */
-/** @typedef {{ windDownNudge: string, lockdown: string, substitution: string, consequence: string, identity: string, signoffNudge: string, granularity: Granularity }} Voice */
-/** @typedef {Record<string, string>} Watches  name → start time "HH:MM" */
-/** @typedef {{ rules: Rule[], orient: Orient, voice: Voice, watches: Watches, windDown: string, signOnGate: boolean }} Target */
+/** @typedef {{ consequence: string, identity: string, signoffNudge: string }} Voice */
+/** @typedef {{ orient: Orient, voice: Voice }} Target */
 /** @typedef {{ level: string, ts: number }} GranularitySeen  the ceiling a session was last told, and when */
-/** @typedef {{ sessionStartTs: number, lastPromptTs: number, turnLockedTs: number, inferNudgedTs: number, granularity: string, granularityDay: string, focus: boolean, focusTs: number, focusSession: string, lastRuleHash: string, consentShownTs: number, lastMomentId: string, granularitySeen?: Record<string, GranularitySeen> }} State */
-
-/** Named time-of-day watches (intention blocks) → start time. The active watch is the
- * latest start ≤ now, wrapping past midnight to the last watch. The `night` watch is the
- * sleep/lock window — coding locks during it (the one wall keel keeps); its start is the
- * hard stop, its end (next watch) is the wake/reset. Fully configurable. */
-export const DEFAULT_WATCHES = { morning: "09:00", afternoon: "13:00", evening: "19:00", night: "01:30" };
-
-/** Default wind-down lead — how long before `night` the friction ramp begins (pressure, not lock). */
-export const DEFAULT_WIND_DOWN = "90m";
+/** @typedef {{ sessionStartTs: number, lastPromptTs: number, inferNudgedTs: number, granularity: string, granularityDay: string, focus: boolean, focusTs: number, lastRuleHash: string, consentShownTs: number, lastMomentId: string, granularitySeen?: Record<string, GranularitySeen> }} State */
 
 /** @type {Target} */
 export const DEFAULT_TARGET = {
-  watches: DEFAULT_WATCHES,
-  windDown: DEFAULT_WIND_DOWN,
-  // Default OFF: the gate's only key is zenborg's framing screen. Flipping this on
-  // without that screen reachable would lock the day shut with no way to open it.
-  signOnGate: false,
-  rules: [{ notch: "block", engagesAt: 1.0, arming: "breakpoint", maxGraceMin: 10,
-            tools: ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"],
-            // Both spellings: `~/.kairos/keel` is the real directory, `~/.keel` the
-            // symlink left behind by the 2026-08-07 move. isAllowedPath matches on the
-            // literal prefix and never resolves symlinks, so dropping either spelling
-            // would silently lock one of them behind the gate.
-            allowPaths: ["~/journals", "~/.kairos/keel", "~/.keel"] }],
   orient: { bellAfterMin: 120, sessionGapMin: 30 },
-  voice: {
-    windDownNudge: "Wind-down window — a good moment to land open work.",
-    lockdown: "Coding tools are paused until {reset} — your declared night, the one wall keel keeps. Past here your judgment isn't yours to trust; sleep is the move.",
-    substitution: "",
-    consequence: "",
-    identity: "",
-    signoffNudge: "",
-    granularity: {
-      windDown: "Keep it high-level — summaries and next steps, not deep multi-file dives.",
-      lockdown: "L1 only — one-line status + tomorrow's first step; no detail.",
-    },
-  },
+  voice: { consequence: "", identity: "", signoffNudge: "" },
 };
 
 /** @returns {State} */
 export const emptyState = () => ({
-  sessionStartTs: 0, lastPromptTs: 0, turnLockedTs: 0, inferNudgedTs: 0,
-  granularity: "", granularityDay: "", focus: false, focusTs: 0, focusSession: "",
+  sessionStartTs: 0, lastPromptTs: 0, inferNudgedTs: 0,
+  granularity: "", granularityDay: "", focus: false, focusTs: 0,
   lastRuleHash: "", consentShownTs: 0, lastMomentId: "", granularitySeen: {},
 });
 
 /** Merge a partial target config over the defaults. @param {any} t @returns {Target} */
 export function mergeTarget(t = {}) {
   return {
-    rules: t.rules ?? DEFAULT_TARGET.rules,
     orient: { ...DEFAULT_TARGET.orient, ...t.orient },
     voice: { ...DEFAULT_TARGET.voice, ...t.voice },
-    watches: (t.watches && Object.keys(t.watches).length) ? t.watches : DEFAULT_WATCHES,
-    windDown: t.windDown ?? DEFAULT_TARGET.windDown,
-    signOnGate: t.signOnGate ?? DEFAULT_TARGET.signOnGate,
   };
 }
 
-// ── Time + friction ─────────────────────────────────────────────
-
-/** @param {string} hhmm */
-export function toMin(hhmm) {
-  const [h, m] = String(hhmm).split(":").map(Number);
-  return h * 60 + m;
-}
+// ── Time + phase bands ──────────────────────────
 
 /** nowMin in half-open [start,end), wrapping midnight if start > end. */
 export function inWindow(nowMin, start, end) {
   return start > end ? nowMin >= start || nowMin < end : nowMin >= start && nowMin < end;
 }
 
-/** Parse a duration ("90", "90m", "1h", "1h30m") → minutes; 0 if unparseable. @param {string} s */
-export function toDurationMin(s) {
-  const str = String(s ?? "").trim().toLowerCase();
-  if (/^\d+$/.test(str)) return Number(str);
-  const m = str.match(/^(?:(\d+)h)?(?:(\d+)m)?$/);
-  return m && (m[1] || m[2]) ? Number(m[1] || 0) * 60 + Number(m[2] || 0) : 0;
-}
-
-/** Minutes-of-day (0..1439) → "HH:MM". @param {number} m */
-export const minToHHMM = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-
-/** The night (lock) window derived from the watches + wind-down lead: ramp starts `leadMin`
- * before `night`, the lock runs the whole `night` watch [nightStart, reset), reset = the next
- * watch start after night. null when no `night` watch is set (⇒ pure-soft: no ramp, no lock).
- * @param {Watches} watches @param {number} leadMin */
-export function nightWindow(watches, leadMin) {
-  if (!watches || !watches.night) return null;
-  const nightStart = toMin(watches.night);
-  const starts = Object.values(watches).map(toMin).sort((a, b) => a - b);
-  const after = starts.find((m) => m > nightStart);
-  const reset = after != null ? after : starts[0];
-  const windDownStart = (((nightStart - leadMin) % 1440) + 1440) % 1440;
-  return { windDownStart, nightStart, reset };
-}
-
-/** Wind-down friction f ∈ [0,1], derived from the watches: 0 by day · linear ramp across the
- * wind-down lead · 1 through the `night` watch (the lock). @param {number} nowMin @param {Watches} watches @param {number} leadMin @returns {Friction} */
-export function frictionAt(nowMin, watches, leadMin) {
-  const w = nightWindow(watches, leadMin);
-  if (!w) return 0;
-  if (!inWindow(nowMin, w.windDownStart, w.reset)) return 0;   // outside the wind-down → reset arc
-  if (inWindow(nowMin, w.nightStart, w.reset)) return 1;       // inside the night watch → lock
-  const span = ((w.nightStart - w.windDownStart + 1440) % 1440) || 1;
-  const into = (nowMin - w.windDownStart + 1440) % 1440;
-  return Math.max(0, Math.min(1, into / span));
-}
-
-/** @param {Friction} f @returns {Phase} */
-export function phaseOf(f) {
-  if (f <= 0) return "day";
-  if (f >= 1) return "lockdown";
-  return "wind_down";
-}
-
 export const nowMinOf = (now) => { const d = new Date(now); return d.getHours() * 60 + d.getMinutes(); };
 
-/** Effective friction now — derived entirely from the watches + wind-down lead: the `night`
- * watch is the lock, the lead is the ramp before it. @param {Target} target @param {number} now */
-export function frictionNow(target, now) {
-  return frictionAt(nowMinOf(now), target.watches, toDurationMin(target.windDown));
+// The bands are the kernel's, not keel's. zenborg owns `$KAIROS_HOME/phaseConfigs.json`
+// (MORNING/AFTERNOON/EVENING/NIGHT, each a [startHour, endHour) arc) and keel READS them,
+// exactly as it reads areas.json and moments.json — same seam, same direction.
+//
+// keel used to declare its own `watches`: private morning/afternoon/evening/night start
+// times, which were also the spine of the night lock. That was a second source of truth for
+// the same question and the two had already drifted — keel said evening@19:00, night@00:30
+// while zenborg said EVENING 20→03 and NIGHT 03→09. Moments already sit on a (day, phase)
+// band, so keel depended on zenborg's answer anyway; carrying a private one only let them
+// disagree. Retired with the gates on 2026-08-18.
+
+/** Which kairos band `nowMin` falls in. Total, and fails soft to "": an absent or garbled
+ * phaseConfigs must leave events untagged, never throw inside a hook. Visibility is a UI
+ * concern, so a hidden band (NIGHT) still answers here.
+ * @param {number} nowMin @param {PhaseConfig[]|null|undefined} phaseConfigs @returns {Band} */
+export function bandAt(nowMin, phaseConfigs) {
+  if (!Array.isArray(phaseConfigs)) return "";
+  for (const p of phaseConfigs) {
+    const start = Number(p?.startHour) * 60;
+    const end = Number(p?.endHour) * 60;
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start === end) continue;
+    if (inWindow(nowMin, start, end)) return /** @type {Band} */ (String(p?.phase ?? ""));
+  }
+  return "";
 }
+
+/** The band right now. @param {PhaseConfig[]|null|undefined} phaseConfigs @param {number} now @returns {Band} */
+export const bandNow = (phaseConfigs, now) => bandAt(nowMinOf(now), phaseConfigs);
 
 // ── Session ─────────────────────────────────────────────────────
 
@@ -144,63 +76,7 @@ export function updateSession(state, nowTs, orient) {
   const fresh = !state.lastPromptTs || nowTs - state.lastPromptTs > gapMs;
   return { ...state, sessionStartTs: fresh ? nowTs : state.sessionStartTs, lastPromptTs: nowTs };
 }
-export const unbrokenMin = (/** @type {State} */ s, nowTs) =>
-  s.sessionStartTs ? Math.floor((nowTs - s.sessionStartTs) / 60_000) : 0;
-
-// ── Friction rule application (breakpoint-armed via the turn boundary) ──
-
-/** Which rule denies this tool now? null = allow.
- * @param {Target} target @param {Friction} f @param {string|undefined} tool @param {State} state @param {number} now @returns {Rule|null} */
-export function denyingRule(target, f, tool, state, now) {
-  const rule = target.rules.find((r) =>
-    r.notch === "block" && f >= r.engagesAt && (r.tools ?? []).includes(tool ?? "")) ?? null;
-  if (!rule) return null;
-  if ((rule.arming ?? "breakpoint") === "immediate") return rule;
-  const turnOpenedLocked = !!state.turnLockedTs && state.turnLockedTs === state.lastPromptTs;
-  const graceExceeded = !!state.lastPromptTs && now - state.lastPromptTs > (rule.maxGraceMin ?? 10) * 60_000;
-  return turnOpenedLocked || graceExceeded ? rule : null;
-}
-
-/** Is this write target on the rule's allow-list (e.g. the journal / ritual artifacts),
- * so it's exempt from the block even under lockdown? Closing the day must never be blocked.
- * Pure: caller supplies `home` to expand a leading `~/`. Matches a path or any descendant.
- * @param {string|undefined} filePath @param {string[]|undefined} allowPaths @param {string} home */
-export function isAllowedPath(filePath, allowPaths, home) {
-  if (!filePath || !allowPaths?.length) return false;
-  const expand = (p) => (p.startsWith("~/") ? home + p.slice(1) : p);
-  return allowPaths.some((raw) => {
-    const base = expand(raw).replace(/\/+$/, "");
-    return filePath === base || filePath.startsWith(base + "/");
-  });
-}
-
 // ── Presentation (pure) ─────────────────────────────────────────
-
-/** @param {string} s @param {Target} target */
-export const fill = (s, target) => {
-  const w = nightWindow(target.watches, toDurationMin(target.windDown));
-  return String(s).replaceAll("{reset}", w ? minToHHMM(w.reset) : "wake");
-};
-
-/** The PreToolUse deny reason. @param {Target} target */
-export const denyReason = (target) =>
-  fill(target.voice.lockdown, target) +
-  (target.voice.substitution ? " " + target.voice.substitution : "");
-
-/** The UserPromptSubmit orient line (empty during `day`).
- * @param {Target} target @param {Phase} phase @param {State} state @param {number} now @returns {string} */
-export function renderOrient(target, phase, state, now) {
-  if (phase === "day") return "";
-  const dur = unbrokenMin(state, now);
-  const bell = dur >= target.orient.bellAfterMin
-    ? ` You've been at it ${Math.floor(dur / 60)}h unbroken — worth landing the current thread.` : "";
-  // Adaptive-granularity nudge (Compass-orient): coarser as the night deepens. Applies even on a skipped night.
-  const gran = phase === "lockdown" ? target.voice.granularity?.lockdown : target.voice.granularity?.windDown;
-  const extra = [gran, target.voice.signoffNudge, target.voice.consequence, target.voice.identity].filter(Boolean).join(" ");
-  const tail = `${bell}${extra ? " " + extra : ""}`;
-  const body = phase === "lockdown" ? denyReason(target) : target.voice.windDownNudge;
-  return `[keel] ${body}${tail}`;
-}
 
 /** Local calendar day, YYYY-MM-DD (not UTC — the nudge is wall-clock). @param {number} now */
 export const dayKey = (now) => {
@@ -219,19 +95,6 @@ export const DAY_START_HOUR = 4;
 /** A logical "day" key for focus that rolls at DAY_START_HOUR, not midnight. Distinct from
  * dayKey (calendar, used by the ritual nudge) so late-night work isn't a new day. @param {number} now */
 export const focusDayKey = (now) => dayKey(now - DAY_START_HOUR * 3600_000);
-
-/** Which named watch `now` falls in — the latest start ≤ now, wrapping past midnight
- * to the last watch. "" if no watches configured. @param {number} now @param {Watches} [watches] */
-export function activeWatch(now, watches = DEFAULT_WATCHES) {
-  const entries = Object.entries(watches ?? {})
-    .map(([name, t]) => ({ name, m: toMin(t) }))
-    .sort((a, b) => a.m - b.m);
-  if (!entries.length) return "";
-  const nm = nowMinOf(now);
-  let cur = entries[entries.length - 1].name;   // before the first start → wrapped from the last watch
-  for (const e of entries) { if (nm >= e.m) cur = e.name; }
-  return cur;
-}
 
 // ── Intention: the active moment (kairos-owned) ─────────────────
 //
@@ -485,73 +348,21 @@ export function granularityNotice(state, sessionId, now = Date.now()) {
   };
 }
 
-// ── Deep-focus mode (single-stream commitment, opt-in, owner-claimed) ──
+// ── Focus marker (self-invoked, non-blocking) ────────────
 // Focus is the deep gear of `intention`, not a second concept: the active moment already
-// names the stream (holds-the-thread + captures-drift) and `keel focus` flips this flag over
-// it. It does two things intention can't: adds a breath on the AI-wait gap, and holds you to
-// ONE stream — tool calls in any session other than the focus owner are denied. A standing
-// commitment (a user-invoked Ulysses pact): it survives session restarts and clears only on
-// explicit `keel focus off`, never on idle. The CLI can't know which session you meant, so the
-// owner is whichever session prompts first after enable (claimFocus); others are blocked.
+// names the stream and `keel focus` flips this flag over it.
+//
+// It used to also hold you to ONE stream — tool calls in any session but the focus owner
+// were denied. That wall went on 2026-08-18 with the night lock and the day-note gate; what
+// remains is the half that carried signal rather than refusal: a breath on the AI-wait gap,
+// a ◉ in the HUD, and focus_on/focus_off in the log so the read-side EDA can segment focus
+// periods. Nothing here denies anything.
 
-/** Deny reason shown when a non-owner session tries a tool under active focus. */
-export const FOCUS_DENY = "◉ keel focus — held to one stream. Focus is active in another session; work there, or `keel focus off` to release. (journal + ~/.keel stay open.)";
-
-/** Set the deep-focus flag. Enabling leaves the owner UNCLAIMED ("") — the next prompting
- * session claims it (claimFocus). Disabling clears owner + stamp. `focusTs` stamps when it
- * engaged (HUD/"since"). @param {State} state @param {boolean} on @param {number} now */
+/** Set the focus marker. `focusTs` stamps when it engaged (HUD/"since"). Survives session
+ * restarts and clears only on explicit `keel focus off`, never on idle.
+ * @param {State} state @param {boolean} on @param {number} now */
 export function setFocus(state, on, now) {
-  return { ...state, focus: !!on, focusTs: on ? now : 0, focusSession: "" };
-}
-
-/** Claim the focus owner for a session on its first prompt while focus is on and unclaimed.
- * No-op otherwise (idempotent — a claimed owner is never stolen). @param {State} state @param {string} sessionId */
-export function claimFocus(state, sessionId) {
-  return state.focus && !state.focusSession && sessionId
-    ? { ...state, focusSession: sessionId } : state;
-}
-
-/** Does active focus block this session's tools? True only when focus is on, an owner is
- * claimed, and this isn't it. Unclaimed focus blocks nothing yet. @param {State} state @param {string|undefined} sessionId */
-export function focusBlocks(state, sessionId) {
-  return !!(state.focus && state.focusSession && sessionId && sessionId !== state.focusSession);
-}
-
-// ── Day-note gate (kairos-owned) ────────────────────────────────
-//
-// The day opens in zenborg, not here. keel is a READER of `$KAIROS_HOME/dayNotes.json`
-// exactly as it reads areas.json — same seam, same direction, keel never writes it.
-// The key can't live inside the box it opens: a Claude Code skill that unlocked Claude
-// Code would deadlock. Zenborg is outside the lock.
-//
-// There is no separate sign-on ceremony and no separate flag. Naming the day IS opening
-// it: one question, answered in the UI next to that day's moments. keel only asks whether
-// today has a name — never what the name says, and never whether the note is any good.
-
-/** Tools the gate holds until the day is named. Reads stay open on purpose: "no work
- * before naming the day", not "no computer" — you can look around, not change things. */
-export const SIGNON_TOOLS = ["Edit", "Write", "MultiEdit", "NotebookEdit", "Bash"];
-
-/** Paths that stay writable with the day unnamed, so capture and the day-close are
- * never trapped behind the gate. Mirrors the night rule's allowPaths. */
-export const SIGNON_ALLOW = ["~/journals", "~/.kairos/keel", "~/.keel"];
-
-export const SIGNON_DENY = "⊙ keel — today has no name yet. Name the day in zenborg (its title, and a note if you want one); the tools unlock the moment you do. (reads, journal + ~/.keel stay open.)";
-
-/** Does the gate hold this tool right now? Pure — the caller supplies the kairos
- * collection. Off unless explicitly enabled, and fails OPEN on a missing/garbled file:
- * an unreadable vault must never be able to lock the day shut.
- *
- * Keyed on `focusDayKey` (04:00 roll), not the calendar date, so a 02:00 session still
- * belongs to the day you already named rather than re-locking mid-flow.
- * @param {boolean} gateOn @param {Record<string, unknown>|null|undefined} dayNotes
- * @param {string|undefined} tool @param {number} now @returns {boolean} */
-export function signOnBlocks(gateOn, dayNotes, tool, now) {
-  if (!gateOn) return false;
-  if (!SIGNON_TOOLS.includes(tool ?? "")) return false;
-  if (!dayNotes || typeof dayNotes !== "object") return false; // fail-open: no vault, no lock
-  const note = /** @type {any} */ (dayNotes[focusDayKey(now)]);
-  return !(note && typeof note.title === "string" && note.title.trim() !== "");
+  return { ...state, focus: !!on, focusTs: on ? now : 0 };
 }
 
 // ── Moment friction (kairos-owned moments, keel-owned friction) ──
@@ -618,14 +429,11 @@ export function momentFrictionAt(pointer, moments, areas, now) {
   return { allow: seedAllowFromRefs(moments?.[active.id]?.refs), deny: [] };
 }
 
-/** The per-turn deep-focus line. In the owner (or not-yet-claimed) session: a breath on the
- * AI gap. In a blocked session: a note that the stream is held elsewhere. Empty unless focus
- * is on. Scoreless by design (a streak would be engagement, not equanimity); the capture
- * machinery is intention's, this only adds the breath. @param {State} state @param {string|undefined} sessionId @returns {string} */
-export function focusLine(state, sessionId) {
+/** The per-turn focus line: a breath on the AI-wait gap. Empty unless focus is on.
+ * Scoreless by design (a streak would be engagement, not equanimity); the capture
+ * machinery is intention's, this only adds the breath. @param {State} state @returns {string} */
+export function focusLine(state) {
   if (!state.focus) return "";
-  if (focusBlocks(state, sessionId))
-    return "[keel] ◉ focus is held in another session — one stream. `keel focus off` to release.";
   return "[keel] ◉ focus — breathe the AI gap; hold this stream, park strays with /idea.";
 }
 
@@ -759,18 +567,20 @@ export function targetHash(target) {
 /** Render the effective rules with provenance: each section marked (custom)
  * when the user's config touches it, (default) otherwise. The discoverability
  * half of modifiability — a rule you don't know you can change is hardcoded.
- * @param {Target} t @param {any} configured raw (unmerged) user config for provenance */
-export function renderRules(t, configured = {}) {
+ * The bands are printed as (kairos) rather than custom/default on purpose: they are not
+ * keel's to default, and a reader who wants them changed must be sent to zenborg.
+ * @param {Target} t @param {any} configured raw (unmerged) user config for provenance
+ * @param {PhaseConfig[]|null|undefined} phaseConfigs the kernel's bands */
+export function renderRules(t, configured = {}, phaseConfigs = null) {
   const src = (k) => (configured && configured[k] !== undefined ? "custom" : "default");
-  const w = nightWindow(t.watches, toDurationMin(t.windDown));
+  const bands = Array.isArray(phaseConfigs) && phaseConfigs.length
+    ? phaseConfigs.map((b) => `${b.phase}@${b.startHour}→${b.endHour}`).join(", ")
+    : "(unreadable — events log with no band)";
   const lines = [
     `keel rules — effective target (hash ${targetHash(t)})`,
-    `watches (${src("watches")}): ${Object.entries(t.watches).map(([n, s]) => `${n}@${s}`).join(", ")}`,
-    `wind-down (${src("windDown")}): ${t.windDown} lead → ${w ? `ramp ${minToHHMM(w.windDownStart)}→${minToHHMM(w.nightStart)}, lock (night) until ${minToHHMM(w.reset)}` : "no night watch → pure-soft, never locks"}`,
+    `phase bands (kairos): ${bands}`,
+    `gates: none — keel denies nothing. The night lock, the day-note gate and the focus lock were retired 2026-08-18.`,
   ];
-  for (const r of t.rules) {
-    lines.push(`rule (${src("rules")}): ${r.notch} at f≥${r.engagesAt} · ${r.arming ?? "immediate"}${r.maxGraceMin ? ` (grace ${r.maxGraceMin}m)` : ""} · tools: ${r.tools.join(", ")}${r.allowPaths?.length ? ` · always-allowed paths: ${r.allowPaths.join(", ")}` : ""}`);
-  }
   lines.push(`orient (${src("orient")}): bell after ${t.orient.bellAfterMin}m · session gap ${t.orient.sessionGapMin}m`);
   const setVoice = Object.entries(t.voice).filter(([, v]) => typeof v === "string" && v).map(([k]) => k);
   lines.push(`voice (${src("voice")}): ${setVoice.join(", ") || "(all silent)"}`);

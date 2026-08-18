@@ -1,25 +1,21 @@
 #!/usr/bin/env node
 // @ts-check
-// keel agent — the Claude Code surface: focus gate + activity-log writer. Thin orchestration over core (pure) + store (I/O).
+// keel agent — the Claude Code surface: activity-log writer + HUD. Thin orchestration over core (pure) + store (I/O).
 // Fail-open: any error → exit 0, allow. A hook must never trap the user.
+// Gate-free since 2026-08-18: this surface observes and reports; it denies nothing.
 
 import {
-  phaseOf, nowMinOf, frictionNow, nightWindow, minToHHMM, toDurationMin,
-  updateSession, denyingRule,
-  denyReason, renderOrient, focusDayKey,
-  signOnBlocks, SIGNON_ALLOW, SIGNON_DENY,
-  resolveActiveMoment, todaysMoments, activeWatch, intentionLine, intentionNudge, intentionSwitch,
-  setGranularity, normalizeGranularity, activeGranularity, granularityLine, granularityNotice, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
-  setFocus, focusLine, claimFocus, focusBlocks, FOCUS_DENY,
-  isAllowedPath,
+  bandNow, updateSession,
+  resolveActiveMoment, todaysMoments, intentionLine, intentionNudge, intentionSwitch,
+  setGranularity, normalizeGranularity, activeGranularity, granularityNotice, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
+  setFocus, focusLine,
   buildEvent, capPayload, summarizeEvents, matchDispatch, targetHash, renderRules, consentLines,
   watchlistLines, desktopSensorLines,
   applyObserveVerdicts, mergeLedger,
 } from "./core.mjs";
-import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, loadDayNotes, loadActiveMomentPointer, loadMoments, loadAreas, readStdin, TARGET_ID, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
+import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, loadPhaseConfigs, loadActiveMomentPointer, loadMoments, loadAreas, readStdin, TARGET_ID, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
 import { runHost } from "./native-host.mjs";
 import { execFileSync, spawnSync } from "node:child_process";
-import { homedir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { join, dirname } from "node:path";
@@ -73,42 +69,17 @@ async function handleObservedHook(sub, now) {
   return emit(null);
 }
 
+// PreToolUse is observation only. keel denied tools here until 2026-08-18 — the night lock,
+// the day-note gate, and the single-stream focus lock. All three are gone; what remains is
+// the dispatch record every read-side derivation is built on.
+//
+// The band is stamped at write time rather than derived read-side because zenborg's bands
+// can be re-cut later: an event has to remember the day it was actually filed against.
 async function handlePreTool(now) {
-  const target = loadTarget();
-  const state = loadState();
-  const f = frictionNow(target, now);
   const input = await readStdin();
-  const rule = denyingRule(target, f, input?.tool_name, state, now);
-  const filePath = input?.tool_input?.file_path;
-  const nightDenied = !!rule && !isAllowedPath(filePath, rule.allowPaths, homedir());
-  // Single-stream commitment: a non-owner session's tools are denied while focus is active.
-  // Journal + keel's own subtree stay open so capture and sign-off are never trapped.
-  // SIGNON_ALLOW rather than a second literal list: two hand-maintained copies of the
-  // same exemption is how one of them silently goes stale after a path move.
-  const focusDenied = focusBlocks(state, input?.session_id)
-    && !isAllowedPath(filePath, SIGNON_ALLOW, homedir());
-  // Day-open commitment: writes are held until the day is framed in zenborg. Same
-  // exemptions as focus, so capture and the ritual itself are never trapped behind it.
-  const signOnDenied = signOnBlocks(target.signOnGate, loadDayNotes(), input?.tool_name, now)
-    && !isAllowedPath(filePath, SIGNON_ALLOW, homedir());
-  const allowed = !nightDenied && !focusDenied && !signOnDenied;
-  // Rules observability: every gate decision is auditable from the log alone.
-  logHookEvent("tool_dispatched", now, input, { extra: {
-    keel_denied: !allowed, keel_friction: Number(f.toFixed(3)), keel_phase: phaseOf(f),
-    ...(rule?.notch ? { keel_rule_notch: rule.notch } : {}),
-    ...(focusDenied ? { keel_focus_block: true } : {}),
-    ...(signOnDenied ? { keel_signon_block: true } : {}),
-  } });
-  if (allowed) return emit(null); // allow (silent)
-  // Night outranks focus outranks sign-on: report the wall you'd hit first anyway.
-  const reason = nightDenied ? denyReason(target) : focusDenied ? FOCUS_DENY : SIGNON_DENY;
-  return emit({
-    hookSpecificOutput: {
-      hookEventName: "PreToolUse",
-      permissionDecision: "deny",
-      permissionDecisionReason: reason,
-    },
-  });
+  const band = bandNow(loadPhaseConfigs(), now);
+  logHookEvent("tool_dispatched", now, input, { extra: band ? { keel_band: band } : {} });
+  return emit(null); // always allow
 }
 
 async function handleUserSubmit(now) {
@@ -116,9 +87,6 @@ async function handleUserSubmit(now) {
   logHookEvent("prompt", now, input);
   const target = loadTarget();
   let state = updateSession(loadState(), now, target.orient);
-  const phase = phaseOf(frictionNow(target, now));
-  // Mark whether THIS turn opened under lockdown — the breakpoint signal PreToolUse reads.
-  state.turnLockedTs = phase === "lockdown" ? state.lastPromptTs : 0;
 
   // Ambient by design: indicators live in the statusline HUD (`keel hud`), not injected per-turn.
   // Two exceptions, both silent on an ordinary turn:
@@ -146,15 +114,12 @@ async function handleUserSubmit(now) {
     state.inferNudgedTs = state.sessionStartTs;
     nudge = intentionNudge(todaysMoments(moments, now));
   }
-  // First prompt while focus is on + unclaimed → this session becomes the focus owner.
-  state = claimFocus(state, input?.session_id);
   // Empty unless the ceiling moved since this session was last told (incl. the 04:00 lapse).
   const gran = granularityNotice(state, input?.session_id, now);
   state = gran.state;
   saveState(state);
-  // Deep-focus cue rides the same turn-boundary channel — breath in the owner session, a
-  // held-elsewhere note in blocked ones. Empty unless `keel focus` is on.
-  return emitText([nudge, gran.line, focusLine(state, input?.session_id)].filter(Boolean).join("\n"));
+  // The focus cue rides the same turn-boundary channel. Empty unless `keel focus` is on.
+  return emitText([nudge, gran.line, focusLine(state)].filter(Boolean).join("\n"));
 }
 
 async function handleSessionStart(now) {
@@ -201,22 +166,20 @@ async function handleSessionStart(now) {
 }
 
 function cmdStatus(now) {
-  const target = loadTarget();
-  const f = frictionNow(target, now);
-  const locked = phaseOf(f) === "lockdown";
-  const w = nightWindow(target.watches, toDurationMin(target.windDown));
+  const state = loadState();
+  const band = bandNow(loadPhaseConfigs(), now) || "(none — zenborg's phaseConfigs unreadable)";
   console.log(
-    `keel[${TARGET_ID}]: f=${f.toFixed(2)} phase=${phaseOf(f)}${locked ? " (LOCKED · night)" : ""} ` +
-    `watch=${activeWatch(now, target.watches)} windDown=${target.windDown} ` +
-    (w ? `night=${minToHHMM(w.nightStart)}→${minToHHMM(w.reset)}` : "(no night watch → pure-soft)"),
+    `keel[${TARGET_ID}]: band=${band} · gates=none · ` +
+    `moment=${activeMomentNow(now)?.name ?? "unset"} · ` +
+    `focus=${state.focus ? "on" : "off"} · granularity=${activeGranularity(state)}`,
   );
 }
 
-// ponytail: signoff's old levers (self-imposed park + vice block) retired with the
-// walls (decision 2026-06-17 — block kept for the night-lock only). The dial-driven
-// "friction all the way up" is pass 2; for now signoff just acknowledges the close.
+// ponytail: signoff's levers went in stages — the self-imposed park and vice block with the
+// walls (2026-06-17), then the night lock that outlived them (2026-08-18). Nothing is left to
+// pull: signoff acknowledges the close and the log carries the rest.
 function cmdSignoff() {
-  console.log("keel: signed off. The day is sealed. (keel no longer walls coding — your declared night is the only hard stop.)");
+  console.log("keel: signed off. The day is sealed. (keel walls nothing — it watches and reports.)");
 }
 
 // ponytail: `keel signon` is gone (2026-08-07). The day now opens in zenborg, which
@@ -268,11 +231,12 @@ function logFocusEvent(kind, now) {
   catch { /* fail-open */ }
 }
 
-// `keel focus` — the deep gear over the intention: flips the breath/self-ending flag and
-// holds you to one stream. It no longer NAMES the stream; the active moment does that
-// (2026-08-07), so any label argument is accepted and ignored rather than becoming a
-// second source of truth. focus_on/focus_off land in the log so the gap-fill EDA can
-// segment focus periods.
+// `keel focus` — the deep gear over the intention: flips the breath flag over the active
+// moment. It no longer NAMES the stream; the active moment does that (2026-08-07), so any
+// label argument is accepted and ignored rather than becoming a second source of truth.
+// It no longer HOLDS the stream either: the single-stream lock went on 2026-08-18. What it
+// still does is mark the period — focus_on/focus_off land in the log so the gap-fill EDA can
+// segment focus periods — and put a breath on the AI-wait gap.
 function cmdFocus(arg, now) {
   const raw = String(arg ?? "").trim();
   const low = raw.toLowerCase();
@@ -293,7 +257,7 @@ function cmdFocus(arg, now) {
   saveState(setFocus(state, true, now));
   logFocusEvent("focus_on", now);
   const named = label ? `one stream on "${label}"` : "one stream (no active moment — set one in zenborg to name it)";
-  console.log(`keel: ◉ focus on — ${named}. Other sessions are held; this one's the owner once you prompt. Breath on the AI gap. \`keel focus off\` to release.`);
+  console.log(`keel: ◉ focus on — ${named}. A marker, not a lock: nothing is held. Breath on the AI gap. \`keel focus off\` to release.`);
 }
 
 // ── HUD (for the Claude Code statusLine) ──────────────────────
@@ -306,24 +270,14 @@ function sessionCount() {  // approximate # of concurrent Claude Code sessions
     return n || 1;
   } catch { return 1; }
 }
-// A calm, phase-adaptive HUD: one useful thing per phase, no empty dashes.
-// DAY near-silent · WIND-DOWN leads with time-to-sign-off · LOCKDOWN leads with
-// the held-until + skips. Context glyphs appear only when they carry signal.
+// A calm HUD: glyphs appear only when they carry signal, no empty dashes.
+// The 🔒/🌙 lock and wind-down leaders went with the night gate (2026-08-18) — there is no
+// held-until to report when nothing is held, and a countdown to a wall that no longer exists
+// is worse than silence.
 function cmdHud(now) {
-  const target = loadTarget();
   const state = loadState();
-  const w = nightWindow(target.watches, toDurationMin(target.windDown));
-  const phase = phaseOf(frictionNow(target, now));
 
   const parts = [];
-
-  // Abnormal states only — silent on a normal day.
-  if (phase === "lockdown") {
-    parts.push(`keel 🔒 locked till ${w ? minToHHMM(w.reset) : "wake"}`);
-  } else if (phase === "wind_down" && w) {
-    const mins = (w.nightStart - nowMinOf(now) + 1440) % 1440;
-    parts.push(`keel 🌙 winding down · ${mins}m to night`);
-  }
 
   // Always-on indicators: the active moment (when one is set) + the day's granularity ceiling.
   const inten = activeMomentNow(now)?.name ?? "";
@@ -336,7 +290,7 @@ function cmdHud(now) {
 
 /** `keel rules` — the effective rules, with provenance per section. */
 function cmdRules() {
-  console.log(renderRules(loadTarget(), loadRawTarget()));
+  console.log(renderRules(loadTarget(), loadRawTarget(), loadPhaseConfigs()));
   console.log(watchlistLines(loadWatchlist()).join("\n"));
   console.log(desktopSensorLines(loadDesktopSensors()).join("\n"));
 }

@@ -1,21 +1,23 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  toMin, frictionAt, phaseOf, updateSession, unbrokenMin,
-  denyingRule, renderOrient, signOnBlocks,
-  mergeTarget, emptyState, frictionNow,
+  bandAt, updateSession,
+  mergeTarget, emptyState,
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
   effectiveGranularity, exceedsCeiling, granularityLine,
   granularityNotice, pruneGranularitySeen, GRANULARITY_SEEN_MAX, GRANULARITY_SEEN_TTL_MS,
   resolveActiveMoment, todaysMoments, intentionLine, focusDayKey,
-  setFocus, claimFocus, focusBlocks, focusLine,
+  setFocus, focusLine,
   seedAllowFromRefs, momentFrictionAt, intentionSwitch,
 } from "./core.mjs";
 
-// Watches with night@01:00 + a 90m lead reproduce the old 23:30→01:00 ramp, 01:00→05:00 lock.
-const watches = { morning: "05:00", afternoon: "13:00", evening: "19:00", night: "01:00" };
-const lead = 90;
-const near = (a, b) => Math.abs(a - b) < 0.02;
+// zenborg's real bands, as `list_phase_configs` returns them (NIGHT wraps past midnight).
+const BANDS = [
+  { phase: "MORNING", startHour: 9, endHour: 13, order: 0 },
+  { phase: "AFTERNOON", startHour: 13, endHour: 20, order: 1 },
+  { phase: "EVENING", startHour: 20, endHour: 3, order: 2 },
+  { phase: "NIGHT", startHour: 3, endHour: 9, order: 3 },
+];
 
 test("granularity: a level set on one waking-day does not survive into the next", () => {
   const mon = Date.parse("2026-08-10T10:00:00");
@@ -198,59 +200,10 @@ test("todaysMoments: today's board only, in order", () => {
   assert.deepEqual(todaysMoments(moments, Date.parse("2026-06-19T02:00:00")).map((m) => m.name), ["stale"]);
 });
 
-test("signOnBlocks: holds writes until the day has a name in zenborg", () => {
-  const friday = Date.parse("2026-06-19T22:00:00");
-  const key = focusDayKey(friday);
-  const named = { [key]: { date: key, title: "Ship export", body: "# plan\n- land the writer" } };
-
-  // Gate off (the default) → never blocks, named or not.
-  assert.equal(signOnBlocks(false, {}, "Edit", friday), false);
-  // Gate on, day unnamed → writes held.
-  assert.equal(signOnBlocks(true, {}, "Edit", friday), true);
-  assert.equal(signOnBlocks(true, {}, "Bash", friday), true);
-  // Reads stay open — "no work before naming the day", not "no computer".
-  assert.equal(signOnBlocks(true, {}, "Read", friday), false);
-  assert.equal(signOnBlocks(true, {}, "Grep", friday), false);
-  // Named today → open.
-  assert.equal(signOnBlocks(true, named, "Edit", friday), false);
-  // A title with no body still opens it — the body is optional, the name isn't.
-  assert.equal(signOnBlocks(true, { [key]: { date: key, title: "Rest" } }, "Edit", friday), false);
-  // A note whose title is empty/whitespace is not a named day.
-  assert.equal(signOnBlocks(true, { [key]: { date: key, title: "   " } }, "Edit", friday), true);
-  assert.equal(signOnBlocks(true, { [key]: { date: key, body: "notes" } }, "Edit", friday), true);
-  // Pre-04:00 next calendar day is still the prior (named) waking-day → stays open.
-  assert.equal(signOnBlocks(true, named, "Edit", Date.parse("2026-06-20T02:00:00")), false);
-  // ...but past the 04:00 roll it's a new, unnamed day → held again.
-  assert.equal(signOnBlocks(true, named, "Edit", Date.parse("2026-06-20T09:00:00")), true);
-  // Fail-open: an unreadable vault must never be able to lock the day shut.
-  assert.equal(signOnBlocks(true, null, "Edit", friday), false);
-});
-
 test("focusDayKey: the day flips at 04:00, not midnight", () => {
   assert.equal(focusDayKey(Date.parse("2026-06-19T03:59:00")), "2026-06-18"); // pre-dawn → prior day
   assert.equal(focusDayKey(Date.parse("2026-06-19T04:00:00")), "2026-06-19"); // boundary → new day
   assert.equal(focusDayKey(Date.parse("2026-06-19T23:30:00")), "2026-06-19");
-});
-
-test("toMin parses HH:MM", () => {
-  assert.equal(toMin("23:30"), 1410);
-  assert.equal(toMin("01:00"), 60);
-});
-
-test("frictionAt across the wrapping night (derived from the night watch + lead)", () => {
-  assert.equal(frictionAt(toMin("12:00"), watches, lead), 0);
-  assert.equal(frictionAt(toMin("23:20"), watches, lead), 0);
-  assert.ok(near(frictionAt(toMin("23:30"), watches, lead), 0));      // ramp start = night(01:00) − 90m
-  assert.ok(near(frictionAt(toMin("00:30"), watches, lead), 0.667));
-  assert.equal(frictionAt(toMin("01:00"), watches, lead), 1);         // night begins → lock
-  assert.equal(frictionAt(toMin("03:00"), watches, lead), 1);
-  assert.equal(frictionAt(toMin("05:00"), watches, lead), 0);         // morning → reset
-});
-
-test("phaseOf maps f to a label", () => {
-  assert.equal(phaseOf(0), "day");
-  assert.equal(phaseOf(0.5), "wind_down");
-  assert.equal(phaseOf(1), "lockdown");
 });
 
 test("updateSession continues within gap, resets after gap", () => {
@@ -263,73 +216,43 @@ test("updateSession continues within gap, resets after gap", () => {
   const big = ten + 40 * 60_000;
   s = updateSession(s, big, orient);
   assert.equal(s.sessionStartTs, big);
-  assert.equal(unbrokenMin({ sessionStartTs: big }, big + 90 * 60_000), 90);
 });
 
-test("focus: claim-on-first-prompt, owner works, other sessions blocked, off releases", () => {
+test("focus: a marker, not a lock — the flag flips and the breath line follows it", () => {
   let s = setFocus(emptyState(), true, 1000);
   assert.equal(s.focus, true);
-  assert.equal(s.focusSession, "");                 // unclaimed on enable
-  assert.equal(focusBlocks(s, "B"), false);         // unclaimed → nothing blocked yet
-  s = claimFocus(s, "A");                           // first prompt claims the owner
-  assert.equal(s.focusSession, "A");
-  s = claimFocus(s, "B");                           // a claimed owner is never stolen
-  assert.equal(s.focusSession, "A");
-  assert.equal(focusBlocks(s, "A"), false);         // owner works freely
-  assert.equal(focusBlocks(s, "B"), true);          // other sessions are held
-  assert.equal(focusBlocks(s, ""), false);          // no session id → never block
-  s = setFocus(s, false, 2000);                     // off clears the flag + owner
+  assert.equal(s.focusTs, 1000);
+  assert.match(focusLine(s), /breathe the AI gap/);
+  s = setFocus(s, false, 2000);
   assert.equal(s.focus, false);
-  assert.equal(focusBlocks(s, "B"), false);
+  assert.equal(s.focusTs, 0);
+  assert.equal(focusLine(s), "");
 });
 
-test("focus: breath line for owner, held-note for others, empty when off", () => {
-  assert.equal(focusLine(emptyState(), "A"), "");
-  const s = claimFocus(setFocus(emptyState(), true, 0), "A");
-  assert.match(focusLine(s, "A"), /breathe the AI gap/);
-  assert.match(focusLine(s, "B"), /held in another session/);
+test("focus carries no session ownership — nothing to claim, nothing held", () => {
+  const s = setFocus(emptyState(), true, 0);
+  assert.equal("focusSession" in s, false);
 });
 
-const now = 1_000_000_000_000;
-const bpTarget = {
-  rules: [{ notch: "block", engagesAt: 1, arming: "breakpoint", maxGraceMin: 10, tools: ["Edit", "Bash"] }],
-};
-
-test("denyingRule: breakpoint arming respects the turn boundary", () => {
-  // turn opened BEFORE lockdown (turnLockedTs 0), within grace → allow (let it finish)
-  assert.equal(denyingRule(bpTarget, 1, "Edit", { skipUntilTs: 0, turnLockedTs: 0, lastPromptTs: now - 1000 }, now), null);
-  // turn opened UNDER lockdown → deny
-  assert.ok(denyingRule(bpTarget, 1, "Edit", { skipUntilTs: 0, turnLockedTs: now - 1000, lastPromptTs: now - 1000 }, now));
-  // straddling turn ran past maxGrace → deny
-  assert.ok(denyingRule(bpTarget, 1, "Edit", { skipUntilTs: 0, turnLockedTs: 0, lastPromptTs: now - 20 * 60_000 }, now));
-  // non-coding tool → allow
-  assert.equal(denyingRule(bpTarget, 1, "Read", { skipUntilTs: 0, turnLockedTs: now, lastPromptTs: now }, now), null);
-  // below engagesAt → allow
-  assert.equal(denyingRule(bpTarget, 0.6, "Edit", { skipUntilTs: 0, turnLockedTs: now, lastPromptTs: now }, now), null);
+test("bandAt: every hour of the day resolves to exactly one kairos band", () => {
+  assert.equal(bandAt(9 * 60, BANDS), "MORNING");
+  assert.equal(bandAt(12 * 60 + 59, BANDS), "MORNING");
+  assert.equal(bandAt(13 * 60, BANDS), "AFTERNOON");     // half-open: the boundary belongs to the later band
+  assert.equal(bandAt(19 * 60 + 59, BANDS), "AFTERNOON");
+  assert.equal(bandAt(20 * 60, BANDS), "EVENING");
+  assert.equal(bandAt(23 * 60, BANDS), "EVENING");
+  assert.equal(bandAt(0, BANDS), "EVENING");             // EVENING wraps past midnight to 03:00
+  assert.equal(bandAt(2 * 60 + 59, BANDS), "EVENING");
+  assert.equal(bandAt(3 * 60, BANDS), "NIGHT");
+  assert.equal(bandAt(8 * 60 + 59, BANDS), "NIGHT");
 });
 
-test("immediate arming denies regardless of turn", () => {
-  const t = { rules: [{ notch: "block", engagesAt: 1, arming: "immediate", tools: ["Edit"] }] };
-  assert.ok(denyingRule(t, 1, "Edit", { skipUntilTs: 0, turnLockedTs: 0, lastPromptTs: now }, now));
-});
-
-test("frictionNow: calm afternoon is 0; ramp before night; night watch forces full lockdown", () => {
-  const t = mergeTarget({ watches, windDown: "90m" });
-  assert.equal(frictionNow(t, new Date("2026-06-05T14:00:00").getTime()), 0);   // day → no friction
-  const ramp = frictionNow(t, new Date("2026-06-06T00:00:00").getTime());       // inside the 90m lead
-  assert.ok(ramp > 0 && ramp < 1, `expected ramp, got ${ramp}`);
-  assert.equal(frictionNow(t, new Date("2026-06-06T03:00:00").getTime()), 1);   // inside night → lockdown
-});
-
-test("renderOrient: silent by day, voiced otherwise", () => {
-  const t = mergeTarget({});
-  assert.equal(renderOrient(t, "day", emptyState(), now), "");
-  const wd = renderOrient(t, "wind_down", { ...emptyState(), lastPromptTs: now, sessionStartTs: now }, now);
-  assert.match(wd, /\[keel\].*wind-down|land(ing)? open work/i);
-  assert.match(wd, /high-level/); // wind-down granularity nudge
-  const locked = renderOrient(t, "lockdown", { ...emptyState(), lastPromptTs: now }, now);
-  assert.match(locked, /paused until 09:00/);   // reset = morning watch (default 09:00)
-  assert.match(locked, /L1 only/); // lockdown granularity nudge
+test("bandAt: fails soft to \"\" rather than throwing inside a hook", () => {
+  assert.equal(bandAt(600, null), "");
+  assert.equal(bandAt(600, undefined), "");
+  assert.equal(bandAt(600, []), "");
+  assert.equal(bandAt(600, [{ phase: "BROKEN" }]), "");                       // no hours
+  assert.equal(bandAt(600, [{ phase: "X", startHour: 5, endHour: 5 }]), "");  // empty arc
 });
 
 // ── Moment friction (refs → allow list) ─────────────────────────
