@@ -133,7 +133,7 @@ Modify a region of the DOM. Replacement may be empty (hide), text (substitute), 
 ```ts
 interface TransformSpec {
   readonly kind: "transform";
-  readonly target: SelectorChain;
+  readonly targets: SelectorChain;
   readonly replacement:
     | { readonly type: "hide" }
     | { readonly type: "text"; readonly content: string }
@@ -150,6 +150,16 @@ interface CssRule {
   readonly properties: Readonly<Record<string, string | number>>;
 }
 ```
+
+> **Same divergence as `RuleSpec` scope: the key is `targets`, not `target`.**
+> `loadTransforms` (`apps/agent/store.mjs`) reads `p.targets.primary` and skips
+> the primitive outright when it is absent, so a transform authored as `target`
+> is dropped without a word. `applyTransforms` likewise reads `t.targets`.
+>
+> Two more gaps between this contract and the interpreter: only `hide` and
+> `restyle` are interpreted (`text` and `template` are declared here and
+> unimplemented), and `restyle` carries a flat `style` object rather than
+> `rules: CssRule[]` with a `scope`.
 
 The `restyle` replacement emerged from the youtube-shorts smoke test: killing scroll-snap, overflow, and nav buttons is a CSS concern, not a DOM-mutation concern. With `scope: "rule_class"`, the runtime scopes all rules under an auto-generated class on `<html>` (e.g. `equanimi-shorts-scroll-lock-active`) that it toggles based on activation.
 
