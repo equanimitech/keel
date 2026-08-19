@@ -44,7 +44,8 @@ interface RuleSpec {
   readonly id: RuleId;
   readonly name: string;
   readonly description: string;
-  readonly domain: string;                      // e.g. "linkedin.com"
+  readonly domains: readonly string[];          // e.g. ["linkedin.com"]
+  readonly areas?: readonly AreaId[];           // resolved to domains at load time
   readonly matches: readonly string[];          // URL match patterns
 
   // Behavioral classification (metadata for patterns layer)
@@ -66,6 +67,13 @@ interface RuleSpec {
   readonly dependsOn?: readonly RuleId[];       // explicit declaration, user-acknowledged at commit
 }
 ```
+
+> **Scope is `domains` (plural), not `domain`.** Every loader reads
+> `rule.domains` and `rule.areas` (`resolveRuleDomains`, `apps/agent/store.mjs`);
+> nothing reads a singular `domain`. A rule authored with `domain: "linkedin.com"`
+> resolves to the empty set and its primitives silently cover nothing, which looks
+> exactly like a rule that is enabled and working. `matches` is likewise declared
+> here and not yet read by any loader.
 
 **Equanimous constraints checked at the Rule level:**
 
