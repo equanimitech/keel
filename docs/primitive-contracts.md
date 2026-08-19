@@ -44,7 +44,8 @@ interface RuleSpec {
   readonly id: RuleId;
   readonly name: string;
   readonly description: string;
-  readonly domain: string;                      // e.g. "linkedin.com"
+  readonly domains: readonly string[];          // e.g. ["linkedin.com"]
+  readonly areas?: readonly AreaId[];           // resolved to domains at load time
   readonly matches: readonly string[];          // URL match patterns
 
   // Behavioral classification (metadata for patterns layer)
@@ -66,6 +67,13 @@ interface RuleSpec {
   readonly dependsOn?: readonly RuleId[];       // explicit declaration, user-acknowledged at commit
 }
 ```
+
+> **Scope is `domains` (plural), not `domain`.** Every loader reads
+> `rule.domains` and `rule.areas` (`resolveRuleDomains`, `apps/agent/store.mjs`);
+> nothing reads a singular `domain`. A rule authored with `domain: "linkedin.com"`
+> resolves to the empty set and its primitives silently cover nothing, which looks
+> exactly like a rule that is enabled and working. `matches` is likewise declared
+> here and not yet read by any loader.
 
 **Equanimous constraints checked at the Rule level:**
 
@@ -125,7 +133,7 @@ Modify a region of the DOM. Replacement may be empty (hide), text (substitute), 
 ```ts
 interface TransformSpec {
   readonly kind: "transform";
-  readonly target: SelectorChain;
+  readonly targets: SelectorChain;
   readonly replacement:
     | { readonly type: "hide" }
     | { readonly type: "text"; readonly content: string }
@@ -142,6 +150,23 @@ interface CssRule {
   readonly properties: Readonly<Record<string, string | number>>;
 }
 ```
+
+> **Same divergence as `RuleSpec` scope: the key is `targets`, not `target`.**
+> `loadTransforms` (`apps/agent/store.mjs`) reads `p.targets.primary` and skips
+> the primitive outright when it is absent, so a transform authored as `target`
+> is dropped without a word. `applyTransforms` likewise reads `t.targets`.
+>
+> Two more gaps between this contract and the interpreter. `template` is
+> declared here and unimplemented (`hide`, `restyle`, and `text` are live;
+> `text` landed 2026-08-19). And `restyle` carries a flat `style` object rather
+> than `rules: CssRule[]` with a `scope`.
+>
+> `text` renders as a `::before` on the target rather than by writing to the
+> DOM, which keeps the interpreter a single stylesheet. It hides the target by
+> `visibility`, never `display`, and absolutely positions the placeholder inside
+> it, so the element keeps its box and the page keeps its height. That is not a
+> stylistic choice: collapsing the height of LinkedIn's feed items kept its
+> infinite-scroll sentinel in the viewport and set the feed fetching forever.
 
 The `restyle` replacement emerged from the youtube-shorts smoke test: killing scroll-snap, overflow, and nav buttons is a CSS concern, not a DOM-mutation concern. With `scope: "rule_class"`, the runtime scopes all rules under an auto-generated class on `<html>` (e.g. `equanimi-shorts-scroll-lock-active`) that it toggles based on activation.
 
