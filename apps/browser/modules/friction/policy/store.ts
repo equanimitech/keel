@@ -47,7 +47,8 @@ export interface PageTransform {
   readonly targets: { readonly primary: string; readonly fallbacks: readonly string[] };
   readonly replacement:
     | { readonly type: "hide" }
-    | { readonly type: "restyle"; readonly style: Readonly<Record<string, string>> };
+    | { readonly type: "restyle"; readonly style: Readonly<Record<string, string>> }
+    | { readonly type: "text"; readonly content: string };
 }
 
 /** DOM transforms declared by rules. */

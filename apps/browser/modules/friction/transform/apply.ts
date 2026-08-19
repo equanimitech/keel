@@ -49,6 +49,24 @@ export function transformsFor(
   );
 }
 
+/** A string as a CSS string literal, safe to drop into `content:`.
+ *
+ * Rule files are hand-edited, so the content is untrusted input to the parser.
+ * An unescaped `"` closes the declaration and everything after it becomes live
+ * CSS; a raw newline is a parse error that discards the WHOLE stylesheet, which
+ * would silently un-hide every page keel is transforming. Backslash goes first,
+ * or it re-escapes the escapes.
+ *
+ * `\A ` (with the trailing space) is the CSS hex escape for a line feed; the
+ * space terminates the hex digits rather than adding one. */
+export function cssString(value: string): string {
+  const escaped = value
+    .replace(/\\/g, "\\\\")
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, "\\A ");
+  return `"${escaped}"`;
+}
+
 /** The stylesheet a set of transforms declares. Pure — this is the tested half.
  *
  * Returns `""` for an empty set, which the applier reads as "remove the style
@@ -62,6 +80,36 @@ export function transformCss(transforms: readonly PageTransform[]): string {
     if (selectors.length === 0) {
       continue;
     }
+    const sel = selectors.join(",\n");
+
+    // `text` is a placeholder, not a hide: the element's own content goes and a
+    // message takes its place. Rendered as `::before` rather than by writing to
+    // the DOM, which keeps this module a single stylesheet — SPA-proof, with no
+    // re-application race and nothing to clean up but one node.
+    //
+    // The element is hidden by VISIBILITY, never `display: none`, and the
+    // pseudo-element is absolutely positioned inside it. Both facts are
+    // load-bearing: a hidden element keeps its box, so the page keeps its
+    // height. Collapsing the height is what set LinkedIn's feed reloading
+    // forever (2026-08-19) — the scroll sentinel never left the viewport.
+    // `visibility: visible` on the pseudo-element beats the inherited `hidden`,
+    // because a descendant's own declaration outranks an inherited one.
+    if (t.replacement.type === "text") {
+      const content = t.replacement.content.trim();
+      if (content === "") {
+        continue; // A blank placeholder is an authoring slip, not an empty message.
+      }
+      const before = selectors.map((s) => `${s}::before`).join(",\n");
+      blocks.push(
+        `/* ${t.ruleId} */\n` +
+          `${sel} { visibility: hidden !important; position: relative !important; }\n` +
+          `${before} { content: ${cssString(content)}; visibility: visible !important; ` +
+          `position: absolute !important; inset: 0 !important; display: flex !important; ` +
+          `align-items: center !important; justify-content: center !important; }`
+      );
+      continue;
+    }
+
     const body =
       t.replacement.type === "restyle"
         ? Object.entries(t.replacement.style)
@@ -71,7 +119,7 @@ export function transformCss(transforms: readonly PageTransform[]): string {
     if (body === "") {
       continue;
     }
-    blocks.push(`/* ${t.ruleId} */\n${selectors.join(",\n")} { ${body} }`);
+    blocks.push(`/* ${t.ruleId} */\n${sel} { ${body} }`);
   }
   return blocks.join("\n\n");
 }

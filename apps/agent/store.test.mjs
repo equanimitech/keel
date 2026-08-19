@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, readdirSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeJsonAtomic } from "./store.mjs";
@@ -93,4 +93,41 @@ test("safeRedirect refuses schemes that execute", async () => {
   assert.equal(safeRedirect("https://example.test/read"), "https://example.test/read");
   assert.equal(safeRedirect("http://localhost:3000/"), "http://localhost:3000/");
   assert.equal(safeRedirect("/feed/"), "/feed/");
+});
+
+// `KEEL_DIR` resolves at module load, so these re-import against a scratch
+// subtree rather than the real rules directory.
+async function loadTransformsFrom(dir, rule) {
+  process.env.KEEL_HOME = dir;
+  mkdirSync(join(dir, "rules"), { recursive: true });
+  writeJsonAtomic(join(dir, "rules", "r.json"), rule);
+  const m = await import(`./store.mjs?transforms=${Math.random()}`);
+  return m.loadTransforms();
+}
+
+const textRule = (replacement) => ({
+  id: "placeholder",
+  domains: ["x.test"],
+  defaultEnabled: true,
+  primitives: [
+    { kind: "transform", targets: { primary: ".a", fallbacks: [] }, replacement },
+  ],
+});
+
+test("loadTransforms projects a text placeholder with its content", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-transforms-"));
+  const [t] = await loadTransformsFrom(dir, textRule({ type: "text", content: "the feed is off." }));
+  assert.deepEqual(t.replacement, { type: "text", content: "the feed is off." });
+});
+
+test("loadTransforms degrades a text placeholder with no content to a plain hide", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-transforms-blank-"));
+  // A half-written rule must still suppress the element. Shipping `text` with
+  // nothing in it would render an empty box where the content used to be.
+  const [blank] = await loadTransformsFrom(dir, textRule({ type: "text", content: "   " }));
+  assert.deepEqual(blank.replacement, { type: "hide" });
+
+  const dir2 = mkdtempSync(join(tmpdir(), "keel-transforms-missing-"));
+  const [missing] = await loadTransformsFrom(dir2, textRule({ type: "text" }));
+  assert.deepEqual(missing.replacement, { type: "hide" });
 });

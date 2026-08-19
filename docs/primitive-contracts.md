@@ -156,10 +156,17 @@ interface CssRule {
 > the primitive outright when it is absent, so a transform authored as `target`
 > is dropped without a word. `applyTransforms` likewise reads `t.targets`.
 >
-> Two more gaps between this contract and the interpreter: only `hide` and
-> `restyle` are interpreted (`text` and `template` are declared here and
-> unimplemented), and `restyle` carries a flat `style` object rather than
-> `rules: CssRule[]` with a `scope`.
+> Two more gaps between this contract and the interpreter. `template` is
+> declared here and unimplemented (`hide`, `restyle`, and `text` are live;
+> `text` landed 2026-08-19). And `restyle` carries a flat `style` object rather
+> than `rules: CssRule[]` with a `scope`.
+>
+> `text` renders as a `::before` on the target rather than by writing to the
+> DOM, which keeps the interpreter a single stylesheet. It hides the target by
+> `visibility`, never `display`, and absolutely positions the placeholder inside
+> it, so the element keeps its box and the page keeps its height. That is not a
+> stylistic choice: collapsing the height of LinkedIn's feed items kept its
+> infinite-scroll sentinel in the viewport and set the feed fetching forever.
 
 The `restyle` replacement emerged from the youtube-shorts smoke test: killing scroll-snap, overflow, and nav buttons is a CSS concern, not a DOM-mutation concern. With `scope: "rule_class"`, the runtime scopes all rules under an auto-generated class on `<html>` (e.g. `equanimi-shorts-scroll-lock-active`) that it toggles based on activation.
 
