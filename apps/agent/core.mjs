@@ -189,26 +189,45 @@ export function todaysMoments(moments, now) {
     .map((m) => ({ name: m.name.trim(), emoji: m.emoji ?? "" }));
 }
 
-/** The session-start guardrail line — names the active moment and the drift contract.
- * Empty when nothing is active. @param {ActiveMoment|null} moment @returns {string} */
+/** The session-start line — names the habit being tended, or says plainly that none is.
+ *
+ * A moment is not something you plant. The habit is the perennial already in the ground;
+ * the moment is the watering. So the verb here is *tend*, and the absent case is a dry
+ * bed rather than an empty one.
+ *
+ * ponytail: that absent case returned "" until 2026-08-20, so the one session worth
+ * speaking to — the one opening with nothing being tended — was the one that opened in
+ * silence. The silence was deliberate once: the day-open nudge was cut on 2026-08-07
+ * because the day-note gate carried the same intent "with teeth". The gate was retired on
+ * 2026-08-18 and nothing refilled the hole. A line you can ignore is weaker than a gate,
+ * and that is the trade shadow mode requires — zenborg's migration is at step 2, where the
+ * loop runs and nothing acts on it.
+ * @param {ActiveMoment|null} moment @returns {string} */
 export function intentionLine(moment) {
-  if (!moment) return "";
+  if (!moment) return "[keel] ◌ nothing is being tended — no habit is getting water this session.";
   const where = moment.area ? ` (${moment.area})` : "";
-  return `[keel] ◎ intention: ${moment.name}${where} — capture drift (idea/pain), hold the thread.`;
+  return `[keel] ◎ tending: ${moment.name}${where} — capture drift (idea/pain), hold the thread.`;
 }
 
-/** The once-per-session nudge, fired only while nothing is active: the agent infers what
- * the session is actually doing, proposes the closest moment, and sets it in zenborg on
- * the user's yes. keel can't set it itself — it's a reader, and the writer lives outside
- * the box it opens. @param {{name: string}[]} candidates @returns {string} */
-export function intentionNudge(candidates) {
-  const board = candidates.length
-    ? `Today's board: ${candidates.map((m) => `"${m.name}"`).join(", ")}.`
-    : "Today's board is empty.";
-  return `<keel: no active moment — the intention is unset. ${board} Infer what this session` +
-    " is actually doing, propose the closest moment (or a new 1–3 word one) in one short line," +
-    " and on the user's yes set it active in zenborg via the zenborg MCP. Never set it unasked;" +
-    " if you genuinely cannot infer it, say nothing.>";
+/** The once-per-session nudge, fired while nothing is being tended: the agent infers what
+ * the session is actually doing, proposes the habit closest to it, and sets it in zenborg
+ * on the user's yes. keel can't set it itself — it's a reader, and the writer lives outside
+ * the box it opens.
+ *
+ * The cwd is the strongest hint available about which area the work belongs to, and it is
+ * the same seam a later gate would read. Naming it here makes the proposal specific now,
+ * and makes the cwd→area mapping observable well before anything is gated on it.
+ * @param {{name: string}[]} candidates @param {string} [cwd] @returns {string} */
+export function intentionNudge(candidates, cwd) {
+  const garden = candidates.length
+    ? `Today's garden: ${candidates.map((m) => `"${m.name}"`).join(", ")}.`
+    : "Today's garden is bare.";
+  const dir = String(cwd ?? "").trim();
+  const where = dir ? ` Working in ${dir}.` : "";
+  return `<keel: nothing is being tended — no habit is getting water this session. ${garden}${where}` +
+    " Infer what this session is actually doing, propose the closest habit to tend (or a new" +
+    " 1–3 word moment) in one short line, and on the user's yes set it active in zenborg via" +
+    " the zenborg MCP. Never set it unasked; if you genuinely cannot infer it, say nothing.>";
 }
 
 /** Response-granularity levels → the depth contract each implies (maps to semantic-zoom). */

@@ -6,7 +6,7 @@ import {
   normalizeGranularity, activeGranularity, setGranularity, DEFAULT_GRANULARITY,
   effectiveGranularity, exceedsCeiling, granularityLine,
   granularityNotice, pruneGranularitySeen, GRANULARITY_SEEN_MAX, GRANULARITY_SEEN_TTL_MS,
-  resolveActiveMoment, todaysMoments, intentionLine, focusDayKey,
+  resolveActiveMoment, todaysMoments, intentionLine, intentionNudge, focusDayKey,
   setFocus, focusLine,
   seedAllowFromRefs, momentFrictionAt, intentionSwitch,
 } from "./core.mjs";
@@ -182,8 +182,27 @@ test("resolveActiveMoment: resolves the pointer, names the area, degrades to nul
   // Phase is deliberately not matched — an afternoon moment is still yours at 23:00.
   assert.equal(resolveActiveMoment({ momentId: "m1" }, moments, areas, Date.parse("2026-06-19T23:00:00"))?.name, "staging release");
 
-  assert.equal(intentionLine(at("m1")), "[keel] ◎ intention: staging release (Themia) — capture drift (idea/pain), hold the thread.");
-  assert.equal(intentionLine(null), "");
+  assert.equal(intentionLine(at("m1")), "[keel] ◎ tending: staging release (Themia) — capture drift (idea/pain), hold the thread.");
+  // The absent case speaks. It returned "" until 2026-08-20, which made the session that
+  // most needed the line the only one that never got it.
+  assert.equal(intentionLine(null), "[keel] ◌ nothing is being tended — no habit is getting water this session.");
+});
+
+test("intentionNudge: names the garden, the cwd, and never sets anything itself", () => {
+  const withCwd = intentionNudge([{ name: "staging release" }, { name: "gym" }], "/Users/rafa/Developer/themia");
+  assert.match(withCwd, /nothing is being tended/);
+  assert.match(withCwd, /Today's garden: "staging release", "gym"\./);
+  assert.match(withCwd, /Working in \/Users\/rafa\/Developer\/themia\./);
+  // keel reads; zenborg writes. The nudge must never imply keel can set the moment.
+  assert.match(withCwd, /set it active in zenborg via the zenborg MCP/);
+  assert.match(withCwd, /Never set it unasked/);
+
+  // A bare garden is still a garden — the line must not collapse to silence.
+  assert.match(intentionNudge([], ""), /Today's garden is bare\./);
+  // No cwd, no clause — never the string "undefined".
+  assert.doesNotMatch(intentionNudge([], undefined), /Working in/);
+  assert.doesNotMatch(intentionNudge([], undefined), /undefined/);
+  assert.doesNotMatch(intentionNudge([], "   "), /Working in/);
 });
 
 test("todaysMoments: today's board only, in order", () => {

@@ -98,7 +98,6 @@ async function handleUserSubmit(now) {
   //    Session-start alone stopped being enough once the tray made the dial a click away: a
   //    ceiling moved mid-session never reached the agent, which then answered at the level it
   //    was told at open — indistinguishable from ignoring the dial entirely.
-  const freshTurn = state.sessionStartTs === now;        // the session's first prompt
   const moments = loadMoments();
   const pointer = loadActiveMomentPointer();
   const moment = resolveActiveMoment(pointer, moments, loadAreas(), now);
@@ -110,9 +109,13 @@ async function handleUserSubmit(now) {
   }
   const unset = !moment;
   let nudge = "";
-  if (!freshTurn && unset && state.inferNudgedTs !== state.sessionStartTs) {
+  // ponytail: this waited for turn 2 (`!freshTurn`) until 2026-08-20. Turn 1 is the turn
+  // that carries the prompt, so it is both the earliest the agent can infer anything and
+  // the last moment before work starts. Waiting one more turn only ever bought a proposal
+  // that arrived after the session had already committed to something.
+  if (unset && state.inferNudgedTs !== state.sessionStartTs) {
     state.inferNudgedTs = state.sessionStartTs;
-    nudge = intentionNudge(todaysMoments(moments, now));
+    nudge = intentionNudge(todaysMoments(moments, now), input?.cwd);
   }
   // Empty unless the ceiling moved since this session was last told (incl. the 04:00 lapse).
   const gran = granularityNotice(state, input?.session_id, now);
@@ -170,7 +173,7 @@ function cmdStatus(now) {
   const band = bandNow(loadPhaseConfigs(), now) || "(none — zenborg's phaseConfigs unreadable)";
   console.log(
     `keel[${TARGET_ID}]: band=${band} · gates=none · ` +
-    `moment=${activeMomentNow(now)?.name ?? "unset"} · ` +
+    `tending=${activeMomentNow(now)?.name ?? "nothing"} · ` +
     `focus=${state.focus ? "on" : "off"} · granularity=${activeGranularity(state)}`,
   );
 }
@@ -192,12 +195,12 @@ function cmdSignoff() {
 function cmdIntention(arg, now) {
   const moment = activeMomentNow(now);
   if (String(arg ?? "").trim()) {
-    console.log("keel: the intention is a zenborg moment now — set it there (MCP or the UI) and keel picks it up. `keel intention` shows the active one.");
+    console.log("keel: what you tend is a zenborg moment now — tend it there (MCP or the UI) and keel picks it up. `keel intention` shows what's being tended.");
     return;
   }
   console.log(moment
-    ? `keel: ◎ intention — ${moment.name}${moment.area ? ` (${moment.area})` : ""}.`
-    : "keel: no active moment. Set one in zenborg; keel reads it from the vault.");
+    ? `keel: ◎ tending — ${moment.name}${moment.area ? ` (${moment.area})` : ""}.`
+    : "keel: nothing is being tended. Tend a habit in zenborg; keel reads it from the vault.");
 }
 
 /** The active moment right now, resolved from the kairos vault. @param {number} now */
