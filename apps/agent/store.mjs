@@ -460,6 +460,12 @@ export function loadTransforms() {
         .filter((s) => typeof s === "string" && s.trim())
         .map((s) => s.trim());
       const style = p.replacement?.style;
+      // A `text` placeholder degrades to a plain hide when its content is blank
+      // or absent. A half-written rule must still suppress the element: shipping
+      // `text` with nothing in it would leave an empty box where the content was,
+      // which reads as a broken site rather than a suppressed one.
+      const content =
+        typeof p.replacement?.content === "string" ? p.replacement.content.trim() : "";
       out.push({
         ruleId: rule.id,
         domains: resolveRuleDomains(rule),
@@ -467,7 +473,9 @@ export function loadTransforms() {
         replacement:
           p.replacement?.type === "restyle" && style && typeof style === "object"
             ? { type: "restyle", style }
-            : { type: "hide" },
+            : p.replacement?.type === "text" && content !== ""
+              ? { type: "text", content }
+              : { type: "hide" },
       });
     }
   }

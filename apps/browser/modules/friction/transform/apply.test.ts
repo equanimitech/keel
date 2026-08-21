@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PageTransform } from "../policy/store";
-import { transformCss, transformsFor } from "./apply";
+import { cssString, transformCss, transformsFor } from "./apply";
 
 const hide = (ruleId: string, domains: string[], primary: string, fallbacks: string[] = []): PageTransform => ({
   ruleId,
@@ -54,5 +54,76 @@ describe("transformCss", () => {
     ]);
     expect(css).toContain("opacity: 0.3 !important;");
     expect(css).toContain("filter: grayscale(1) !important;");
+  });
+});
+
+describe("cssString", () => {
+  it("wraps plain text in quotes", () => {
+    expect(cssString("the feed is off.")).toBe('"the feed is off."');
+  });
+
+  it("escapes a double quote so the declaration cannot be closed early", () => {
+    // The failure this prevents: rule files are hand-edited, so an unescaped
+    // quote ends the string and everything after it becomes live CSS.
+    expect(cssString('say "hi"')).toBe('"say \\"hi\\""');
+  });
+
+  it("escapes a backslash before it can escape the closing quote", () => {
+    expect(cssString("a\\b")).toBe('"a\\\\b"');
+  });
+
+  it("encodes a newline as \\A rather than emitting a raw break", () => {
+    // A literal newline inside a CSS string is a parse error, which discards
+    // the whole stylesheet and silently un-hides the page.
+    expect(cssString("one\ntwo")).toBe('"one\\A two"');
+  });
+});
+
+describe("transformCss - text placeholder", () => {
+  const text = (content: string): PageTransform => ({
+    ruleId: "placeholder",
+    domains: ["x.test"],
+    targets: { primary: ".first", fallbacks: [] },
+    replacement: { type: "text", content },
+  });
+
+  it("hides the element itself so its own content cannot show through", () => {
+    expect(transformCss([text("the feed is off.")])).toContain(
+      "visibility: hidden !important;"
+    );
+  });
+
+  it("renders the content in a ::before that overrides the inherited hidden", () => {
+    const css = transformCss([text("the feed is off.")]);
+    expect(css).toContain(".first::before");
+    expect(css).toContain('content: "the feed is off."');
+    expect(css).toContain("visibility: visible !important;");
+  });
+
+  it("lays the placeholder over the element it replaces", () => {
+    // Absolute inside a positioned ancestor: the placeholder occupies the
+    // suppressed element's box instead of adding height of its own. Height is
+    // load-bearing here — collapsing it is what set the feed reloading.
+    const css = transformCss([text("the feed is off.")]);
+    expect(css).toContain("position: relative !important;");
+    expect(css).toContain("position: absolute !important;");
+    expect(css).toContain("inset: 0 !important;");
+  });
+
+  it("emits the pseudo-element for fallbacks too, not just the primary", () => {
+    const css = transformCss([
+      {
+        ruleId: "placeholder",
+        domains: ["x.test"],
+        targets: { primary: ".a", fallbacks: [".b"] },
+        replacement: { type: "text", content: "gone" },
+      },
+    ]);
+    expect(css).toContain(".a::before");
+    expect(css).toContain(".b::before");
+  });
+
+  it("skips a text transform with blank content rather than emitting an empty placeholder", () => {
+    expect(transformCss([text("   ")])).toBe("");
   });
 });
