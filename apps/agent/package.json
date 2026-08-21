@@ -9,7 +9,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "typecheck": "tsc --noEmit --checkJs --allowJs --target es2022 --module nodenext --moduleResolution nodenext core.mjs store.mjs keel.mjs capture.mjs capture-store.mjs keel-classify.mjs"
+    "typecheck": "tsc --noEmit --checkJs --allowJs --target es2022 --module nodenext --moduleResolution nodenext core.mjs store.mjs keel.mjs capture.mjs capture-store.mjs inference.mjs keel-classify.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

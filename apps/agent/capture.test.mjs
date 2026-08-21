@@ -158,7 +158,7 @@ test("a corrupt offset file reads as 0 rather than throwing", () => {
 
 // ── ollama sampling ───────────────────────────────────────────
 
-import { voteKind, unloadModel, MODEL, SAMPLES } from "./capture-store.mjs";
+import { voteKind, unloadModel, modelUp, MODEL, SAMPLES } from "./capture-store.mjs";
 
 /** A fetch stub that replays canned kinds and records every request body. */
 function stubFetch(kinds) {
@@ -210,6 +210,50 @@ test("unloadModel asks ollama to drop the model immediately", async () => {
   await unloadModel({ fetchImpl: f });
   assert.equal(f.calls[0].body.keep_alive, 0);
   assert.equal(f.calls[0].body.model, MODEL);
+});
+
+// ── the same calls, through the port ──────────────────────────
+//
+// The point of D: these three functions no longer know what an ollama request
+// looks like. Hand them anything that answers the port and they work — which is
+// what "harvest without a local 35B model" needs.
+
+test("voteKind runs on any provider answering the port, with no HTTP in sight", async () => {
+  const seen = [];
+  const provider = {
+    modelId: "somewhere-else",
+    complete: async (req) => { seen.push(req); return { kind: "reference" }; },
+    available: async () => true,
+    release: async () => {},
+  };
+  const votes = await voteKind("a note", {
+    samples: 2, provider,
+    fetchImpl: () => { throw new Error("the port must not reach for fetch"); },
+  });
+  assert.deepEqual(votes, ["reference", "reference"]);
+  assert.equal(seen.length, 2);
+  assert.ok(seen[0].prompt.includes("a note"));
+  assert.equal(seen[0].schema.properties.kind.type, "string");
+  assert.equal(seen[0].temperature, 0.8);
+  assert.equal(seen[0].maxContextTokens, 2048);
+  // Nothing ollama-shaped crossed the seam.
+  assert.deepEqual(
+    Object.keys(seen[0]).sort(),
+    ["maxContextTokens", "prompt", "schema", "temperature"],
+  );
+});
+
+test("modelUp and unloadModel defer to the injected provider too", async () => {
+  let released = 0;
+  const provider = {
+    modelId: "somewhere-else",
+    complete: async () => ({ kind: "reference" }),
+    available: async () => false,
+    release: async () => { released += 1; },
+  };
+  assert.equal(await modelUp({ provider }), false);
+  await unloadModel({ provider });
+  assert.equal(released, 1);
 });
 
 test("SAMPLES is the measured five-vote gate", () => {

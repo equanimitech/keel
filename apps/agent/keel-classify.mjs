@@ -14,6 +14,7 @@ import {
   findThingsDb, readInboxSince, loadOffset, saveOffset,
   voteKind, unloadModel, modelUp, MODEL,
 } from "./capture-store.mjs";
+import { createProvider } from "./inference.mjs";
 import { appendEvent, readEvents, LOG_DIR, KEEL_DIR } from "./store.mjs";
 
 /** @param {number} ts */
@@ -35,26 +36,31 @@ async function main() {
     process.exit(0);
   }
 
-  // Preflight. `ollama serve` is hand-started here, so it can simply be absent.
+  // The composition root: the one line in this surface that picks who answers.
+  // Everything below speaks the port, so swapping this line is the whole of
+  // running the classifier somewhere without a 35B model on the disk.
+  const provider = createProvider({ kind: "ollama", model: MODEL });
+
+  // Preflight. The local server is hand-started here, so it can simply be absent.
   // Exiting before touching the offset means the whole batch retries next fire.
-  if (!(await modelUp())) {
-    console.error(`keel-classify: model server unreachable, ${captures.length} captures left for the next run`);
+  if (!(await modelUp({ provider }))) {
+    console.error(`keel-classify: ${provider.modelId} unavailable, ${captures.length} captures left for the next run`);
     process.exit(0);
   }
 
   const result = await classifyCaptures({
     captures,
-    vote: (title) => voteKind(title),
+    vote: (title) => voteKind(title, { provider }),
     appendEvent: (e) => { appendEvent(LOG_DIR, e); },
     saveOffset: (o) => { saveOffset(o); },
     now: () => Date.now(),
     newId: () => randomUUID(),
-    model: MODEL,
+    model: provider.modelId,
   });
 
   // Idle draw returns to zero between batches.
   try {
-    await unloadModel();
+    await unloadModel({ provider });
   } catch {
     // ollama already gone; nothing to unload
   }

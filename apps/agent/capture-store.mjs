@@ -8,6 +8,7 @@ import { homedir } from "node:os";
 import { join, dirname } from "node:path";
 import { KEEL_DIR } from "./store.mjs";
 import { classifyPrompt, kindSchema } from "./capture.mjs";
+import { ollamaProvider } from "./inference.mjs";
 
 const THINGS_GROUP = "Library/Group Containers/JLMPQHK86H.com.culturedcode.ThingsMac";
 
@@ -80,76 +81,86 @@ export function saveOffset(creationDate, path = OFFSET_PATH) {
   writeFileSync(path, JSON.stringify({ lastCreationDate: creationDate }) + "\n");
 }
 
-// ── the local model ───────────────────────────────────────────
+// ── the model, behind the inference port ───────────────
+//
+// These three functions used to build ollama's request body inline. They now
+// state what the classifier needs — a prompt, a schema, a temperature, a
+// context cap — and let a provider answer. `inference.mjs` holds the port and
+// the ollama adapter; every legacy option below still lands on that adapter, so
+// the requests on the wire are unchanged.
 
 /** Measured: lfm2.5 (2.6B) is *unanimously wrong* on this task — it collapses
  * toward `reference` — so the gate gives no protection at that size. */
 export const MODEL = "qwen3.6:35b";
 export const SAMPLES = 5;
-const ENDPOINT = "http://localhost:11434/api/generate";
 
-/** Sample the local model `samples` times. Temperature must be non-zero or the
- * vote is theatre. `num_ctx` must be capped: uncapped, ollama sizes the context
- * at the model's full window — measured at 41 GB and 47s for one call.
+/** Non-zero or the vote is theatre. */
+export const TEMPERATURE = 0.8;
+
+/** Capped, or a local runtime sizes the context at the model's full window —
+ * measured at 41 GB and 47s for one call. */
+export const MAX_CONTEXT_TOKENS = 2048;
+
+/** Resolve the provider for one call. An injected provider wins outright; the
+ * older `model` / `endpoint` / `keepAlive` / `fetchImpl` options keep working
+ * by landing on the local adapter, which is what keeps the default path
+ * byte-identical.
+ * @param {{provider?: import("./inference.mjs").InferenceProvider, model?: string,
+ *   endpoint?: string, tagsEndpoint?: string, keepAlive?: string | number,
+ *   fetchImpl?: typeof fetch}} opts
+ * @returns {import("./inference.mjs").InferenceProvider} */
+function providerFor(opts) {
+  const { provider, model = MODEL, endpoint, tagsEndpoint, keepAlive, fetchImpl } = opts;
+  if (provider) {
+    return provider;
+  }
+  return ollamaProvider({ model, endpoint, tagsEndpoint, keepAlive, fetchImpl });
+}
+
+/** Sample the model `samples` times and return every vote.
  * @param {string} title
- * @param {{model?: string, samples?: number, endpoint?: string,
- *   keepAlive?: string | number, fetchImpl?: typeof fetch}} [opts]
+ * @param {{provider?: import("./inference.mjs").InferenceProvider, model?: string,
+ *   samples?: number, endpoint?: string, keepAlive?: string | number,
+ *   fetchImpl?: typeof fetch}} [opts]
  * @returns {Promise<string[]>} */
 export async function voteKind(title, opts = {}) {
-  const {
-    model = MODEL, samples = SAMPLES, endpoint = ENDPOINT,
-    keepAlive = "5m", fetchImpl = fetch,
-  } = opts;
+  const { samples = SAMPLES } = opts;
+  const provider = providerFor(opts);
   const votes = [];
   for (let i = 0; i < samples; i += 1) {
-    const res = await fetchImpl(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model,
-        prompt: classifyPrompt(title),
-        stream: false,
-        think: false,
-        keep_alive: keepAlive,
-        options: { num_ctx: 2048, temperature: 0.8 },
-        format: kindSchema(),
-      }),
+    const answer = await provider.complete({
+      prompt: classifyPrompt(title),
+      schema: kindSchema(),
+      temperature: TEMPERATURE,
+      maxContextTokens: MAX_CONTEXT_TOKENS,
     });
-    if (!res.ok) {
-      throw new Error(`ollama ${res.status}`);
-    }
-    const body = await res.json();
-    votes.push(JSON.parse(body.response).kind);
+    votes.push(answer.kind);
   }
   return votes;
 }
 
-/** Is the local model server reachable?
+/** Can the provider answer right now?
  *
  * Found during verification: `ollama serve` is started by hand on this machine
  * — no brew service, no launch agent — so it can simply be absent when launchd
  * fires. Without this check every capture burns SAMPLES failed requests and
  * fails individually. With it the run exits early, touches no offset, and
- * retries whole on the next fire.
- * @param {{endpoint?: string, fetchImpl?: typeof fetch}} [opts] */
+ * retries whole on the next fire. A hosted provider answers the same question
+ * about its own credentials.
+ * @param {{provider?: import("./inference.mjs").InferenceProvider, endpoint?: string,
+ *   fetchImpl?: typeof fetch}} [opts] */
 export async function modelUp(opts = {}) {
-  const { endpoint = "http://127.0.0.1:11434/api/tags", fetchImpl = fetch } = opts;
-  try {
-    const res = await fetchImpl(endpoint);
-    return res.ok;
-  } catch {
-    return false;
-  }
+  const { provider, endpoint, fetchImpl } = opts;
+  // `endpoint` has always meant the *reachability* endpoint here, not the
+  // generation one — preserved rather than unified, so nothing shifts.
+  return providerFor({ provider, tagsEndpoint: endpoint, fetchImpl }).available();
 }
 
-/** Drop the model from memory. Idle draw returns to zero between batches —
- * this is what keeps a 23 GB model compatible with an always-on watcher.
- * @param {{model?: string, endpoint?: string, fetchImpl?: typeof fetch}} [opts] */
+/** Give back whatever the run held. Locally that drops a 23 GB model from
+ * memory, which is what keeps it compatible with an always-on watcher; idle
+ * draw returns to zero between batches. A hosted provider holds nothing.
+ * @param {{provider?: import("./inference.mjs").InferenceProvider, model?: string,
+ *   endpoint?: string, fetchImpl?: typeof fetch}} [opts] */
 export async function unloadModel(opts = {}) {
-  const { model = MODEL, endpoint = ENDPOINT, fetchImpl = fetch } = opts;
-  await fetchImpl(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model, keep_alive: 0 }),
-  });
+  await providerFor(opts).release();
 }
