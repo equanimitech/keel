@@ -7,7 +7,7 @@
 import {
   bandNow, updateSession,
   resolveActiveMoment, todaysMoments, intentionLine, intentionNudge, intentionSwitch,
-  setGranularity, normalizeGranularity, activeGranularity, granularityNotice, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
+  setGranularity, normalizeGranularity, activeGranularity, GRANULARITY_LEVELS, DEFAULT_GRANULARITY,
   setFocus, focusLine,
   buildEvent, capPayload, summarizeEvents, matchDispatch, targetHash, renderRules, consentLines,
   watchlistLines, desktopSensorLines,
@@ -89,15 +89,17 @@ async function handleUserSubmit(now) {
   let state = updateSession(loadState(), now, target.orient);
 
   // Ambient by design: indicators live in the statusline HUD (`keel hud`), not injected per-turn.
-  // Two exceptions, both silent on an ordinary turn:
+  // One exception, silent on an ordinary turn:
   //
   // 1. Once per session, on turn 2+, only while nothing is active: prompt the agent to infer
   //    what this session is doing and PROPOSE a moment. It proposes; zenborg writes; keel only
   //    ever reads.
-  // 2. The granularity ceiling, whenever it no longer matches what THIS session was last told.
-  //    Session-start alone stopped being enough once the tray made the dial a click away: a
-  //    ceiling moved mid-session never reached the agent, which then answered at the level it
-  //    was told at open — indistinguishable from ignoring the dial entirely.
+  //
+  // The granularity ceiling injected here too until 2026-08-20. attently now owns response
+  // depth, and two depth contracts arriving on the same turn boundary contradicted each other:
+  // keel rationed one claim by length (a rung ladder under a ceiling), attently splits the
+  // answer by what each tier costs the reader. The dial, its CLI and the tray submenu survive
+  // but now reach no agent — see docs/decisions/2026-08-20-hand-response-depth-to-attently.md.
   const moments = loadMoments();
   const pointer = loadActiveMomentPointer();
   const moment = resolveActiveMoment(pointer, moments, loadAreas(), now);
@@ -117,12 +119,9 @@ async function handleUserSubmit(now) {
     state.inferNudgedTs = state.sessionStartTs;
     nudge = intentionNudge(todaysMoments(moments, now), input?.cwd);
   }
-  // Empty unless the ceiling moved since this session was last told (incl. the 04:00 lapse).
-  const gran = granularityNotice(state, input?.session_id, now);
-  state = gran.state;
   saveState(state);
   // The focus cue rides the same turn-boundary channel. Empty unless `keel focus` is on.
-  return emitText([nudge, gran.line, focusLine(state)].filter(Boolean).join("\n"));
+  return emitText([nudge, focusLine(state)].filter(Boolean).join("\n"));
 }
 
 async function handleSessionStart(now) {
@@ -160,12 +159,8 @@ async function handleSessionStart(now) {
     logHookEvent("intention_switched", now, input, { extra: switched.extra });
     state = { ...state, lastMomentId: switched.lastMomentId };
   }
-  // Always renders here (a fresh session has been told nothing yet) and records
-  // the telling, so the user-submit notice stays quiet until the dial moves.
-  const gran = granularityNotice(state, input?.session_id, now);
-  state = gran.state;
   saveState(state);
-  return emitText([...consent, intentionLine(moment), gran.line].filter(Boolean).join("\n"));
+  return emitText([...consent, intentionLine(moment)].filter(Boolean).join("\n"));
 }
 
 function cmdStatus(now) {
