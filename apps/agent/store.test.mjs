@@ -95,12 +95,14 @@ test("safeRedirect refuses schemes that execute", async () => {
   assert.equal(safeRedirect("/feed/"), "/feed/");
 });
 
-// `KEEL_DIR` resolves at module load, so these re-import against a scratch
-// subtree rather than the real rules directory.
+// Paths resolve at module load, so these re-import against a scratch vault.
+// MIGRATION STEP 5: the fixture moved from `keel/rules/*.json` to the vault's
+// `fences.json`. Only the store moved — the placeholder projection these two
+// tests pin is unchanged, so the assertions below are the ones Rafa wrote.
 async function loadTransformsFrom(dir, rule) {
-  process.env.KEEL_HOME = dir;
-  mkdirSync(join(dir, "rules"), { recursive: true });
-  writeJsonAtomic(join(dir, "rules", "r.json"), rule);
+  process.env.KAIROS_HOME = dir;
+  process.env.KEEL_HOME = join(dir, "keel");
+  writeJsonAtomic(join(dir, "fences.json"), { [rule.id]: rule });
   const m = await import(`./store.mjs?transforms=${Math.random()}`);
   return m.loadTransforms();
 }
@@ -272,4 +274,155 @@ test("loadArmed skips a disabled rule", async () => {
     },
   });
   assert.deepEqual(await loadArmedFrom(dir), {});
+});
+
+// ── Migration step 5: fences is the single store ──────────────────────────
+//
+// Slice E shipped the armed record reading two stores merged — `fences.json`
+// and keel's own `~/.kairos/keel/rules/*.json` — because zenborg had no
+// browser-scoped fence writer and a fences-only read would have reached no
+// browser at all. That writer now exists, so the second store is retired and
+// these are the tests that hold it retired.
+
+async function storeFrom(dir) {
+  process.env.KAIROS_HOME = dir;
+  process.env.KEEL_HOME = join(dir, "keel");
+  return await import(`./store.mjs?step5=${Math.random()}`);
+}
+
+test("the rules directory is no longer a rule store", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-step5-"));
+  // What used to arm a shield: a RuleSpec sitting in keel's own rules dir.
+  mkdirSync(join(dir, "keel", "rules"), { recursive: true });
+  writeJsonAtomic(join(dir, "keel", "rules", "legacy-block.json"), {
+    id: "legacy-block",
+    name: "Legacy",
+    domains: ["chess.com"],
+    primitives: [
+      {
+        kind: "cooldown",
+        enforcement: { at: "browser" },
+        duration: { type: "standing" },
+        unlockPath: { type: "wait" },
+      },
+    ],
+  });
+  const m = await storeFrom(dir);
+
+  // Nothing reads it any more, and nothing exports a way to.
+  assert.equal(m.loadRules, undefined);
+  assert.equal(m.RULES_DIR, undefined);
+  assert.deepEqual(m.loadArmed(), {});
+  assert.deepEqual(m.loadTransforms(), []);
+  assert.equal(m.loadBreakTarget(), null);
+});
+
+test("the two projections the extension actuates from are retired in favour of one", async () => {
+  // `loadArmed` is now the only browser projection. Two more existed because
+  // the policy pull and the armed push had different sources; they have the
+  // same source now, and a second projection of one store is a second answer
+  // waiting to disagree with the first.
+  const m = await storeFrom(mkdtempSync(join(tmpdir(), "keel-step5-two-")));
+  assert.equal(m.loadBlockDomains, undefined);
+  assert.equal(m.loadDwellGates, undefined);
+});
+
+test("loadArmed arms a browser fence zenborg wrote, and only that", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-step5-armed-"));
+  mkdirSync(join(dir, "keel", "rules"), { recursive: true });
+  writeJsonAtomic(join(dir, "keel", "rules", "legacy.json"), {
+    id: "legacy",
+    domains: ["youtube.com"],
+    primitives: [
+      { kind: "cooldown", duration: { type: "standing" }, unlockPath: { type: "wait" } },
+    ],
+  });
+  // The shape `hostBlockSeedRules` produces: browser scope, standing cooldown,
+  // out-of-band exit.
+  writeJsonAtomic(join(dir, "fences.json"), {
+    "seed-block-browser-chess.com": {
+      id: "seed-block-browser-chess.com",
+      name: "chess.com",
+      scope: {
+        surface: "browser",
+        domain: "chess.com",
+        matches: ["*://chess.com/*", "*://*.chess.com/*"],
+      },
+      deliveryProbability: 1,
+      primitives: [
+        {
+          kind: "cooldown",
+          enforcement: { at: "browser" },
+          duration: { type: "standing" },
+          unlockPath: { type: "out_of_band", note: "take it out of the profile" },
+        },
+      ],
+    },
+  });
+  const m = await storeFrom(dir);
+  const armed = m.loadArmed();
+  assert.deepEqual(Object.keys(armed), ["seed-block-browser-chess.com"]);
+  assert.deepEqual(armed["seed-block-browser-chess.com"].domains, ["chess.com"]);
+});
+
+test("resolveRuleDomains reads a browser RuleScope as well as the flat shape", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-step5-scope-"));
+  const m = await storeFrom(dir);
+  assert.deepEqual(
+    m.resolveRuleDomains({
+      scope: { surface: "browser", domain: "linkedin.com", matches: [] },
+    }),
+    ["linkedin.com"]
+  );
+  // Session and desktop reach no browser and yield nothing, rather than
+  // falling through to the flat shape and inventing a domain.
+  assert.deepEqual(
+    m.resolveRuleDomains({
+      scope: { surface: "session", paths: ["/x"] },
+      domains: ["linkedin.com"],
+    }),
+    []
+  );
+  assert.deepEqual(m.resolveRuleDomains({ domains: ["chess.com"] }), ["chess.com"]);
+});
+
+test("loadTransforms and loadBreakTarget read fences, not the rules directory", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-step5-rest-"));
+  writeJsonAtomic(join(dir, "areas.json"), {
+    a: { id: "a", name: "Leisure", emoji: "🎲", order: 0 },
+  });
+  writeJsonAtomic(join(dir, "fences.json"), {
+    "content-break": {
+      id: "content-break",
+      scope: { surface: "browser", domain: "youtube.com", matches: ["*://youtube.com/*"] },
+      areas: ["a"],
+      primitives: [
+        {
+          kind: "cooldown",
+          duration: { type: "seconds", baseSeconds: 3600 },
+          unlockPath: { type: "wait" },
+        },
+      ],
+    },
+    feed: {
+      id: "feed",
+      scope: { surface: "browser", domain: "linkedin.com", matches: ["*://linkedin.com/*"] },
+      primitives: [
+        {
+          kind: "transform",
+          targets: { primary: ".feed", fallbacks: [] },
+          replacement: { type: "hide" },
+        },
+      ],
+    },
+  });
+  const m = await storeFrom(dir);
+
+  const transforms = m.loadTransforms();
+  assert.equal(transforms.length, 1);
+  assert.deepEqual(transforms[0].domains, ["linkedin.com"]);
+
+  const target = m.loadBreakTarget();
+  assert.deepEqual(target.domains, ["youtube.com"]);
+  assert.equal(target.durationMs, 3600 * 1000);
 });

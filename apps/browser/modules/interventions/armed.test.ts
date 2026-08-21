@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   armedFor,
   armedGatesFor,
+  browserArmableHosts,
   browserStandingHosts,
   exitLine,
   gatesFrom,
@@ -173,6 +174,23 @@ describe("reading the cache", () => {
         }),
       })?.armed ?? {};
     expect(browserStandingHosts(resolver)).toEqual([]);
+  });
+
+  it("browserArmableHosts carries the timed cooldowns a gesture may arm, not the standing ones", () => {
+    // The big red button's candidate set. Step 5 moved this read off the policy
+    // mirror and onto the one store; a standing block is already held and is
+    // deliberately not offered to the gesture.
+    const timed =
+      parseArmed({
+        a: hostBlock(),
+        t: hostBlock({
+          ruleId: "watched",
+          domains: ["news.example.com"],
+          primitive: { kind: "cooldown", enforcement: "browser", standing: false },
+        }),
+      })?.armed ?? {};
+    expect(browserArmableHosts(timed)).toEqual(["news.example.com"]);
+    expect(browserArmableHosts(armed)).toEqual([]);
   });
 
   it("armedGatesFor returns only the gates covering the host", () => {

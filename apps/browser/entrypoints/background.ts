@@ -2,7 +2,6 @@ import { browser } from "wxt/browser";
 import { startActivityWriter } from "@/modules/activity/writer";
 import { syncBlocklistRules } from "@/modules/drogues/blocklist/sync";
 import { cooldownNextLapse, cooldowns } from "@/modules/friction/cooldown/store";
-import { standingDomains } from "@/modules/friction/policy/store";
 import { armBreak } from "@/modules/friction/cooldown/arm";
 import { armedCache } from "@/modules/interventions/store";
 import { flushToHost } from "@/modules/relay/client";
@@ -40,14 +39,15 @@ export default defineBackground(() => {
   // Registered synchronously so MV3 event wakeups re-attach listeners.
   startActivityWriter();
 
-  // ~/.keel/rules is the source of truth for the drogue, mirrored by the relay;
-  // project that mirror onto DNR dynamic rules on startup and on every change.
+  // The armed cache is the source of truth for what is blocked — the `fences`
+  // collection, pushed by the native host. Project it onto DNR dynamic rules on
+  // startup and re-project the moment it changes rather than waiting for the
+  // next flush: a fence declared in conversation should hold on the next
+  // navigation, not five minutes later.
+  //
+  // There used to be a second watcher here, on the policy mirror's standing
+  // list. Migration step 5 retired that store, so one watcher covers it.
   void syncBlocklistRules();
-  standingDomains.watch(() => void syncBlocklistRules());
-
-  // The armed cache is the record the app pushes. Re-project the moment it
-  // changes rather than waiting for the next flush: a fence declared in
-  // conversation should hold on the next navigation, not five minutes later.
   armedCache.watch(() => void syncBlocklistRules());
 
   // Any cooldown change re-projects the rules and re-arms the lapse alarm.

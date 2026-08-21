@@ -3,7 +3,7 @@
 // unprivileged writer. Chrome frames messages as a uint32 little-endian length
 // prefix followed by UTF-8 JSON. Max 1 MB/message (Chrome limit).
 
-import { appendBrowserEvents, loadArmed, loadWatchlist, loadAreas, loadAreaMap, saveAreaMap, loadBlockDomains, loadBreakTarget, loadDwellGates, loadLedger, loadMomentFriction, loadTransforms, readBrowserEventsSince } from "./store.mjs";
+import { appendBrowserEvents, loadArmed, loadWatchlist, loadAreas, loadAreaMap, saveAreaMap, loadBreakTarget, loadLedger, loadMomentFriction, loadTransforms, readBrowserEventsSince } from "./store.mjs";
 
 const MAX_MESSAGE_BYTES = 1024 * 1024;
 
@@ -143,18 +143,20 @@ export function runHost(stdin = process.stdin, stdout = process.stdout) {
       } else if (msg.type === "request_observe") {
         reply({ type: "observe", domains: loadWatchlist().observe });
       } else if (msg.type === "request_policy") {
-        // Policy pull: what the extension needs to enforce, derived from
-        // ~/.kairos/keel/rules/*.json plus the ledger classification. Domains only —
-        // the full RuleSpec stays host-side until the interpreter needs it.
-        const { standing, armable } = loadBlockDomains();
+        // Policy pull: the surrounding context the extension needs, derived from
+        // the ledger classification and the kernel's own collections.
+        //
+        // MIGRATION STEP 5 took three fields off this reply — `standing`,
+        // `armable` and `gates`. They were a second projection of the same rules
+        // the armed record already carries, and the two only had separate lives
+        // because they had separate sources: policy read keel's rules directory,
+        // armed read `fences`. One store means one projection, and a second
+        // answer to "what is in force" is a second answer waiting to disagree.
         const ledger = loadLedger();
         const observe = Object.keys(ledger).filter((d) => ledger[d] === "observe");
         reply({
           type: "policy",
-          standing,
-          armable,
           observe,
-          gates: loadDwellGates(),
           transforms: loadTransforms(),
           break: loadBreakTarget(),
           areas: loadAreas(),

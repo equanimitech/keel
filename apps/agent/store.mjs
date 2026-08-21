@@ -98,46 +98,36 @@ export function saveSnapshot(snap) {
   writeJsonAtomic(SNAPSHOT_PATH, snap);
 }
 
-// ── Rules (~/.kairos/keel/rules/*.json) ────────────────────────────────
-// One RuleSpec per file. The source of truth for policy: MCP authors here,
-// the tray reads it directly, the extension pulls it over the relay. Replaces
-// the three legacy lists (config.watchlist.windowed, the drogue seed, and
-// vice-blocklist.txt), which were the same concept in three grammars.
-export const RULES_DIR = join(KEEL_DIR, "rules");
+// ── Rules (the `fences` collection) ────────────────────────────────────
+//
+// MIGRATION STEP 5, "flip the readers". `~/.kairos/keel/rules/*.json` was the
+// rule store: one RuleSpec per file, authored by keel's MCP, read by the tray
+// and pushed to the extension. It is retired. Every rule this surface reads now
+// comes from `fences.json` at the vault root — the kernel record collection
+// `kairos/kernel/substrate.md` registers, written by zenborg and nobody else.
+//
+// Why the retirement had to wait for a writer: slice E shipped the armed record
+// reading BOTH stores merged, and said plainly why. zenborg's only fence writer
+// was `sessionFenceRule`, which produces `scope.surface: "session"` rules that
+// reach no browser, so a fences-only read would have shipped an inert feature.
+// zenborg now has `declareHostBlock`, `declareBrowserGate` and `seedHostBlocks`,
+// all of them browser-scoped, so the second store has nothing left to carry.
+//
+// What this costs, stated rather than discovered: a rule still sitting in the
+// old directory does nothing at all. Migrating those records into `fences` is a
+// deliberate act taken through zenborg's tools, not something this reader should
+// do quietly on the principal's behalf — a reader that adopted files it found
+// would be a second writer of a single-writer collection.
 
-/** Every declared rule, newest-name-first for stable ordering.
+/** Every rule in force, from the one store.
+ *
+ * Ordered by id for stability, where the directory reader ordered by filename.
  * @returns {any[]} */
-export function loadRules() {
-  try {
-    return readdirSync(RULES_DIR)
-      .filter((f) => f.endsWith(".json"))
-      .sort()
-      .map((f) => {
-        try { return JSON.parse(readFileSync(join(RULES_DIR, f), "utf8")); } catch { return null; }
-      })
-      .filter((r) => r !== null);
-  } catch {
-    return []; // No rules dir yet — fail open, never fail closed on policy.
-  }
-}
-
-/** Domains under enabled rules carrying a browser-enforced cooldown.
- * Standing cooldowns are always on; timed ones are armed per-surface, so this
- * returns the *candidate* set and the arming state decides what actually holds.
- * @returns {{ standing: string[], armable: string[] }} */
-export function loadBlockDomains() {
-  const standing = new Set();
-  const armable = new Set();
-  for (const rule of loadRules()) {
-    if (rule?.defaultEnabled === false) continue;
-    for (const p of rule?.primitives ?? []) {
-      if (p?.kind !== "cooldown") continue;
-      if ((p.enforcement?.at ?? "browser") !== "browser") continue;
-      const target = p.duration && "standing" in p.duration ? standing : armable;
-      for (const d of resolveRuleDomains(rule)) target.add(d);
-    }
-  }
-  return { standing: [...standing], armable: [...armable] };
+export function loadRuleSpecs() {
+  return Object.entries(loadFences())
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([, rule]) => rule)
+    .filter((r) => r !== null && typeof r === "object");
 }
 
 // ── Areas (kairos shared kernel) ────────────────────────────────
@@ -280,6 +270,20 @@ export function saveAreaMap(map) {
  * time, so a rule stays correct as the map grows.
  * @param {any} rule @returns {string[]} */
 export function resolveRuleDomains(rule) {
+  // `RuleScope` first, because a rule that carries one has said which surface it
+  // is for and that answer is not negotiable. A session or desktop scope reaches
+  // no browser and yields nothing — falling through to the flat shape would let
+  // a fence declared for a filesystem path block a domain it happens to name.
+  const scope = rule?.scope;
+  if (scope && typeof scope === "object" && "surface" in scope) {
+    if (scope.surface !== "browser") return [];
+    const domain = typeof scope.domain === "string" ? scope.domain.trim() : "";
+    return domain ? [domain] : [];
+  }
+
+  // The flat shape: keel's own rules named `domains` directly and `areas` for
+  // membership resolved at serve time, so a rule stays correct as the map grows.
+  // Kept because records written before `RuleScope` may still be in `fences`.
   const map = loadAreaMap();
   const out = new Set(rule?.domains ?? []);
   for (const areaId of rule?.areas ?? []) {
@@ -295,7 +299,7 @@ export function resolveRuleDomains(rule) {
  * @returns {{areas: {name: string, emoji: string}[], domains: string[], durationMs: number} | null} */
 export function loadBreakTarget() {
   const areas = loadAreas();
-  for (const rule of loadRules()) {
+  for (const rule of loadRuleSpecs()) {
     if (rule?.id !== "content-break" || rule?.defaultEnabled === false) continue;
     const cooldown = (rule.primitives ?? []).find((p) => p?.kind === "cooldown");
     if (!cooldown) continue;
@@ -394,53 +398,11 @@ export function projectFriction(frictionType) {
   return { type: "intention", prompt: "Still what you came for?" };
 }
 
-/** Dwell gates declared by enabled rules — what the extension needs to fire an
- * interstitial every N minutes of attended time.
- *
- * Both affordances travel with the gate. They used to be hard-coded in `gate/arm.ts`
- * ("Keep watching" / "Close the tab"), invisible only because the one live rule happens
- * to declare those exact strings. The fallbacks below are the same words, but they are
- * now a stated default in one place rather than a page-side constant that overrides
- * whatever the author wrote.
- *
- * @returns {{ruleId: string, domains: string[], everyMinutes: number, friction: any,
- *            proceed: {label: string, action: any}, abort: {label: string}}[]} */
-export function loadDwellGates() {
-  const out = [];
-  for (const rule of loadRules()) {
-    if (rule?.defaultEnabled === false) continue;
-    for (const p of rule?.primitives ?? []) {
-      if (p?.kind !== "gate" || p?.trigger?.type !== "dwell") continue;
-      const action = p.proceedAffordance?.action;
-      out.push({
-        ruleId: rule.id,
-        domains: resolveRuleDomains(rule),
-        everyMinutes: p.trigger.everyMinutes,
-        friction: projectFriction(p.frictionType),
-        proceed: {
-          label: p.proceedAffordance?.label || "Keep watching",
-          // `redirect` needs a destination; without one it is a continue wearing a
-          // different name, and a gate that claims to reroute and does not is the bug
-          // this function exists to stop shipping.
-          action:
-            action?.type === "redirect" && safeRedirect(action.to)
-              ? { type: "redirect", to: safeRedirect(action.to) }
-              : action?.type === "abort"
-                ? { type: "abort" }
-                : { type: "continue" },
-        },
-        abort: { label: p.abortAffordance?.label || "Close the tab" },
-      });
-    }
-  }
-  return out;
-}
-
 /** DOM transforms declared by enabled rules — the `transform` primitive, which was
  * typed in 2026-06 and left uninterpreted until now.
  *
  * Projected as data the content script can act on without the full RuleSpec, the same
- * bargain `loadDwellGates` makes: domains travel with the transform so the page can
+ * bargain the armed projection makes: domains travel with the transform so the page can
  * self-select, and the rule stays host-side.
  *
  * `replace` is not projected. It needs the template registry, which is its own
@@ -450,7 +412,7 @@ export function loadDwellGates() {
  * @returns {{ruleId: string, domains: string[], targets: {primary: string, fallbacks: string[]}, replacement: any}[]} */
 export function loadTransforms() {
   const out = [];
-  for (const rule of loadRules()) {
+  for (const rule of loadRuleSpecs()) {
     if (rule?.defaultEnabled === false) continue;
     for (const p of rule?.primitives ?? []) {
       if (p?.kind !== "transform") continue;
@@ -550,7 +512,7 @@ export function appendBrowserEvents(events, maxBytes = MAX_BROWSER_LOG_BYTES) {
   return written;
 }
 
-// ── The armed record (`fences.json` + keel's own rules) ─────────────────
+// ── The armed record (the `fences` collection) ──────────────────────────
 //
 // What is in force right now, projected into the shape the browser extension
 // can actuate from. `kairos/kernel/substrate.md` records why this exists as a
@@ -558,14 +520,13 @@ export function appendBrowserEvents(events, maxBytes = MAX_BROWSER_LOG_BYTES) {
 // will, so a process that can read the vault hands it the collection. No copy
 // on disk, so the one-writer rule still holds.
 //
-// TWO SOURCES, and the reason is migration rather than design. The kernel
-// collection is `fences.json` at the vault root, written by zenborg — the
-// design's `armed.json`, renamed on 2026-08-20 because a garden is fenced
-// rather than armed. keel's own `~/.kairos/keel/rules/*.json` is what actually
-// holds the shields today, and migration step 5 is where the readers flip. Both
-// carry `RuleSpec`, so one projection reads both, and the extension is spared
-// having to know which file a rule came from. `fences` wins on a collision,
-// because it is the collection the contract registers.
+// ONE SOURCE, as of migration step 5. It was two: `fences.json` at the vault
+// root, and keel's own `~/.kairos/keel/rules/*.json`, merged, because the second
+// was where the shields actually lived and the first had no browser-scoped
+// writer. zenborg has one now, so the merge is gone and the readers are flipped.
+// The design document calls this collection `armed.json`; `substrate.md` renamed
+// it `fences` on 2026-08-20 — a garden is tended and it is fenced — and the
+// contract is more recent than the spec, so the code follows the contract.
 //
 // The projection deliberately INVENTS NO EXIT. A cooldown with no `unlockPath`
 // or a gate with no `proceedAffordance` is shipped without one, and the
@@ -586,19 +547,6 @@ export function loadFences() {
   } catch {
     return {};
   }
-}
-
-/** Hosts a rule covers, across both the old flat shape and `RuleScope`.
- * A session- or desktop-scoped rule reaches no browser and yields none.
- * @returns {string[]} */
-function armedDomains(rule) {
-  const scope = rule?.scope;
-  if (scope && typeof scope === "object" && "surface" in scope) {
-    if (scope.surface !== "browser") return [];
-    const domain = typeof scope.domain === "string" ? scope.domain.trim() : "";
-    return domain ? [domain] : [];
-  }
-  return resolveRuleDomains(rule);
 }
 
 /** A cooldown's unlock path as the extension's one exit shape, or null when the
@@ -635,7 +583,7 @@ function projectProceed(proceedAffordance) {
 /** Every browser-actuable primitive of one rule, as armed entries.
  * @returns {{kind: string, entry: any}[]} */
 function armedEntriesFor(rule) {
-  const domains = armedDomains(rule);
+  const domains = resolveRuleDomains(rule);
   if (domains.length === 0) return [];
   const out = [];
   for (const p of rule?.primitives ?? []) {
@@ -679,7 +627,7 @@ function armedEntriesFor(rule) {
  * exactly what was delivered rather than only which rule declared it.
  * @returns {Record<string, any>} */
 export function loadArmed() {
-  const rules = [...loadRules(), ...Object.values(loadFences())];
+  const rules = loadRuleSpecs();
   /** @type {Record<string, any>} */
   const armed = {};
   for (const rule of rules) {

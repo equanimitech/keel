@@ -101,11 +101,19 @@ mode worth naming:
    `intervention_effective` is the read side's verdict and this surface never
    writes it.
 
-`ARMED_RULE_ID = 3` in `drogues/blocklist/sync.ts` is the DNR projection of
-browser-enforced standing cooldowns. It has its own rule id because the two
-mirrors refresh on different schedules; it collapses into `BLOCK_RULE_ID` at
-migration step 5, when `~/.kairos/keel/rules/*.json` stops being a second
-declared-rule store.
+**Migration step 5 collapsed the two mirrors into one, 2026-08-21.** There used
+to be a third DNR rule id in `drogues/blocklist/sync.ts`, because "what is
+blocked" had two answers: the policy mirror, projected host-side from
+`~/.kairos/keel/rules/*.json`, and the armed cache, pushed from `fences`. That
+second store is retired, so `BLOCK_RULE_ID` carries the armed cache and
+`COOLDOWN_RULE_ID` carries the locally-armed cooldown — which genuinely does
+refresh on a different schedule, being a gesture rather than a push.
+
+The same collapse happened to gates (`activity/writer.ts` reads
+`armedGatesFor` and nothing else) and to the big red button's candidate set
+(`friction/cooldown/arm.ts` reads `browserArmableHosts`). `friction/policy/`
+keeps only what is not a rule: transforms, the break target, areas, the area map
+and the moment's allow/deny pair.
 
 ## The hostile-page boundary
 

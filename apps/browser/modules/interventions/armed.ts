@@ -340,6 +340,31 @@ export function browserStandingHosts(armed: Armed): readonly string[] {
 }
 
 /**
+ * Hosts a *timed* browser cooldown may cover once armed.
+ *
+ * The candidate set, not the held set: a timed cooldown is armed by a gesture —
+ * the popup, the keyboard, the tray — and the arming state decides what actually
+ * holds. This says which hosts a rule has made available to that gesture.
+ *
+ * Migration step 5 moved this read here from the policy mirror
+ * (`local:policy:armable`), which was projected host-side from
+ * `~/.kairos/keel/rules/*.json`. Same question, one store.
+ */
+export function browserArmableHosts(armed: Armed): readonly string[] {
+  const out = new Set<string>();
+  for (const entry of Object.values(armed)) {
+    const p = entry.primitive;
+    if (p.kind !== "cooldown" || p.standing || p.enforcement !== "browser") {
+      continue;
+    }
+    for (const domain of entry.domains) {
+      out.add(domain);
+    }
+  }
+  return [...out];
+}
+
+/**
  * A gate's exit, narrowed to the three actions an interstitial can offer.
  *
  * `wait`, `delay`, `intention` and `out_of_band` are cooldown vocabulary — a

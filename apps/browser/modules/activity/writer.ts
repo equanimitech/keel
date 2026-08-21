@@ -36,8 +36,7 @@ import {
   validateSensorMessage,
 } from "../sensors/events";
 import { observeDomains } from "../watchlist/store";
-import { dwellGates } from "../friction/policy/store";
-import { evaluateGates, gatesFor } from "../friction/gate/decide";
+import { evaluateGates } from "../friction/gate/decide";
 import { evaluateMomentGate } from "../friction/gate/moment";
 import { armedGatesFor } from "../interventions/armed";
 import { armedCache } from "../interventions/store";
@@ -230,16 +229,14 @@ export function startActivityWriter(): void {
         .getValue()
         .then(async (observe) => ({
           observed: sensorAllowed(domain, observe),
-          // A domain is gated if EITHER store says so. The armed cache is
-          // consulted here as well as in the poll, or a fence declared purely
-          // through the app would never arm its page in the first place.
+          // The armed cache is consulted here as well as in the poll, or a
+          // fence would never arm its page in the first place. One store since
+          // migration step 5: the policy mirror's gate list came from
+          // `~/.kairos/keel/rules/*.json`, which is retired.
           gate:
             domain === null
               ? null
-              : ([
-                  ...gatesFor(await dwellGates.getValue(), domain),
-                  ...armedGatesFor(await armedCache.getValue(), domain),
-                ][0] ?? null),
+              : (armedGatesFor(await armedCache.getValue(), domain)[0] ?? null),
         }))
         .catch(() => ({ observed: false, gate: null }));
     }
@@ -279,14 +276,11 @@ export function startActivityWriter(): void {
           // Every gate on the domain, not the first — see `evaluateGates`. A second
           // rule used to be dropped on the floor here.
           //
-          // The armed cache joins the same list rather than getting a branch of
-          // its own: an armed gate and a policy gate are one primitive arriving
-          // down two transports, and escalation across them is just more rules.
-          // The read is local, so the hot path makes no round trip.
-          return evaluateGates([
-            ...gatesFor(await dwellGates.getValue(), domain),
-            ...armedGatesFor(await armedCache.getValue(), domain),
-          ]);
+          // One list, from one store. Slice E unioned the armed cache with the
+          // policy mirror because the two carried different rules from different
+          // files; step 5 retired the second file, so the union has nothing left
+          // to add. The read is local, so the hot path makes no round trip.
+          return evaluateGates(armedGatesFor(await armedCache.getValue(), domain));
         })
         .then((verdict) => {
           // The delivery, recorded here rather than in the page for the same
