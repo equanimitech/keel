@@ -4,6 +4,7 @@ import { syncBlocklistRules } from "@/modules/drogues/blocklist/sync";
 import { cooldownNextLapse, cooldowns } from "@/modules/friction/cooldown/store";
 import { standingDomains } from "@/modules/friction/policy/store";
 import { armBreak } from "@/modules/friction/cooldown/arm";
+import { armedCache } from "@/modules/interventions/store";
 import { flushToHost } from "@/modules/relay/client";
 
 const COOLDOWN_ALARM = "keel-cooldown-lapse";
@@ -43,6 +44,11 @@ export default defineBackground(() => {
   // project that mirror onto DNR dynamic rules on startup and on every change.
   void syncBlocklistRules();
   standingDomains.watch(() => void syncBlocklistRules());
+
+  // The armed cache is the record the app pushes. Re-project the moment it
+  // changes rather than waiting for the next flush: a fence declared in
+  // conversation should hold on the next navigation, not five minutes later.
+  armedCache.watch(() => void syncBlocklistRules());
 
   // Any cooldown change re-projects the rules and re-arms the lapse alarm.
   void scheduleCooldownLapse();

@@ -77,7 +77,15 @@ Dependencies flow inward: Domain -> Application -> Infrastructure -> UI.
 - **`apps/browser`**: activity writer (coarse events) + watchlist-gated per-domain sensors (key-action completions) + `modules/friction/` (the gate, the cooldown, the policy) + the blocklist drogue (commitment device)
 - **`apps/tray`**: macOS menubar app (Tauri) — the desktop activity-log writer. (The frozen `apps/desktop` compass was removed 2026-06-13; archived at tag `desktop-archive-2026-06-13`, reusable gems mapped in `docs/decisions/2026-06-13-remove-desktop-preserve-compass-gems.md`.)
 
-**Cross-surface transport:** the browser extension relays events (`modules/relay`) to `apps/agent/native-host.mjs` — a command-less, append-only, schema-validating native-messaging host that writes to `~/.kairos/keel/log/`. Chrome frames messages with a uint32 LE length prefix, 1 MB max; responses are chunked to stay inside it.
+**Cross-surface transport:** the browser extension relays events (`modules/relay`) to `apps/agent/native-host.mjs`, a schema-validating native-messaging host that writes to `~/.kairos/keel/log/`. Chrome frames messages with a uint32 LE length prefix, 1 MB max; responses are chunked to stay inside it.
+
+That host used to be described here as **command-less and append-only**, and that description is stale rather than a constraint. It answers questions (`request_observe`, `request_policy`, `request_armed`, `request_events`), it writes `area-map.json` on `set_area`, and since 2026-08-21 it **pushes the armed record**. What is actually load-bearing survives unchanged and is worth stating in its own words:
+
+- **the extension writes nothing but events**, and only append;
+- **every inbound message is validated** before anything is written, because the extension is untrusted (`validateInbound`, `isValidEvent`);
+- **the host is an unprivileged reader of the vault**, never a writer of the kernel's collections.
+
+`kairos/kernel/substrate.md` records why the push exists: the extension has no filesystem access and never will, so it takes a **pusher rather than a loader**. Pushing is a read with extra steps, not a second writer — no copy lands on disk, so one-writer-per-collection still holds.
 
 ## Privacy posture (load-bearing, not aspirational)
 
@@ -102,6 +110,24 @@ The load-bearing invariant, enforced in `@keel/domain` types rather than at
 runtime: **a tide (ambient observation) may arm a `gate`; it may never arm a
 `cooldown`.** `AmbientRule.primitives` is `Exclude<PrimitiveSpec, CooldownSpec>`,
 so an imposed lock cannot be constructed. Locks are self-invoked only.
+
+- **2026-08-21** — the extension gained an **armed cache**
+  (`apps/browser/modules/interventions/`), the browser end of slice E of
+  `kairos/docs/superpowers/specs/2026-08-18-the-garden-absorbs-keel-design.md`.
+  The app decides what is armed and pushes the record; the extension decides
+  when it fires and actuates from local storage, so nothing in the hot path
+  makes a round trip. Deliveries are **completions in `logs`**
+  (`intervention_shown`, `intervention_dismissed`,
+  `intervention_clicked_through`) — there is no `interventions/` collection,
+  because one fact with two homes is the drift that project exists to remove.
+
+  That slice also **reverses the restricted category above** on the armed path:
+  a rule may arm any primitive, and what protects the person is invariant 6 —
+  every armed thing carries an exit. `parseArmed` refuses an entry with no
+  reachable exit, and the popup renders the exit of everything in force. The
+  `AmbientRule` type in `@keel/domain` still encodes the old restriction and is
+  scheduled for retirement with `packages/domain`; until then the two paths
+  disagree, and the armed one is the design's.
 
 ## kairos — the shared kernel
 

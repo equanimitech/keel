@@ -177,3 +177,47 @@ body {
   color: var(--quiet);
   opacity: 0.75;
 }
+
+/* ── In force ────────────────────────────────────────────────── */
+/* What is armed right now, and the way out of each. Quiet by design: this is
+   a reference you go looking for, not a thing that competes with the one
+   gesture above it. The exit is always rendered — a fence with no visible way
+   out is a bug, not a stricter shield. */
+.popup-armed {
+  border-top: 1px solid var(--rule);
+  padding: 12px 0 0;
+}
+
+.popup-armed-title {
+  margin: 0 0 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--quiet);
+}
+
+.popup-armed-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.popup-armed-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.popup-armed-name {
+  font-size: 13px;
+}
+
+.popup-armed-exit {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--quiet);
+}

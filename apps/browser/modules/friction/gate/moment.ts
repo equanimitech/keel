@@ -24,9 +24,20 @@ export const momentGateFiredAt = storage.defineItem<Record<string, number>>(
   { fallback: {} }
 );
 
+/**
+ * The moment gate's rule id.
+ *
+ * It has no `RuleSpec` behind it — the moment's own allow/deny pair is what
+ * arms it — but a delivery still has to be attributable, or its outcome cannot
+ * be settled against anything. A stable literal is the honest name for "the
+ * moment said so".
+ */
+export const MOMENT_GATE_RULE_ID = "moment-friction";
+
 export interface MomentGateVerdict {
   readonly fire: boolean;
   readonly dwellMs: number;
+  readonly ruleId: string;
   readonly prompt: string;
 }
 
@@ -62,6 +73,7 @@ export async function evaluateMomentGate(
   return {
     fire: true,
     dwellMs: 0,
+    ruleId: MOMENT_GATE_RULE_ID,
     prompt: "This is outside what the moment you're in is about. Still what you came for?",
   };
 }

@@ -97,3 +97,33 @@ test("browserLogFileName buckets by local date with .browser surface", () => {
   const name = browserLogFileName(1781364354057);
   assert.match(name, /^\d{4}-\d{2}-\d{2}\.browser\.jsonl$/);
 });
+
+test("accepts request_armed — the push the extension actuates from", () => {
+  assert.deepEqual(validateInbound({ type: "request_armed" }), { type: "request_armed" });
+});
+
+test("accepts the three reserved intervention kinds", () => {
+  // Reserved in packages/domain/docs/event-taxonomy.md under P5. A delivery is
+  // a completion in `logs`, so the host has to let it through or the extension
+  // writes an outcome that never reaches the store.
+  const kinds = [
+    "intervention_shown",
+    "intervention_dismissed",
+    "intervention_clicked_through",
+  ];
+  const out = validateInbound({
+    type: "events",
+    events: kinds.map((kind, i) => ({ ...validEvent, id: `i${i}`, kind })),
+  });
+  assert.deepEqual(out.events.map((e) => e.kind), kinds);
+});
+
+test("does not accept intervention_effective from the extension", () => {
+  // It is settleProximalOutcome's verdict, derived read-side over the three
+  // above. A surface that could assert it would be grading its own homework.
+  const out = validateInbound({
+    type: "events",
+    events: [{ ...validEvent, id: "x", kind: "intervention_effective" }],
+  });
+  assert.deepEqual(out.events, []);
+});

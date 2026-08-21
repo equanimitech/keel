@@ -21,6 +21,8 @@ const POLL_MS = 30_000;
 interface GateVerdictMessage {
   readonly fire?: boolean;
   readonly dwellMs?: number;
+  /** Which rule fired. Sent back with the settlement so the two join. */
+  readonly ruleId?: string;
   readonly friction?: GateFriction;
   readonly proceed?: { label?: string; action?: { type?: string; to?: string } };
   readonly abort?: { label?: string };
@@ -60,6 +62,25 @@ export function armDwellGate(): void {
       abortLabel: verdict.abort?.label ?? "Close the tab",
     });
     showing = false;
+    // Report how it ended. The background writes the completion — the page is
+    // untrusted, so it names the rule and the choice and nothing else; the
+    // domain comes from the browser-attested sender tab on the other side.
+    //
+    // The `intervention_shown` half was already written when the verdict fired,
+    // so a page that never gets here leaves a delivery with no settlement,
+    // which reads as the abandonment it was rather than as nothing happening.
+    if (verdict.ruleId !== undefined) {
+      void browser.runtime
+        .sendMessage({
+          type: "keel-intervention-settled",
+          ruleId: verdict.ruleId,
+          proceeded,
+        })
+        .catch(() => {
+          // Background asleep. The shown stands; the settlement is lost, and a
+          // settlement invented here would be worse than a missing one.
+        });
+    }
     // A declared `redirect` now actually reroutes. It used to be parsed, stored, and
     // ignored — every proceed was a `continue`.
     const action = verdict.proceed?.action;

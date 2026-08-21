@@ -37,8 +37,16 @@ import {
 } from "../sensors/events";
 import { observeDomains } from "../watchlist/store";
 import { dwellGates } from "../friction/policy/store";
-import { evaluateGates, gateFor, gatesFor } from "../friction/gate/decide";
+import { evaluateGates, gatesFor } from "../friction/gate/decide";
 import { evaluateMomentGate } from "../friction/gate/moment";
+import { armedGatesFor } from "../interventions/armed";
+import { armedCache } from "../interventions/store";
+import {
+  interventionEvent,
+  isSettlement,
+  settlementKind,
+  type InterventionKind,
+} from "../interventions/events";
 import type { Runtime } from "wxt/browser";
 
 type WriteFn = (
@@ -57,6 +65,31 @@ const routeByTab = storage.defineItem<Record<number, string | null>>("session:ac
  */
 export function startActivityWriter(): void {
   const sessionId = crypto.randomUUID();
+
+  /**
+   * Record one delivery event.
+   *
+   * Goes through `interventionEvent` rather than `write` so the payload shape
+   * has exactly one home — the same reason the sensor channel validates in one
+   * place. Fail-open like every other write: a dropped event must never break
+   * the browsing session, and a gate that fired still fired.
+   */
+  const writeDelivery = (
+    kind: InterventionKind,
+    fields: { readonly domain: string; readonly ruleId: string; readonly primitive: "gate" | "cooldown" }
+  ): void => {
+    void appendEvent(
+      interventionEvent({
+        kind,
+        ruleId: fields.ruleId,
+        domain: fields.domain,
+        primitive: fields.primitive,
+        id: crypto.randomUUID(),
+        ts: Date.now(),
+        sessionId,
+      })
+    );
+  };
 
   const write: WriteFn = (kind, payload, durationMs) => {
     // Fail-open: appendEvent swallows storage errors; a dropped event
@@ -197,7 +230,16 @@ export function startActivityWriter(): void {
         .getValue()
         .then(async (observe) => ({
           observed: sensorAllowed(domain, observe),
-          gate: domain === null ? null : gateFor(await dwellGates.getValue(), domain),
+          // A domain is gated if EITHER store says so. The armed cache is
+          // consulted here as well as in the poll, or a fence declared purely
+          // through the app would never arm its page in the first place.
+          gate:
+            domain === null
+              ? null
+              : ([
+                  ...gatesFor(await dwellGates.getValue(), domain),
+                  ...armedGatesFor(await armedCache.getValue(), domain),
+                ][0] ?? null),
         }))
         .catch(() => ({ observed: false, gate: null }));
     }
@@ -236,9 +278,45 @@ export function startActivityWriter(): void {
           }
           // Every gate on the domain, not the first — see `evaluateGates`. A second
           // rule used to be dropped on the floor here.
-          return evaluateGates(gatesFor(await dwellGates.getValue(), domain));
+          //
+          // The armed cache joins the same list rather than getting a branch of
+          // its own: an armed gate and a policy gate are one primitive arriving
+          // down two transports, and escalation across them is just more rules.
+          // The read is local, so the hot path makes no round trip.
+          return evaluateGates([
+            ...gatesFor(await dwellGates.getValue(), domain),
+            ...armedGatesFor(await armedCache.getValue(), domain),
+          ]);
+        })
+        .then((verdict) => {
+          // The delivery, recorded here rather than in the page for the same
+          // reason the firing is: a content script that could decline to report
+          // would earn a free pass by refreshing. `intervention_shown` is a
+          // completion in `logs` — there is no second collection.
+          if (verdict.fire && verdict.ruleId !== undefined) {
+            writeDelivery("intervention_shown", {
+              domain,
+              ruleId: verdict.ruleId,
+              primitive: "gate",
+            });
+          }
+          return verdict;
         })
         .catch(() => ({ fire: false }));
+    }
+
+    // How the delivery ended. The page reports which rule and whether the
+    // person proceeded; the domain still comes from the browser-attested
+    // sender tab, exactly as the sensor channel does.
+    if (isSettlement(message)) {
+      if (domain !== null) {
+        writeDelivery(settlementKind(message.proceeded), {
+          domain,
+          ruleId: message.ruleId,
+          primitive: "gate",
+        });
+      }
+      return;
     }
 
     const validated = validateSensorMessage(message);
