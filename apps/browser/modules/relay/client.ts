@@ -25,7 +25,7 @@
  * Fail-open throughout. Pure helpers (chunkEvents/unacked) are unit-tested; the
  * connectNative wiring is integration.
  */
-import type { ActivityEvent } from "@keel/domain";
+import type { ActivityEvent } from "../domain";
 import { readAllEvents, deleteEventsByIds } from "../activity/log";
 import { replaceObserveDomains } from "../watchlist/store";
 import { replacePolicy } from "../friction/policy/store";
@@ -67,7 +67,7 @@ export async function setArea(domain: string, areaId: string): Promise<boolean> 
  * Ask the store what happened since `since`.
  *
  * Returns raw events; the caller runs `bouts()` over them. The host streams
- * rather than computing because `@keel/domain` is TypeScript and the agent
+ * rather than computing because the domain module is TypeScript and the agent
  * surface is plain JS — so the one dwell implementation stays in one place,
  * and the cost is a few MB over a channel that is already local.
  *

@@ -1,14 +1,15 @@
 /**
- * @keel/domain — Shared domain types for the keel platform.
+ * keel domain: the pure attention substrate the extension writes and reads.
  *
- * The log is the product: one append-only ActivityEvent stream per
- * surface, one event grammar (docs/event-taxonomy.md), read-side
- * derivations later (slice E). The intervention layer was retired on
- * 2026-06-12 (docs/decisions/2026-06-12-retire-the-intervention-layer-…)
- * — it returns as a separate module (P5) built on personal baselines.
+ * This was `@keel/domain`, a workspace package shared by three surfaces. Two of
+ * them are gone: the tray was replaced by zenborg's observer and the agent never
+ * imported TypeScript. The extension is the sole consumer, so the package was
+ * inlined here on 2026-08-21 (slice B, step 6) and the modules nothing imported
+ * (`rules.ts`, `tide.ts`, `areas.ts`) went with it. The event-taxonomy
+ * contract and the read-side pitfalls moved to `docs/` at the repo root.
  *
- * Design rules:
- * - Vanilla TypeScript only (no fp-ts, no React, no Tauri, no Chrome APIs)
+ * Design rules, unchanged:
+ * - Vanilla TypeScript only (no React, no Chrome APIs)
  * - All types are readonly / immutable
  * - Factory functions for construction, never classes
  * - No side effects — types and pure functions only
@@ -24,48 +25,6 @@ export { ROUTE_REGISTRY, normalizeRoute } from "./route.js";
 // ── Bouts (read-side behavioral unit; the one dwell methodology) ─
 export type { Bout, Run } from "./bouts.js";
 export { bouts, runs, BOUT_GAP_MS, SEGMENT_CAP_MS, RUN_GAP_MS, MIN_RUN_MS } from "./bouts.js";
-
-// ── Tides (observational reading over bouts — never a protocol) ──
-export type {
-  DomainClass,
-  DomainClassifier,
-  TideLabel,
-  Absorption,
-  TideThresholds,
-  TideReading,
-} from "./tide.js";
-export { tide, classifierFromLedger, DEFAULT_THRESHOLDS } from "./tide.js";
-
-// ── Rules (friction authoring unit; primitive-contracts.md) ──────
-export type {
-  RuleId,
-  Rule,
-  AmbientRule,
-  SelfArmedRule,
-  PrimitiveSpec,
-  AmbientPrimitive,
-  GateSpec,
-  GateTrigger,
-  GateFriction,
-  CooldownSpec,
-  CooldownTrigger,
-  Enforcement,
-  TransformSpec,
-  ObserveSpec,
-  ScheduleSpec,
-  InterceptSpec,
-  ActuateSpec,
-  Template,
-  ReactiveBinding,
-  ConditionExpr,
-  DataReference,
-  SelectorChain,
-  BehavioralMechanism,
-  FadeEligibility,
-  Validated,
-  RuleWarning,
-} from "./rules.js";
-export { createRule, createRuleId, warningsFor, cooldownDuration } from "./rules.js";
 
 // ── Moment friction (allow / deny, scoped to the active moment) ──
 export type { MomentFriction, MomentVerdict } from "./moment-friction.js";

@@ -11,7 +11,7 @@
  * service worker, so the export path reads the same DB directly.
  */
 
-import type { ActivityEvent } from "@keel/domain";
+import type { ActivityEvent } from "../domain";
 
 const DB_NAME = "keel-log";
 const DB_VERSION = 1;

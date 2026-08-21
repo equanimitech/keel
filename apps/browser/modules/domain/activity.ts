@@ -23,7 +23,7 @@ export type ActivitySurface = "agent" | "desktop" | "browser" | "garmin";
  * desktop: app_switched, idle_start…; browser: tab_activated, navigation…).
  * Kinds accrete; they are not centrally enumerated. They DO conform to one
  * grammar — spans, switches, completions — defined in
- * `packages/domain/docs/event-taxonomy.md` (the writers' contract).
+ * `docs/event-taxonomy.md` (the writers' contract).
  */
 export type ActivityEventKind = string;
 

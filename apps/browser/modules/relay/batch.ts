@@ -2,7 +2,7 @@
  * Pure relay batching helpers — split from client.ts so unit tests can import
  * them without loading the chrome-coupled flush path (wxt storage side-effects).
  */
-import type { ActivityEvent } from "@keel/domain";
+import type { ActivityEvent } from "../domain";
 
 export function chunkEvents(events: readonly ActivityEvent[], size: number): ActivityEvent[][] {
   const out: ActivityEvent[][] = [];

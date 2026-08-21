@@ -34,7 +34,7 @@ sit. It reads the series already fetched, so it costs no extra call.
 Bin semantics, the completeness rule, and the full list of what is deliberately
 **not** synced (badges and challenges, the athletic performance stack, nutrition
 and weigh-ins, splits and FIT files) are specified in
-`packages/domain/docs/event-taxonomy.md`.
+`docs/event-taxonomy.md`.
 
 ## Cost and privacy
 

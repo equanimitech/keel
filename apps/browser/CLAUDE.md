@@ -10,19 +10,16 @@ returned on **2026-08-05** as the friction interpreter, built on `RuleSpec`
 (`docs/primitive-contracts.md`) and the accumulated baselines — not as the old
 shield layer.
 
-**The invariant, enforced in `@keel/domain` types, not at runtime:** a tide
-(ambient observation) may arm a `gate`; it may never arm a `cooldown`.
-`AmbientRule.primitives` is `Exclude<PrimitiveSpec, CooldownSpec>`, so an
-imposed lock cannot be constructed. Locks are self-invoked only.
+**The old invariant is gone, and so is the type that held it.** A tide used to
+be forbidden from arming a `cooldown`: `AmbientRule.primitives` was
+`Exclude<PrimitiveSpec, CooldownSpec>`, so an imposed lock could not be
+constructed. That restriction was reversed on the armed path on 2026-08-21, and
+`rules.ts` was deleted with `packages/domain` on the same day.
 
-**That restriction is reversed on the armed path, 2026-08-21.** A rule may arm
-any primitive, teeth included, because a system that can only ever post a notice
-has no consequence. What protects the person moved from authorship to exit:
-**invariant 6 — every armed thing can be got out of** — and it is the whole of
-the guarantee. `modules/interventions/armed.ts` refuses any pushed entry with no
-reachable exit, and the popup renders the exit of everything in force. The
-`AmbientRule` type above still encodes the old restriction; it retires with
-`packages/domain`.
+What protects the person moved from authorship to exit: **invariant 6 — every
+armed thing can be got out of** — and it is the whole of the guarantee.
+`modules/interventions/armed.ts` refuses any pushed entry with no reachable
+exit, and the popup renders the exit of everything in force.
 
 ---
 
@@ -69,7 +66,7 @@ generic DOM shape (a finished game) and live in `adapters.ts` as data. The
 sensor content script runs on all pages but does NOTHING (no observers) unless
 the background's arm handshake confirms the domain is on the observe tier.
 
-Event vocabulary and grammar: `packages/domain/docs/event-taxonomy.md`. The
+Event vocabulary and grammar: `docs/event-taxonomy.md`. The
 writer emits coarse events for every domain (tab switches, navigations,
 focus/idle spans); sensors add key-action completions only for domains on the
 watchlist's observe tier.

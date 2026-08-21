@@ -175,9 +175,9 @@ export function runHost(stdin = process.stdin, stdout = process.stdout) {
       } else if (msg.type === "request_events") {
         // The store answers questions about itself. Surfaces query rather than
         // remember, so there is exactly one history and no copy to drift.
-        // Raw events, not a computed rollup: `bouts()` is TypeScript in
-        // @keel/domain and this host is plain JS, so the caller computes and
-        // the one dwell implementation stays in one place.
+        // Raw events, not a computed rollup: `bouts()` is TypeScript, living in
+        // apps/browser/modules/domain, and this host is plain JS, so the caller
+        // computes and the one dwell implementation stays in one place.
         const events = readBrowserEventsSince(msg.since);
         for (let i = 0; i < events.length; i += QUERY_CHUNK) {
           reply({

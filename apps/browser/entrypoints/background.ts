@@ -29,7 +29,7 @@ async function scheduleCooldownLapse(): Promise<void> {
  *
  * - Activity writer: coarse events for every domain (tab switches,
  *   navigations, focus/idle spans) + deep sensor events for watchlist
- *   observe-tier domains. See packages/domain/docs/event-taxonomy.md.
+ *   observe-tier domains. See docs/event-taxonomy.md.
  * - Blocklist drogue: explicitly-consented precommitment (DNR rules).
  * - Cooldown: the `cooldown` primitive in flight (primitive-contracts.md
  *   §Contract 3). Self-invoked only — a tide can never arm one, which is

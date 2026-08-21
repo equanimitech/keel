@@ -6,16 +6,12 @@
   "packageManager": "pnpm@10.7.0",
   "scripts": {
     "dev:browser": "pnpm --filter @keel/browser dev",
-    "dev:tray": "pnpm --filter @keel/tray dev",
     "build:browser": "pnpm --filter @keel/browser build",
     "deploy:browser": "pnpm --filter @keel/browser run deploy",
-    "build:tray": "pnpm --filter @keel/tray bundle",
-    "install:tray": "./scripts/install-tray.sh",
-    "check:tray": "node scripts/tray-title-health.mjs",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "changeset": "changeset",
-    "version-packages": "changeset version && node scripts/sync-versions.js",
+    "version-packages": "changeset version",
     "release": "changeset publish"
   },
   "devDependencies": {

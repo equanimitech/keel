@@ -2,14 +2,14 @@
  * Gate decision — the effectful half. Reads the local event log, computes
  * dwell, and answers "should this page be gated right now?".
  *
- * Dwell is computed with `bouts()` from @keel/domain, deliberately: it is the
+ * Dwell is computed with `bouts()` from the domain module, deliberately: it is the
  * same function `tide` and every retrospective read through, so the number the
  * gate acts on is the number the analysis reports. A second dwell
  * implementation here would be a second answer to "how long was I on YouTube",
  * and the two would drift.
  */
 
-import { bouts, createDomain } from "@keel/domain";
+import { bouts, createDomain } from "../../domain";
 import { startOfLocalDay } from "@/modules/activity/events";
 import { readEventsSince } from "@/modules/activity/log";
 import { storage } from "wxt/storage";

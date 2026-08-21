@@ -10,7 +10,7 @@ polls. Reads Garmin Connect via garminconnect (garth tokens already cached in
 ~/.garminconnect — no credentials live here), and appends taxonomy-conformant
 ActivityEvents to ~/.kairos/keel/log/YYYY-MM-DD.garmin.jsonl.
 
-Kinds (all completions, per packages/domain/docs/event-taxonomy.md):
+Kinds (all completions, per docs/event-taxonomy.md):
   workout_completed    ts = activity start,  durationMs = elapsed
   sleep_recorded       ts = sleep end,       durationMs = time asleep
   body_sampled         ts = end of the hour, durationMs = 1h  (rollup)

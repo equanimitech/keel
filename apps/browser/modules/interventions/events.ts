@@ -13,10 +13,10 @@
  * Grammar: each is a **completion** (past tense), carries no `durationMs`
  * because no interval was measured, and carries domains only.
  *
- * Contract: `packages/domain/docs/event-taxonomy.md`.
+ * Contract: `docs/event-taxonomy.md`.
  */
 
-import type { ActivityEvent } from "@keel/domain";
+import type { ActivityEvent } from "../domain";
 import { buildBrowserEvent } from "../activity/events";
 
 /**

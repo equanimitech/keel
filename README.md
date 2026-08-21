@@ -2,7 +2,7 @@
 
 **See where your attention goes — and steer it from compulsion toward flourishing.**
 
-keel makes your attention visible: where your time goes, how your focus fragments — privately, on your own device. That awareness is the first step; gentle steering toward what helps you flourish comes later, built on your own baselines. A pnpm monorepo: capabilities × surfaces over one shared domain.
+keel makes your attention visible: where your time goes, how your focus fragments — privately, on your own device. That awareness is the first step; gentle steering toward what helps you flourish comes later, built on your own baselines. A pnpm monorepo of two surfaces.
 
 ## Surfaces
 
@@ -10,11 +10,11 @@ keel is named by a capability × surface grammar — one core, many edges:
 
 - **keel agent** (`apps/agent`) — a Claude Code surface: an activity-log writer + HUD. Gate-free since 2026-08-18; it observes and reports, and denies nothing. Ships as a Claude Code plugin.
 - **keel browser** (`apps/browser`) — a Chrome extension (WXT): an activity writer (coarse events) + watchlist-gated per-domain sensors (key-action completions) + the blocklist drogue, a commitment device.
-- **keel tray** (`apps/tray`) — a macOS menubar app (Tauri, no windows): the desktop activity-log writer. Ships as "keel".
+**keel tray** was the third surface, a macOS menubar app (Tauri) that wrote desktop activity. It was **deleted on 2026-08-21**; zenborg's observer replaces it, and it ships off until turned on. Between the two, desktop activity is not being logged.
 
-## Shared domain (`packages/domain`)
+## The domain (`apps/browser/modules/domain`)
 
-Pure TypeScript: the `ActivityEvent` log substrate, the read-side derivations built on it (bouts and runs, the tide, areas, routes), the `RuleSpec` primitives the friction layer executes, and the event-taxonomy contract the surfaces write against. No runtime dependencies, no fp-ts, no framework — types and pure functions only.
+Pure TypeScript: the `ActivityEvent` log substrate, the read-side derivations built on it (bouts and runs, routes), and the value objects. No runtime dependencies, no fp-ts, no framework — types and pure functions only. This was the `@keel/domain` workspace package until 2026-08-21; with two of its three consumers gone it was inlined into the third, and the modules nothing imported (`rules.ts`, `tide.ts`, `areas.ts`) were deleted rather than moved. The writers' contract is `docs/event-taxonomy.md`.
 
 ## kairos
 
@@ -24,31 +24,31 @@ keel is one instrument of **kairos**, not a standalone product: keel reads what 
 
 The shield / signal / budget **intervention** layer was retired on 2026-06-12 (see `docs/decisions/`), and keel became observability-first: accumulate raw attention signal, model later. The blocklist drogue — a commitment device — was the retirement's lone survivor.
 
-Interventions came back on 2026-08-05, rebuilt on that accumulated signal, as the **friction interpreter** (`apps/browser/modules/friction/`). Rules are data (`RuleSpec`, see `docs/primitive-contracts.md`), the dwell gate is the one actuator, and everything is scoped by area. The invariant that makes it safe is a type, not a runtime check: ambient observation may arm a *gate*, never a *cooldown* — locks are self-invoked only.
+Interventions came back on 2026-08-05, rebuilt on that accumulated signal, as the **friction interpreter** (`apps/browser/modules/friction/`). Rules are data (see `docs/primitive-contracts.md`), the dwell gate is the one actuator, and everything is scoped by area. The old invariant (ambient observation may arm a *gate*, never a *cooldown*) was reversed on 2026-08-21: a rule may arm any primitive, and what protects you is that **every armed thing carries a reachable exit**, checked in `modules/interventions/armed.ts`.
 
 The frozen macOS compass app (`apps/desktop`) was removed on 2026-06-13 — archived at tag `desktop-archive-2026-06-13`, with its reusable domain gems (drift detection, the BCT/PDP intervention model) mapped in `docs/decisions/`. Docs describing the retired shield layer live in `docs/archive/`.
 
 ## Architecture
 
-Dependencies flow inward: **Domain → Application → Infrastructure → UI.** The shared domain stays pure — no fp-ts, no framework. The agent surface is standalone `// @ts-check` JS (no TS imports — it deploys on its own).
+Dependencies flow inward: **Domain → Application → Infrastructure → UI.** The domain stays pure — no fp-ts, no framework. The agent surface is standalone `// @ts-check` JS (no TS imports — it deploys on its own).
 
 ## Privacy posture (load-bearing)
 
-Everything stays on your machine. Payloads carry **domains and timings, never full URLs or page content.** Browser events live in extension-local IndexedDB until you export them; desktop/tray events write to `~/.kairos/keel/log/`.
+Everything stays on your machine. Payloads carry **domains and timings, never full URLs or page content.** Browser events live in extension-local IndexedDB until you export them; agent events write to `~/.kairos/keel/log/`.
 
 ## Structure
 
 ```
 keel/
 ├── apps/
-│   ├── agent/     # Claude Code plugin — activity-log writer + HUD (no gates)
-│   ├── browser/   # Chrome extension (WXT) — activity writer + sensors + drogue
-│   └── tray/      # macOS menubar activity-log writer (Tauri)
+│   ├── agent/     # Claude Code plugin — activity-log writer + HUD (no gates) + native host
+│   └── browser/   # Chrome extension (WXT) — activity writer + sensors + drogue + the domain
+├── integrations/
+│   └── garmin/    # Garmin body-log poller (Python), run by zenborg's scheduler
 ├── packages/
-│   ├── domain/       # ActivityEvent substrate + event-taxonomy contract (@keel/domain)
-│   ├── ui/           # Shared design system — tokens + shadcn/ui (@keel/ui)
 │   └── keel-alfred/  # Alfred workflow — global launcher for the ritual system
-└── package.json      # Workspace scripts
+├── docs/          # event taxonomy, read-side pitfalls, primitive contracts, BCT references
+└── package.json   # Workspace scripts
 ```
 
 ## Getting started
@@ -57,7 +57,6 @@ keel/
 pnpm install
 
 pnpm dev:browser     # WXT dev server (browser extension)
-pnpm dev:tray        # tauri dev (menubar logger)
 
 pnpm typecheck       # typecheck all packages
 pnpm build           # build all packages

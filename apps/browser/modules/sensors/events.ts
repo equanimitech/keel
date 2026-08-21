@@ -2,7 +2,7 @@
  * Per-domain sensors — pure validation for the observe tier.
  *
  * Sensors are content scripts that detect KEY-ACTION COMPLETIONS
- * (taxonomy: completion grammar — packages/domain/docs/event-taxonomy.md)
+ * (taxonomy: completion grammar — docs/event-taxonomy.md)
  * and message them to the background writer. The hostile-page boundary
  * holds because the background trusts nothing from the page:
  *   - kind must be on the allowlist below,

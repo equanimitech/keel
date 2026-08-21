@@ -1,7 +1,7 @@
 /**
  * Moment gate — friction scoped to the moment you are actually in.
  *
- * The decision itself is `momentVerdict` in @keel/domain (allow / deny /
+ * The decision itself is `momentVerdict` in modules/domain (allow / deny /
  * area_policy, with deny winning over allow). This file is the effectful half:
  * it reads the mirrored policy, and it decides how often a gate is allowed to
  * ask the same question.
@@ -13,7 +13,7 @@
  * turns on.
  */
 
-import { momentVerdict } from "@keel/domain";
+import { momentVerdict } from "../../domain";
 import { storage } from "wxt/storage";
 import { momentFriction } from "../policy/store";
 import { reaskDue } from "./state";

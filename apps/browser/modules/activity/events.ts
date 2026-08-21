@@ -9,8 +9,8 @@
  * payloads carry DOMAINS only — never full URLs, never page titles.
  */
 
-import { createActivityEvent, createDomain, normalizeRoute } from "@keel/domain";
-import type { ActivityEvent } from "@keel/domain";
+import { createActivityEvent, createDomain, normalizeRoute } from "../domain";
+import type { ActivityEvent } from "../domain";
 
 /** Retention ceiling — on startup the writer prunes oldest events beyond this. */
 export const MAX_LOG_EVENTS = 200_000;
@@ -139,7 +139,7 @@ export function tabOpenPayload(
 
 /**
  * Outcome of feeding one observation into a span (start/end + durationMs
- * pattern — see packages/domain/docs/event-taxonomy.md).
+ * pattern — see docs/event-taxonomy.md).
  *
  * `kind` is the event to emit (null = nothing to log); `durationMs` is set
  * only on an end event whose start was observed; `spanStart` is the state

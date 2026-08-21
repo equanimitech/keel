@@ -103,7 +103,7 @@ test("accepts request_armed — the push the extension actuates from", () => {
 });
 
 test("accepts the three reserved intervention kinds", () => {
-  // Reserved in packages/domain/docs/event-taxonomy.md under P5. A delivery is
+  // Reserved in docs/event-taxonomy.md under P5. A delivery is
   // a completion in `logs`, so the host has to let it through or the extension
   // writes an outcome that never reaches the store.
   const kinds = [

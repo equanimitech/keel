@@ -4,7 +4,7 @@ import { Popup } from "./Popup";
 import "./style.css";
 
 // keel theme on the document root (system-aware). Popup is keel-owned, so it
-// carries keel's own light/dark via [data-keel-theme] (see @keel/ui tokens).
+// carries keel's own light/dark via [data-keel-theme] (see ../../styles/tokens.css).
 const media = window.matchMedia("(prefers-color-scheme: dark)");
 const applyTheme = (dark: boolean) =>
   document.documentElement.setAttribute(

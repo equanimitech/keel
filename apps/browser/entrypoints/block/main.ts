@@ -4,8 +4,8 @@
  * unblocks it. Calm, structural, not punitive (strategy Part VI: nudge > block,
  * meta-awareness not guilt).
  */
-import "@keel/ui/tokens.css";
-import "@keel/ui/fonts.css";
+import "@/styles/tokens.css";
+import "@/styles/fonts.css";
 
 // keel-owned theme root (system-aware) so the design tokens resolve.
 document.documentElement.setAttribute(

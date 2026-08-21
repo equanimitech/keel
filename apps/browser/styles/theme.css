@@ -1,16 +1,15 @@
 /* ============================================================
-   @keel/ui — Tailwind v4 theme mapping (Layer ② support)
+   keel: Tailwind v4 theme mapping
 
    Import in a consuming app's Tailwind entry AFTER tokens.css:
 
      @import "tailwindcss";
-     @import "@keel/ui/tokens.css";
-     @import "@keel/ui/theme.css";
-     @source "../../../packages/ui/src";
+     @import "../../styles/tokens.css";
+     @import "../../styles/theme.css";
 
    Maps keel's CSS custom properties (set per [data-keel-theme])
-   onto Tailwind's semantic color/radius/font utilities so shadcn
-   components resolve `bg-background`, `text-foreground`, etc.
+   onto Tailwind's semantic color/radius/font utilities, so page
+   entrypoints resolve `bg-background`, `text-foreground`, etc.
    Content scripts do NOT import this — they use the raw vars.
    ============================================================ */
 

@@ -1,6 +1,6 @@
 /* ============================================================
-   @keel/ui — Inter, self-hosted (woff2 variable).
-   Import once per surface:  @import "@keel/ui/fonts.css";
+   keel fonts: Inter, self-hosted (woff2 variable).
+   Import once per entrypoint:  @import "../../styles/fonts.css";
    CSP-safe: no external font requests. Family name matches
    --font-sans in tokens.css. (Matches the equanimi.tech site.)
    ============================================================ */

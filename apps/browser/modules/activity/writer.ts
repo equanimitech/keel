@@ -9,7 +9,7 @@
  * sessionId rotates with the service-worker lifetime: each cold start of
  * the worker generates a fresh uuid and logs "writer_started". That id is
  * a writer epoch — mechanical provenance, not a behavioral session
- * (bouts are derived read-side; see packages/domain/docs/event-taxonomy.md).
+ * (bouts are derived read-side; see docs/event-taxonomy.md).
  */
 
 import { storage } from "wxt/storage";

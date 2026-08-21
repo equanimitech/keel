@@ -23,7 +23,7 @@
  * unblocked.
  */
 
-import type { MomentFriction } from "@keel/domain";
+import type { MomentFriction } from "../../domain";
 import { storage } from "wxt/storage";
 
 /**

@@ -100,7 +100,7 @@ node --test      # unit tests (pure core)
 pnpm typecheck   # JSDoc + // @ts-check (no build)
 ```
 
-Pure domain lives in `core.mjs` (the part that later lifts into `@keel/domain`); I/O in `store.mjs`; hook orchestration in `keel.mjs`.
+Pure domain lives in `core.mjs`, which mirrors rather than imports the extension's `apps/browser/modules/domain`, because this surface deploys standalone with no TypeScript imports; I/O in `store.mjs`; hook orchestration in `keel.mjs`.
 
 ## Not in v0 (later)
 

@@ -6,7 +6,7 @@ surface live**. Both produce `ActivityEvent`s into `~/.keel/log/`; they differ i
 what they can honestly claim about what they wrote.
 
 The distinction is not organisational tidiness. It is already load-bearing in
-`packages/domain/docs/event-taxonomy.md`, and it changes what the read side is
+`docs/event-taxonomy.md`, and it changes what the read side is
 allowed to conclude:
 
 | | `apps/*` (observing) | `integrations/*` (polling) |

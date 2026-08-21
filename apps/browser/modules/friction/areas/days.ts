@@ -8,7 +8,7 @@
  * hours ending now" is not.
  */
 
-import type { Run } from "@keel/domain";
+import type { Run } from "../../domain";
 
 export interface DayGroup {
   /** Local midnight of the day, as the stable key and sort value. */

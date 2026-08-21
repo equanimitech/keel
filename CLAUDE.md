@@ -1,6 +1,6 @@
 # keel - Attentive Technology Platform
 
-A pnpm monorepo of capability × surface apps (Claude Code agent, browser extension, macOS tray) sharing a pure domain types package.
+A pnpm monorepo of two surfaces: a Claude Code agent and a Chrome extension.
 
 ## Structure
 
@@ -8,24 +8,27 @@ A pnpm monorepo of capability × surface apps (Claude Code agent, browser extens
 keel/
 ├── apps/
 │   ├── agent/            # Claude Code surface (@keel/agent) — activity-log writer + HUD, no gates; ships as plugin
-│   ├── browser/          # Chrome extension (WXT) — activity writer + per-domain sensors
-│   └── tray/             # macOS menubar-only app (Tauri, no windows) — desktop activity-log writer; ships as "keel"
+│   └── browser/          # Chrome extension (WXT) — activity writer + per-domain sensors + its own inlined domain
+├── integrations/
+│   └── garmin/           # Garmin body-log poller (Python), run by zenborg's scheduler
 ├── packages/
-│   ├── domain/           # Shared domain types (@keel/domain)
-│   ├── ui/               # Shared design system — tokens + shadcn/ui (@keel/ui)
-│   └── keel-alfred/      # Alfred workflow — global launcher for the ritual system
+│   └── keel-alfred/      # Alfred workflow — global launcher for the ritual system (shell, not a workspace package)
+├── docs/
+│   ├── event-taxonomy.md      # the writers' contract
+│   ├── read-side-pitfalls.md  # how derivations go wrong
+│   └── references/bct/        # the BCT taxonomy CSVs (93 techniques, groupings, mechanisms)
 └── package.json          # Workspace scripts
 ```
 
-Surfaces are named by the capability × surface grammar (keel agent / keel browser / keel tray — see `docs/decisions/2026-06-12-keel-productization.md`). The agent surface is plain `// @ts-check` JS (no TS imports — it deploys standalone); its dev-mode deploy is symlinks from `~/.kairos/keel/`, its distribution is a Claude Code plugin (`apps/agent/.claude-plugin/`).
+**`apps/tray`, `packages/domain` and `packages/ui` were deleted on 2026-08-21** (slice B, step 6 of `kairos/docs/superpowers/specs/2026-08-18-the-garden-absorbs-keel-design.md`). zenborg's observer replaces the tray; the live half of the domain was inlined into `apps/browser/modules/domain/` (its sole remaining consumer) and the dead half (`rules.ts`, `tide.ts`, `areas.ts`) went with the package; `packages/ui`'s shadcn component set had no importer at all, so only its three CSS files and the Inter woff2 survived, into `apps/browser/styles/`. The three launchd plists went too.
+
+The agent surface is plain `// @ts-check` JS (no TS imports — it deploys standalone); its dev-mode deploy is symlinks from `~/.kairos/keel/`, its distribution is a Claude Code plugin (`apps/agent/.claude-plugin/`).
 
 ## Commands
 
 ```bash
 pnpm dev:browser          # WXT dev server (browser extension)
-pnpm dev:tray             # tauri dev (menubar logger)
 pnpm build:browser        # WXT production build
-pnpm build:tray           # tauri build (menubar logger bundle)
 pnpm build                # Build all packages
 pnpm typecheck            # Typecheck all packages
 ```
@@ -37,29 +40,30 @@ pnpm typecheck            # Typecheck all packages
 There is no root `test` script — run per package:
 
 ```bash
-pnpm -r test                                  # everything (tray needs a Rust toolchain)
-pnpm --filter @keel/domain test               # vitest
-pnpm --filter @keel/browser test              # vitest
+pnpm -r test                                  # everything
+pnpm --filter @keel/browser test              # vitest (includes the inlined domain)
 pnpm --filter @keel/agent test                # node --test (plain .mjs)
-pnpm --filter @keel/tray test                 # cargo test (src-tauri)
 
 # single file — pass the path through to the package's test script
-pnpm --filter @keel/domain test src/bouts.test.ts
+pnpm --filter @keel/browser test modules/domain/bouts.test.ts
 pnpm --filter @keel/agent test store.test.mjs
 ```
 
-## Shared Domain (`@keel/domain`)
+The Garmin integration is pytest: `python3 -m pytest integrations/garmin/test_garmin_sync.py`.
 
-Pure types. No runtime dependencies. The TypeScript surfaces import from this package.
+## The domain (`apps/browser/modules/domain`)
 
-Rules:
+Pure types, no runtime dependencies. This was `@keel/domain`, a workspace package
+shared by three surfaces; two of them are gone, so on 2026-08-21 it was inlined
+into its one remaining consumer rather than kept as a package with a single
+importer. The rules did not change with the address:
 - Vanilla TypeScript only — no fp-ts, no React, no Tauri, no Chrome APIs
 - All types are `readonly` / immutable
 - Factory functions for construction, never classes
 - No side effects — types and pure functions only
 - Branded value objects (e.g., `Duration = number & { __brand: "Duration" }`)
 
-**No fp-ts anywhere in the repo** — it left with `apps/desktop` (removed 2026-06-13). The shared domain stays vanilla TypeScript.
+**No fp-ts anywhere in the repo** — it left with `apps/desktop` (removed 2026-06-13). The domain stays vanilla TypeScript.
 
 ## Coding Conventions
 
@@ -73,9 +77,11 @@ Rules:
 
 Dependencies flow inward: Domain -> Application -> Infrastructure -> UI.
 
-- **`packages/domain`**: the ActivityEvent log substrate (`activity.ts`) + the read-side derivations built on it — `bouts.ts` (bouts, runs), `tide.ts` (what your attention is actually doing), `areas.ts`, `route.ts` — plus `rules.ts`, the 7 primitive contracts (`docs/primitive-contracts.md`), and the event-taxonomy contract (`packages/domain/docs/event-taxonomy.md`).
-- **`apps/browser`**: activity writer (coarse events) + watchlist-gated per-domain sensors (key-action completions) + `modules/friction/` (the gate, the cooldown, the policy) + the blocklist drogue (commitment device)
-- **`apps/tray`**: macOS menubar app (Tauri) — the desktop activity-log writer. (The frozen `apps/desktop` compass was removed 2026-06-13; archived at tag `desktop-archive-2026-06-13`, reusable gems mapped in `docs/decisions/2026-06-13-remove-desktop-preserve-compass-gems.md`.)
+- **`apps/browser/modules/domain`**: the ActivityEvent log substrate (`activity.ts`) plus the read-side derivations built on it: `bouts.ts` (bouts, runs), `route.ts`, `moment-friction.ts`, `value-objects.ts`. The event-taxonomy contract is `docs/event-taxonomy.md`; the 7 primitive contracts are `docs/primitive-contracts.md`. `rules.ts` (the `RuleSpec` types), `tide.ts` and `areas.ts` were deleted with the package on 2026-08-21, because nothing imported them and the rule vocabulary is zenborg's now.
+- **`apps/browser`**: activity writer (coarse events) + watchlist-gated per-domain sensors (key-action completions) + `modules/friction/` (the gate, the cooldown, the policy) + `modules/interventions/` (the armed cache) + the blocklist drogue (commitment device)
+- **`apps/agent`**: the Claude Code surface, plus `native-host.mjs`, the native-messaging host the extension relays through.
+
+**The desktop writer is gone.** `apps/tray` was the macOS menubar app (Tauri) that wrote desktop activity to `~/.kairos/keel/log/`; it was deleted on 2026-08-21 and its replacement is zenborg's observer, which ships **off** and writes to `keel/log-zenborg` in parity mode until it is turned on. Until Rafa enables it, **desktop activity is not being logged**. The operating instructions are `zenborg/docs/2026-08-21-background-agent-operating-the-observer-and-the-scheduler.md`. (The frozen `apps/desktop` compass was removed 2026-06-13; archived at tag `desktop-archive-2026-06-13`, reusable gems mapped in `docs/decisions/2026-06-13-remove-desktop-preserve-compass-gems.md`.)
 
 **Cross-surface transport:** the browser extension relays events (`modules/relay`) to `apps/agent/native-host.mjs`, a schema-validating native-messaging host that writes to `~/.kairos/keel/log/`. Chrome frames messages with a uint32 LE length prefix, 1 MB max; responses are chunked to stay inside it.
 
@@ -89,9 +95,9 @@ That host used to be described here as **command-less and append-only**, and tha
 
 ## Privacy posture (load-bearing, not aspirational)
 
-Everything stays on-device. Payloads carry **domains and timings — never full URLs, prompts, or page content.** Window titles are capped at 256 chars. Browser events live in extension-local IndexedDB until exported; agent/tray events write to `~/.kairos/keel/log/` as JSONL. Treat any change that widens a payload as a design decision, not an implementation detail.
+Everything stays on-device. Payloads carry **domains and timings — never full URLs, prompts, or page content.** Window titles are capped at 256 chars. Browser events live in extension-local IndexedDB until exported; agent events write to `~/.kairos/keel/log/` as JSONL. Treat any change that widens a payload as a design decision, not an implementation detail.
 
-`packages/domain/docs/event-taxonomy.md` is the writers' contract: every `ActivityEvent.kind` is a **span** (`_start`/`_end`), a **switch** (`_switched`/`_activated`), or a **completion** (past-tense). Kinds are an open set that accretes per surface — never centralize them into an enum. `durationMs` appears only when the writer observed the interval's start; never fabricate it across a restart or pause.
+`docs/event-taxonomy.md` is the writers' contract: every `ActivityEvent.kind` is a **span** (`_start`/`_end`), a **switch** (`_switched`/`_activated`), or a **completion** (past-tense). Kinds are an open set that accretes per surface — never centralize them into an enum. `durationMs` appears only when the writer observed the interval's start; never fabricate it across a restart or pause.
 
 ## Interventions: retired, then returned
 
@@ -106,10 +112,11 @@ Two dates, and conflating them is the fastest way to misread this repo.
   baselines. Not the old shield layer: rules are data, the gate is one actuator,
   and the whole thing is scoped by area.
 
-The load-bearing invariant, enforced in `@keel/domain` types rather than at
-runtime: **a tide (ambient observation) may arm a `gate`; it may never arm a
-`cooldown`.** `AmbientRule.primitives` is `Exclude<PrimitiveSpec, CooldownSpec>`,
-so an imposed lock cannot be constructed. Locks are self-invoked only.
+That layer once carried a load-bearing invariant enforced by a type rather than
+at runtime: **a tide (ambient observation) may arm a `gate`; it may never arm a
+`cooldown`.** `AmbientRule.primitives` was `Exclude<PrimitiveSpec, CooldownSpec>`,
+so an imposed lock could not be constructed. That restriction was reversed on
+2026-08-21 (below), and the type that held it was deleted the same day.
 
 - **2026-08-21** — the extension gained an **armed cache**
   (`apps/browser/modules/interventions/`), the browser end of slice E of
@@ -125,9 +132,8 @@ so an imposed lock cannot be constructed. Locks are self-invoked only.
   a rule may arm any primitive, and what protects the person is invariant 6 —
   every armed thing carries an exit. `parseArmed` refuses an entry with no
   reachable exit, and the popup renders the exit of everything in force. The
-  `AmbientRule` type in `@keel/domain` still encodes the old restriction and is
-  scheduled for retirement with `packages/domain`; until then the two paths
-  disagree, and the armed one is the design's.
+  `AmbientRule` type that encoded the old restriction was deleted with
+  `packages/domain` on 2026-08-21, so the two paths no longer disagree.
 
 ## kairos — the shared kernel
 

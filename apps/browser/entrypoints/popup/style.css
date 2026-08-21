@@ -1,12 +1,9 @@
 @import "tailwindcss";
 
-/* keel design system (single source of truth: @keel/ui) */
-@import "@keel/ui/tokens.css";
-@import "@keel/ui/theme.css";
-@import "@keel/ui/fonts.css";
-
-/* Scan the shared component library so its utilities build here */
-@source "../../../../packages/ui/src";
+/* keel design system (single source of truth: ../../styles) */
+@import "../../styles/tokens.css";
+@import "../../styles/theme.css";
+@import "../../styles/fonts.css";
 
 /*
  * Zenborg's design grammar (zenborg/docs/design/design-grammar.md).

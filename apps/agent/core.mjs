@@ -1,5 +1,7 @@
 // @ts-check
-// keel agent core — pure domain. No I/O. The piece that later lifts into @keel/domain.
+// keel agent core — pure domain. No I/O. Deliberately duplicates a little of the
+// extension's domain (apps/browser/modules/domain): this file deploys standalone
+// and imports no TypeScript, so it mirrors rather than shares.
 
 /** @typedef {"MORNING"|"AFTERNOON"|"EVENING"|"NIGHT"|""} Band  a kairos phase band (kernel-owned) */
 /** @typedef {{ phase: string, startHour: number, endHour: number }} PhaseConfig */
@@ -400,8 +402,8 @@ export function setFocus(state, on, now) {
 /** Hostnames from a list of ref URLs. Pure and total: a ref that does not
  * parse is skipped, never thrown on, and never widened into "everything".
  *
- * Normalized like `createDomain` in @keel/domain (lowercase, leading `www.`
- * dropped) so the extension compares like with like.
+ * Normalized like `createDomain` in apps/browser/modules/domain/value-objects.ts
+ * (lowercase, leading `www.` dropped) so the extension compares like with like.
  * @param {unknown} refs @returns {string[]} */
 export function seedAllowFromRefs(refs) {
   const out = new Set();
@@ -457,7 +459,8 @@ export function focusLine(state) {
 }
 
 // ── Activity log (observability substrate — slice A) ────────────
-// Events mirror @keel/domain ActivityEvent. The log is the product; these
+// Events mirror the `ActivityEvent` in apps/browser/modules/domain. The log is
+// the product; these
 // builders are pure — id generation and file I/O live with the callers.
 
 /** @typedef {{ id: string, surface: "agent", kind: string, ts: number,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { breakdown, byDay, byWeek, clock, dayLabel } from "./days.js";
-import { createDomain, createDuration, type Run } from "@keel/domain";
+import { createDomain, createDuration, type Run } from "../../domain";
 
 const MIN = 60_000;
 

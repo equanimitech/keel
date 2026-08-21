@@ -19,7 +19,7 @@ import time
 from contextlib import closing
 from urllib.parse import urlsplit
 
-# MUST mirror packages/domain/src/route.ts ROUTE_REGISTRY (test pins the entries).
+# MUST mirror apps/browser/modules/domain/route.ts ROUTE_REGISTRY (test pins the entries).
 ROUTE_REGISTRY = {
     "youtube.com": ["/shorts", "/watch", "/feed", "/results"],
     "linkedin.com": ["/feed", "/messaging", "/jobs"],

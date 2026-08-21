@@ -19,7 +19,7 @@
  * to drift.
  */
 
-import { runs } from "@keel/domain";
+import { runs } from "@/modules/domain";
 import { toJsonl, exportFileName } from "@/modules/activity/events";
 import { readAllEvents } from "@/modules/activity/log";
 import { areaMap, areas, type AreaInfo } from "@/modules/friction/policy/store";
