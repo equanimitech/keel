@@ -1,5 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
+import { readFileSync, readdirSync } from "node:fs";
 import {
   mergeTarget, emptyState, DEFAULT_TARGET,
   focusDayKey, targetHash, renderRules, consentLines,
@@ -34,6 +36,71 @@ test("a stale config's retired gate keys are dropped, not honoured", () => {
 });
 
 // ── neutral defaults ───────────────────────────────────────────
+
+// ── nothing shipped names one person ─────────────────────────
+//
+// A shipped sample is what a peer copies to `~/.keel/config.json`, so anything
+// concrete in one is something the peer starts out doing. keel's whole claim is
+// that it says what *you* would say and watches what *you* named; shipping
+// someone else's words, clock or paths is the failure mode, not the default.
+//
+// This is the one place that is a rule rather than a habit: everything else
+// ships blank because there is no seeder to misconfigure, but a sample file is
+// edited by hand and nothing but a test stops a personal string landing in it.
+
+const SAMPLE = path.join(import.meta.dirname, "config.sample.json");
+const readSample = () => JSON.parse(readFileSync(SAMPLE, "utf8"));
+
+/** Every string reachable under a `voice` key, at any depth. */
+function voiceStrings(node, insideVoice = false) {
+  if (typeof node === "string") return insideVoice ? [node] : [];
+  if (node === null || typeof node !== "object") return [];
+  const out = [];
+  for (const [k, v] of Object.entries(node)) out.push(...voiceStrings(v, insideVoice || k === "voice"));
+  return out;
+}
+
+/** Every string anywhere in the document, with the path that reached it. */
+function allStrings(node, at = "$") {
+  if (typeof node === "string") return [[at, node]];
+  if (node === null || typeof node !== "object") return [];
+  return Object.entries(node).flatMap(([k, v]) => allStrings(v, `${at}.${k}`));
+}
+
+test("the sample ships no one's voice — every voice string is an empty placeholder", () => {
+  const spoken = voiceStrings(readSample()).filter((s) => s.trim() !== "");
+  assert.deepEqual(spoken, [], `config.sample.json ships words nobody chose: ${JSON.stringify(spoken)}`);
+});
+
+test("the sample's voice keys are exactly the ones mergeTarget honours", () => {
+  const voice = readSample().targets?.["claude-code"]?.voice ?? {};
+  assert.deepEqual(
+    Object.keys(voice).sort(),
+    Object.keys(DEFAULT_TARGET.voice).sort(),
+    "a sample key mergeTarget drops is a promise the config cannot keep",
+  );
+});
+
+test("the sample carries no retired gate config — a leftover clock is one person's day", () => {
+  const target = readSample().targets?.["claude-code"] ?? {};
+  assert.deepEqual(
+    Object.keys(target).sort(),
+    Object.keys(mergeTarget({})).sort(),
+    "the sample declares a key the target no longer has; watches/windDown/rules named one person's hours",
+  );
+});
+
+test("the sample names no host and no path — those are the peer's to name", () => {
+  const named = allStrings(readSample())
+    .filter(([, v]) => /^~?\/|\.(com|org|net|io|dev|be|in)\b/.test(v));
+  assert.deepEqual(named, [], `config.sample.json names places nobody chose: ${JSON.stringify(named)}`);
+});
+
+test("the sample's watchlist tiers ship empty — keel never ships a list", () => {
+  const sample = readSample();
+  assert.deepEqual(mergeWatchlist(sample.watchlist), { observe: [], windowed: [] });
+  assert.deepEqual(mergeDesktopSensors(sample.desktop), { inputActivity: false });
+});
 
 // ── rules observability: hash + render ─────────────────────────
 

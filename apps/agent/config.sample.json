@@ -1,47 +1,14 @@
 {
   "targets": {
     "claude-code": {
-      "watches": {
-        "morning": "09:00",
-        "afternoon": "13:00",
-        "evening": "19:00",
-        "night": "01:30"
-      },
-      "windDown": "90m",
-      "signOnGate": false,
-      "rules": [
-        {
-          "notch": "block",
-          "engagesAt": 1,
-          "arming": "breakpoint",
-          "maxGraceMin": 10,
-          "tools": [
-            "Edit",
-            "Write",
-            "MultiEdit",
-            "NotebookEdit",
-            "Bash"
-          ],
-          "allowPaths": [
-            "~/journals",
-            "~/.keel"
-          ]
-        }
-      ],
       "orient": {
         "bellAfterMin": 120,
         "sessionGapMin": 30
       },
       "voice": {
-        "windDownNudge": "Winding down — favor landing open work over starting something big.",
-        "lockdown": "Coding's paused until {reset} — your declared night, the one wall keel keeps. Conversation's fine; past here, sleep is the move.",
-        "substitution": "Instead: jot tomorrow's first task, then sleep.",
         "consequence": "",
         "identity": "",
-        "granularity": {
-          "windDown": "Keep it high-level — summaries and next steps, not deep multi-file dives.",
-          "lockdown": "L1 only — one-line status + tomorrow's first step; no detail."
-        }
+        "signoffNudge": ""
       }
     }
   },
