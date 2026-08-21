@@ -115,6 +115,12 @@ export async function dwellTodayFor(
 export interface GateVerdict {
   readonly fire: boolean;
   readonly dwellMs: number;
+  /**
+   * Which rule fired. Present only on a firing, and it travels all the way to
+   * the page and back so the delivery and its settlement name the same thing —
+   * an `intervention_shown` nobody can join to its outcome settles nothing.
+   */
+  readonly ruleId?: string;
   readonly friction?: GateFriction;
   readonly proceed?: DwellGate["proceed"];
   readonly abort?: DwellGate["abort"];
@@ -150,7 +156,14 @@ export async function evaluateGate(
     return { fire: false, dwellMs };
   }
   await gateFiredAt.setValue({ ...fired, [g.ruleId]: nextFiredAt(reading) });
-  return { fire: true, dwellMs, friction: g.friction, proceed: g.proceed, abort: g.abort };
+  return {
+    fire: true,
+    dwellMs,
+    ruleId: g.ruleId,
+    friction: g.friction,
+    proceed: g.proceed,
+    abort: g.abort,
+  };
 }
 
 /**

@@ -541,3 +541,153 @@ export function appendBrowserEvents(events, maxBytes = MAX_BROWSER_LOG_BYTES) {
   }
   return written;
 }
+
+// ── The armed record (`fences.json` + keel's own rules) ─────────────────
+//
+// What is in force right now, projected into the shape the browser extension
+// can actuate from. `kairos/kernel/substrate.md` records why this exists as a
+// PUSH rather than a read: the extension has no filesystem access and never
+// will, so a process that can read the vault hands it the collection. No copy
+// on disk, so the one-writer rule still holds.
+//
+// TWO SOURCES, and the reason is migration rather than design. The kernel
+// collection is `fences.json` at the vault root, written by zenborg — the
+// design's `armed.json`, renamed on 2026-08-20 because a garden is fenced
+// rather than armed. keel's own `~/.kairos/keel/rules/*.json` is what actually
+// holds the shields today, and migration step 5 is where the readers flip. Both
+// carry `RuleSpec`, so one projection reads both, and the extension is spared
+// having to know which file a rule came from. `fences` wins on a collision,
+// because it is the collection the contract registers.
+//
+// The projection deliberately INVENTS NO EXIT. A cooldown with no `unlockPath`
+// or a gate with no `proceedAffordance` is shipped without one, and the
+// extension refuses it loudly — invariant 6 says a block with no visible exit
+// is a bug, and a host that quietly supplied a default would hide the bug
+// instead of surfacing it.
+
+export const FENCES_PATH = join(KAIROS_DIR, "fences.json");
+
+/** The `fences` collection, records keyed by rule id. Fail-open: {} when the
+ * file is missing or garbled — a reader must tolerate an absent collection,
+ * and this one is rebuildable besides.
+ * @returns {Record<string, any>} */
+export function loadFences() {
+  try {
+    const raw = JSON.parse(readFileSync(FENCES_PATH, "utf8"));
+    return raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  } catch {
+    return {};
+  }
+}
+
+/** Hosts a rule covers, across both the old flat shape and `RuleScope`.
+ * A session- or desktop-scoped rule reaches no browser and yields none.
+ * @returns {string[]} */
+function armedDomains(rule) {
+  const scope = rule?.scope;
+  if (scope && typeof scope === "object" && "surface" in scope) {
+    if (scope.surface !== "browser") return [];
+    const domain = typeof scope.domain === "string" ? scope.domain.trim() : "";
+    return domain ? [domain] : [];
+  }
+  return resolveRuleDomains(rule);
+}
+
+/** A cooldown's unlock path as the extension's one exit shape, or null when the
+ * rule declared none. Null is the invariant-6 refusal, passed through on
+ * purpose. */
+function projectUnlock(unlockPath) {
+  const t = unlockPath?.type;
+  if (t === "wait") return { label: "Wait it out", action: { type: "wait" } };
+  if (t === "unlock_with_intention" && unlockPath.prompt) {
+    return { label: "Unlock", action: { type: "intention", prompt: unlockPath.prompt } };
+  }
+  if (t === "unlock_with_delay" && Number.isFinite(Number(unlockPath.seconds))) {
+    return { label: "Unlock", action: { type: "delay", seconds: Number(unlockPath.seconds) } };
+  }
+  if (t === "out_of_band" && unlockPath.note) {
+    return { label: "Lift it", action: { type: "out_of_band", note: unlockPath.note } };
+  }
+  return null;
+}
+
+/** A gate's proceed affordance in the same shape. Null when undeclared. */
+function projectProceed(proceedAffordance) {
+  const label = proceedAffordance?.label;
+  const action = proceedAffordance?.action;
+  if (!label || !action?.type) return null;
+  if (action.type === "redirect") {
+    const to = safeRedirect(action.to);
+    return to ? { label, action: { type: "redirect", to } } : null;
+  }
+  if (action.type === "abort") return { label, action: { type: "abort" } };
+  return { label, action: { type: "continue" } };
+}
+
+/** Every browser-actuable primitive of one rule, as armed entries.
+ * @returns {{kind: string, entry: any}[]} */
+function armedEntriesFor(rule) {
+  const domains = armedDomains(rule);
+  if (domains.length === 0) return [];
+  const out = [];
+  for (const p of rule?.primitives ?? []) {
+    if (p?.kind === "cooldown") {
+      const at = p.enforcement?.at ?? "browser";
+      out.push({
+        kind: "cooldown",
+        entry: {
+          domains,
+          primitive: {
+            kind: "cooldown",
+            enforcement: at,
+            standing: Boolean(p.duration && "standing" in p.duration) || p.duration?.type === "standing",
+          },
+          proceed: projectUnlock(p.unlockPath),
+        },
+      });
+    } else if (p?.kind === "gate" && p?.trigger?.type === "dwell") {
+      out.push({
+        kind: "gate",
+        entry: {
+          domains,
+          primitive: {
+            kind: "gate",
+            everyMinutes: p.trigger.everyMinutes,
+            friction: projectFriction(p.frictionType),
+          },
+          proceed: projectProceed(p.proceedAffordance),
+          abort: { label: p.abortAffordance?.label || "Close the tab" },
+        },
+      });
+    }
+  }
+  return out;
+}
+
+/** The armed record the extension caches and actuates from.
+ *
+ * Keyed by entry id: the rule's own id when it has one browser-actuable
+ * primitive, `<ruleId>#<kind>` when it has several — so a delivery event names
+ * exactly what was delivered rather than only which rule declared it.
+ * @returns {Record<string, any>} */
+export function loadArmed() {
+  const rules = [...loadRules(), ...Object.values(loadFences())];
+  /** @type {Record<string, any>} */
+  const armed = {};
+  for (const rule of rules) {
+    if (!rule?.id || rule?.defaultEnabled === false) continue;
+    const entries = armedEntriesFor(rule);
+    for (const { kind, entry } of entries) {
+      const id = entries.length === 1 ? rule.id : `${rule.id}#${kind}`;
+      armed[id] = {
+        ...entry,
+        ruleId: id,
+        label: rule.name || rule.id,
+        deliveryProbability: Number.isFinite(Number(rule.deliveryProbability))
+          ? Number(rule.deliveryProbability)
+          : 1,
+      };
+    }
+  }
+  return armed;
+}

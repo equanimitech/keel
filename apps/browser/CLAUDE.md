@@ -15,6 +15,15 @@ shield layer.
 `AmbientRule.primitives` is `Exclude<PrimitiveSpec, CooldownSpec>`, so an
 imposed lock cannot be constructed. Locks are self-invoked only.
 
+**That restriction is reversed on the armed path, 2026-08-21.** A rule may arm
+any primitive, teeth included, because a system that can only ever post a notice
+has no consequence. What protects the person moved from authorship to exit:
+**invariant 6 — every armed thing can be got out of** — and it is the whole of
+the guarantee. `modules/interventions/armed.ts` refuses any pushed entry with no
+reachable exit, and the popup renders the exit of everything in force. The
+`AmbientRule` type above still encodes the old restriction; it retires with
+`packages/domain`.
+
 ---
 
 ## Architecture
@@ -35,6 +44,7 @@ apps/browser/
 │   │   ├── adapters.ts              # Site-specific probes as DATA — the only place a domain may appear
 │   │   └── send.ts                  # Content-script channel
 │   ├── watchlist/                   # observe-tier mirror (chrome.storage)
+│   ├── interventions/               # the ARMED CACHE — armed.ts (pure) + store.ts + events.ts
 │   ├── friction/
 │   │   ├── cooldown/                # state.ts (pure) + store.ts (chrome) + arm.ts (the one gesture)
 │   │   ├── gate/                    # dwell gate: state.ts + decide.ts (pure) + overlay.ts + arm.ts
@@ -64,10 +74,46 @@ writer emits coarse events for every domain (tab switches, navigations,
 focus/idle spans); sensors add key-action completions only for domains on the
 watchlist's observe tier.
 
+## The armed cache (`modules/interventions/`)
+
+**The app decides what is armed; the extension decides when it fires.** The
+record is pushed over native messaging (`request_armed` → `armed`) and held in
+`chrome.storage.local`; every actuation reads that cache and nothing else, so a
+navigation never waits on a round trip and a dead host never lifts a shield.
+`kairos/kernel/substrate.md` is the contract: this surface has no filesystem
+access and never will, so it takes a **pusher rather than a loader**.
+
+Three rules hold it together, and each exists because its opposite has a failure
+mode worth naming:
+
+1. **Malformed means keep what you have; empty means lift.** `parseArmed`
+   returns `null` for a push that is not a record collection, so an older host
+   or a garbled frame cannot read as "nothing is armed". An explicitly empty
+   record IS honoured, because taking a fence down has to land or the person is
+   trapped by a mirror nobody can edit.
+2. **Invariant 6 is enforced at the door.** An entry with no reachable exit is
+   refused and logged as an error, never armed. A block with no visible exit is
+   a bug, not a stricter shield — and the host deliberately invents no exit, so
+   the omission surfaces instead of being papered over.
+3. **Interventions are log events, not a second collection.** A delivery writes
+   `intervention_shown`; its settlement writes `intervention_dismissed` or
+   `intervention_clicked_through`. All three are completions in `logs`.
+   `intervention_effective` is the read side's verdict and this surface never
+   writes it.
+
+`ARMED_RULE_ID = 3` in `drogues/blocklist/sync.ts` is the DNR projection of
+browser-enforced standing cooldowns. It has its own rule id because the two
+mirrors refresh on different schedules; it collapses into `BLOCK_RULE_ID` at
+migration step 5, when `~/.kairos/keel/rules/*.json` stops being a second
+declared-rule store.
+
 ## The hostile-page boundary
 
 Sensor content scripts are untrusted. The background:
 - accepts only allowlisted kinds (`modules/sensors/events.ts` SENSOR_KINDS),
+- accepts a delivery settlement only through `isSettlement` — the page names the
+  rule and the choice, and nothing else; the domain still comes from the
+  browser-attested sender tab,
 - reduces payloads to capped scalars,
 - derives `domain` from the browser-attested `sender.tab.url` — never the message,
 - writes nothing unless `sensorAllowed(domain, observe)`.

@@ -3,7 +3,7 @@
 // unprivileged writer. Chrome frames messages as a uint32 little-endian length
 // prefix followed by UTF-8 JSON. Max 1 MB/message (Chrome limit).
 
-import { appendBrowserEvents, loadWatchlist, loadAreas, loadAreaMap, saveAreaMap, loadBlockDomains, loadBreakTarget, loadDwellGates, loadLedger, loadMomentFriction, loadTransforms, readBrowserEventsSince } from "./store.mjs";
+import { appendBrowserEvents, loadArmed, loadWatchlist, loadAreas, loadAreaMap, saveAreaMap, loadBlockDomains, loadBreakTarget, loadDwellGates, loadLedger, loadMomentFriction, loadTransforms, readBrowserEventsSince } from "./store.mjs";
 
 const MAX_MESSAGE_BYTES = 1024 * 1024;
 
@@ -39,6 +39,12 @@ const ALLOWED_KINDS = new Set([
   "log_pruned", "panic_pressed",
   "video_started", "video_ended", "video_paused", "video_resumed", "post_seen", "game_finished",
   "product_seen",
+  // Intervention outcomes (P5, event-taxonomy.md). Reserved means the name was
+  // claimed and the first writer creates it; the extension is that writer.
+  // `intervention_effective` is deliberately absent — it is the read-side
+  // verdict of settleProximalOutcome, not something a delivering surface may
+  // assert about itself.
+  "intervention_shown", "intervention_dismissed", "intervention_clicked_through",
 ]);
 
 function isValidEvent(e) {
@@ -64,6 +70,10 @@ export function validateInbound(msg) {
   if (typeof msg !== "object" || msg === null) return null;
   if (msg.type === "request_observe") return { type: "request_observe" };
   if (msg.type === "request_policy") return { type: "request_policy" };
+  // The armed record. Separate from `request_policy` because it is a different
+  // contract: policy is a projection of keel's own rule files, `armed` is the
+  // kernel record collection the app writes and every instrument reads.
+  if (msg.type === "request_armed") return { type: "request_armed" };
   // Read query: what happened since `since`. The store answers; no surface
   // keeps its own history. `since` is clamped rather than trusted — an
   // unbounded value would stream the whole log through a 1 MB channel.
@@ -154,6 +164,12 @@ export function runHost(stdin = process.stdin, stdout = process.stdout) {
           // never as "allow everything".
           momentFriction: loadMomentFriction(),
         });
+      } else if (msg.type === "request_armed") {
+        // The push `kernel/substrate.md` says this surface takes instead of a
+        // loader: the extension has no filesystem access, so a process that
+        // can read the vault hands it the collection. No copy on disk, so the
+        // one-writer rule still holds — pushing is a read with extra steps.
+        reply({ type: "armed", armed: loadArmed() });
       } else if (msg.type === "request_events") {
         // The store answers questions about itself. Surfaces query rather than
         // remember, so there is exactly one history and no copy to drift.

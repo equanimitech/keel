@@ -94,3 +94,145 @@ test("safeRedirect refuses schemes that execute", async () => {
   assert.equal(safeRedirect("http://localhost:3000/"), "http://localhost:3000/");
   assert.equal(safeRedirect("/feed/"), "/feed/");
 });
+
+// ── loadArmed: the record the extension caches and actuates from ──────────
+//
+// Same cache-busting re-import as loadAreas: paths resolve at module load.
+async function loadArmedFrom(dir) {
+  process.env.KAIROS_HOME = dir;
+  process.env.KEEL_HOME = join(dir, "keel");
+  const m = await import(`./store.mjs?armed=${Math.random()}`);
+  return m.loadArmed();
+}
+
+test("loadArmed projects a standing host block with its out-of-band exit", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-armed-"));
+  writeJsonAtomic(join(dir, "fences.json"), {
+    "shield-video": {
+      id: "shield-video",
+      name: "Video",
+      domains: ["youtube.com"],
+      deliveryProbability: 1,
+      primitives: [
+        {
+          kind: "cooldown",
+          enforcement: { at: "browser" },
+          duration: { type: "standing" },
+          unlockPath: { type: "out_of_band", note: "edit the fence and restart" },
+        },
+      ],
+    },
+  });
+  const armed = await loadArmedFrom(dir);
+  assert.deepEqual(armed["shield-video"], {
+    domains: ["youtube.com"],
+    primitive: { kind: "cooldown", enforcement: "browser", standing: true },
+    proceed: {
+      label: "Lift it",
+      action: { type: "out_of_band", note: "edit the fence and restart" },
+    },
+    ruleId: "shield-video",
+    label: "Video",
+    deliveryProbability: 1,
+  });
+});
+
+test("loadArmed invents no exit for a cooldown that declared none", async () => {
+  // Invariant 6 is the extension's to enforce; the host's job is to not paper
+  // over the omission. A supplied default would hide the bug.
+  const dir = mkdtempSync(join(tmpdir(), "keel-armed-noexit-"));
+  writeJsonAtomic(join(dir, "fences.json"), {
+    r: {
+      id: "r",
+      domains: ["chess.com"],
+      primitives: [{ kind: "cooldown", duration: { type: "standing" } }],
+    },
+  });
+  const armed = await loadArmedFrom(dir);
+  assert.equal(armed.r.proceed, null);
+});
+
+test("loadArmed skips a session-scoped rule — it reaches no browser", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-armed-scope-"));
+  writeJsonAtomic(join(dir, "fences.json"), {
+    fence: {
+      id: "fence",
+      scope: { surface: "session", paths: ["/Users/x/dev"] },
+      primitives: [{ kind: "gate", trigger: { type: "dwell", everyMinutes: 5 } }],
+    },
+  });
+  assert.deepEqual(await loadArmedFrom(dir), {});
+});
+
+test("loadArmed reads a browser RuleScope's domain", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-armed-rulescope-"));
+  writeJsonAtomic(join(dir, "fences.json"), {
+    g: {
+      id: "g",
+      name: "Feed",
+      scope: { surface: "browser", domain: "linkedin.com", matches: ["*://linkedin.com/*"] },
+      primitives: [
+        {
+          kind: "gate",
+          trigger: { type: "dwell", everyMinutes: 20 },
+          frictionType: { type: "confirmation" },
+          proceedAffordance: { label: "Keep going", action: { type: "continue" } },
+        },
+      ],
+    },
+  });
+  const armed = await loadArmedFrom(dir);
+  assert.deepEqual(armed.g.domains, ["linkedin.com"]);
+  assert.deepEqual(armed.g.primitive, {
+    kind: "gate",
+    everyMinutes: 20,
+    friction: { type: "confirmation" },
+  });
+  assert.deepEqual(armed.g.proceed, { label: "Keep going", action: { type: "continue" } });
+});
+
+test("loadArmed splits a rule carrying two actuable primitives", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-armed-split-"));
+  writeJsonAtomic(join(dir, "fences.json"), {
+    both: {
+      id: "both",
+      domains: ["chess.com"],
+      primitives: [
+        {
+          kind: "cooldown",
+          duration: { type: "standing" },
+          unlockPath: { type: "wait" },
+        },
+        {
+          kind: "gate",
+          trigger: { type: "dwell", everyMinutes: 10 },
+          frictionType: { type: "confirmation" },
+          proceedAffordance: { label: "Continue", action: { type: "continue" } },
+        },
+      ],
+    },
+  });
+  const armed = await loadArmedFrom(dir);
+  assert.deepEqual(Object.keys(armed).sort(), ["both#cooldown", "both#gate"]);
+  assert.equal(armed["both#gate"].ruleId, "both#gate");
+});
+
+test("loadArmed tolerates an absent fences.json", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-armed-empty-"));
+  assert.deepEqual(await loadArmedFrom(dir), {});
+});
+
+test("loadArmed skips a disabled rule", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "keel-armed-off-"));
+  writeJsonAtomic(join(dir, "fences.json"), {
+    off: {
+      id: "off",
+      defaultEnabled: false,
+      domains: ["youtube.com"],
+      primitives: [
+        { kind: "cooldown", duration: { type: "standing" }, unlockPath: { type: "wait" } },
+      ],
+    },
+  });
+  assert.deepEqual(await loadArmedFrom(dir), {});
+});

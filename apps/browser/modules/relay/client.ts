@@ -29,6 +29,7 @@ import type { ActivityEvent } from "@keel/domain";
 import { readAllEvents, deleteEventsByIds } from "../activity/log";
 import { replaceObserveDomains } from "../watchlist/store";
 import { replacePolicy } from "../friction/policy/store";
+import { replaceArmed } from "../interventions/store";
 import { chunkEvents } from "./batch";
 
 export { chunkEvents, unacked } from "./batch";
@@ -152,6 +153,7 @@ export async function flushToHost(): Promise<void> {
         standing?: string[];
         armable?: string[];
         momentFriction?: { allow: string[]; deny: string[] } | null;
+        armed?: unknown;
       };
       // Delete on ack: the outbox has done its job once the store has the
       // event. Keeping a second copy here is what produced a page that
@@ -159,7 +161,25 @@ export async function flushToHost(): Promise<void> {
       if (msg.type === "ack" && msg.ids) void deleteEventsByIds(msg.ids);
       else if (msg.type === "observe" && msg.domains) void replaceObserveDomains(msg.domains);
       else if (msg.type === "policy") void replacePolicy(msg);
-      else if (msg.type === "area_set") void flushToHost(); // re-pull so every surface agrees
+      // The armed record. `msg.armed` is passed through untouched — validation
+      // (including invariant 6) belongs at the cache door, not on the wire, so
+      // there is exactly one place that decides what may be armed.
+      else if (msg.type === "armed") {
+        void replaceArmed(msg.armed).then((result) => {
+          if (!result.applied) {
+            console.warn("[keel armed] malformed push — keeping the previous cache");
+            return;
+          }
+          for (const refusal of result.refused) {
+            console.error(
+              `[keel armed] refused "${refusal.ruleId}": ${refusal.reason}` +
+                (refusal.reason === "no_exit"
+                  ? " — invariant 6: a block with no visible exit is a bug, not a stricter shield"
+                  : "")
+            );
+          }
+        });
+      } else if (msg.type === "area_set") void flushToHost(); // re-pull so every surface agrees
     });
     const events = await readAllEvents();
     console.debug("[keel relay] flushing", events.length, "buffered events to", HOST_NAME);
@@ -168,6 +188,10 @@ export async function flushToHost(): Promise<void> {
     }
     port.postMessage({ type: "request_observe" });
     port.postMessage({ type: "request_policy" });
+    // Rides the same connection as the policy pull rather than opening its own.
+    // The push is what keeps the hot path local: actuation never asks, it reads
+    // the cache this reply refreshes.
+    port.postMessage({ type: "request_armed" });
   } catch {
     // host crashed mid-flush — buffered events stay in IndexedDB for the next flush
   } finally {

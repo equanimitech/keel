@@ -21,11 +21,23 @@
 import { normalizeDomain } from "../../domains";
 import { cooldownDomains } from "../../friction/cooldown/store";
 import { standingDomains } from "../../friction/policy/store";
+import { browserStandingHosts } from "../../interventions/armed";
+import { armedCache } from "../../interventions/store";
 
 const BLOCK_RULE_ID = 1;
 // Cooldowns get their own rule id so arming and lapsing never disturb the
 // permanent blocklist — an expiring cooldown removes only its own rule.
 const COOLDOWN_RULE_ID = 2;
+// Standing cooldowns from the ARMED CACHE — the pushed record. Its own rule id
+// for the same reason the cooldown has one: the two mirrors refresh on
+// different schedules (armed on the pull, policy on the pull, cooldowns on a
+// local gesture), and a shared rule id would make whichever landed last
+// silently drop the other's domains. Additive by construction: DNR ORs its
+// rules, so a host armed in either place is blocked.
+//
+// These collapse into BLOCK_RULE_ID at migration step 5, when the readers flip
+// and `~/.kairos/keel/rules/*.json` stops being a second declared-rule store.
+const ARMED_RULE_ID = 3;
 
 // All resource types, main_frame + sub_frame included, so a blocked domain is
 // stopped whether navigated to directly or embedded.
@@ -98,6 +110,12 @@ export async function syncBlocklistRules(): Promise<void> {
     ),
   ];
 
+  // The armed cache is authoritative for what it carries, and it is read from
+  // local storage — no round trip, so a navigation never waits on the host and
+  // a dead host never lifts a shield. Only browser-enforced standing cooldowns
+  // arrive here; a resolver block holds somewhere this surface is not.
+  const armedHosts = browserStandingHosts(await armedCache.getValue());
+
   const addRules: DnrRule[] = [];
   if (domains.length > 0) {
     addRules.push({
@@ -121,17 +139,30 @@ export async function syncBlocklistRules(): Promise<void> {
       },
     });
   }
+  if (armedHosts.length > 0) {
+    addRules.push({
+      id: ARMED_RULE_ID,
+      priority: 1,
+      action: { type: "block" },
+      condition: {
+        requestDomains: [...armedHosts],
+        resourceTypes: ALL_RESOURCE_TYPES,
+      },
+    });
+  }
 
   try {
     await dnr.updateDynamicRules({
-      removeRuleIds: [BLOCK_RULE_ID, COOLDOWN_RULE_ID],
+      removeRuleIds: [BLOCK_RULE_ID, COOLDOWN_RULE_ID, ARMED_RULE_ID],
       addRules,
     });
     console.info(
       `[keel blocklist] synced ${domains.length} blocked domain(s)` +
-        (cooling.length > 0 ? ` + ${cooling.length} under cooldown` : ""),
+        (cooling.length > 0 ? ` + ${cooling.length} under cooldown` : "") +
+        (armedHosts.length > 0 ? ` + ${armedHosts.length} armed` : ""),
       domains,
-      cooling
+      cooling,
+      armedHosts
     );
   } catch (err) {
     console.error("[keel blocklist] updateDynamicRules failed:", err);

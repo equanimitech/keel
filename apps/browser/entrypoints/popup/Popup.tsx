@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { armBreak, type BreakTarget } from "@/modules/friction/cooldown/arm";
 import { cooldownNextLapse } from "@/modules/friction/cooldown/store";
 import { breakTarget } from "@/modules/friction/policy/store";
+import { exitLine, type ArmedIntervention } from "@/modules/interventions/armed";
+import { armedCache } from "@/modules/interventions/store";
 
 /**
  * Popup — one gesture.
@@ -19,6 +21,16 @@ import { breakTarget } from "@/modules/friction/policy/store";
  *
  * History and configuration live on the Areas page, where your own data is
  * what you sort.
+ *
+ * The one addition, 2026-08-21: what is armed, and how to get out of it.
+ *
+ * Invariant 6 says sovereignty rests on the exit rather than on who was allowed
+ * to arm the thing — and an exit nobody can find is not one. A standing block
+ * replaces the page with the browser's own error page, where no extension UI
+ * can run and nothing can be rendered beside it, so the way out has to live on
+ * a surface that is reachable at any moment. This is that surface. It is a
+ * list, not a control: several of these exits are deliberately out of band, and
+ * a button here would put the key back in the room.
  */
 function formatUntil(ts: number): string {
   return new Date(ts).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
@@ -27,10 +39,15 @@ function formatUntil(ts: number): string {
 export function Popup() {
   const [target, setTarget] = useState<BreakTarget | null>(null);
   const [until, setUntil] = useState<number | null>(null);
+  const [armed, setArmed] = useState<readonly ArmedIntervention[]>([]);
 
   useEffect(() => {
     breakTarget.getValue().then(setTarget).catch(() => setTarget(null));
     cooldownNextLapse().then(setUntil).catch(() => setUntil(null));
+    armedCache
+      .getValue()
+      .then((record) => setArmed(Object.values(record)))
+      .catch(() => setArmed([]));
   }, []);
 
   const take = (): void => {
@@ -73,6 +90,20 @@ export function Popup() {
               : `2 hours away from ${areas.map((a) => `${a.emoji} ${a.name}`).join(" · ")}`}
           </p>
         </>
+      )}
+
+      {armed.length > 0 && (
+        <section className="popup-armed">
+          <h2 className="popup-armed-title">In force</h2>
+          <ul className="popup-armed-list">
+            {armed.map((entry) => (
+              <li key={entry.ruleId} className="popup-armed-item">
+                <span className="popup-armed-name">{entry.label}</span>
+                <span className="popup-armed-exit">{exitLine(entry)}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       <button
