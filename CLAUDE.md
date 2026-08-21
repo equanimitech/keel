@@ -79,7 +79,7 @@ Dependencies flow inward: Domain -> Application -> Infrastructure -> UI.
 
 **Cross-surface transport:** the browser extension relays events (`modules/relay`) to `apps/agent/native-host.mjs`, a schema-validating native-messaging host that writes to `~/.kairos/keel/log/`. Chrome frames messages with a uint32 LE length prefix, 1 MB max; responses are chunked to stay inside it.
 
-That host used to be described here as **command-less and append-only**, and that description is stale rather than a constraint. It answers questions (`request_observe`, `request_policy`, `request_armed`, `request_events`), it writes `area-map.json` on `set_area`, and since 2026-08-21 it **pushes the armed record**. What is actually load-bearing survives unchanged and is worth stating in its own words:
+That host used to be described here as **command-less and append-only**, and that description is stale rather than a constraint. It answers questions (`request_observe`, `request_policy`, `request_armed`, `request_events`), it writes `area-map.json` on `set_area`, and since 2026-08-21 it **pushes the armed record**. `request_policy` no longer carries `standing`, `armable` or `gates`: migration step 5 made those the armed record's business, and one store deserves one projection. What is actually load-bearing survives unchanged and is worth stating in its own words:
 
 - **the extension writes nothing but events**, and only append;
 - **every inbound message is validated** before anything is written, because the extension is untrusted (`validateInbound`, `isValidEvent`);
@@ -136,7 +136,7 @@ owned by the kernel, not by keel, and is read from `$KAIROS_HOME` (default
 `~/.kairos`).
 
 Since 2026-08-07 keel's own files live **inside** that vault, at
-`$KAIROS_HOME/keel/` (log, config, state, rules, area-map) — one directory to
+`$KAIROS_HOME/keel/` (log, config, state, area-map) — one directory to
 back up, one knob to point at a dev vault. `~/.keel` remains as a symlink to it,
 so any call site still saying `~/.keel` keeps working. The one-way seam is
 unchanged, only stated more precisely: **keel never writes the kernel's
@@ -150,6 +150,13 @@ The kernel-owned state:
   surface (`apps/agent/store.mjs`) and the browser (`entrypoints/manage`,
   `modules/friction/policy`). Contract + schema live in the kairos repo at
   `kernel/areas.md`. keel never writes them.
+- **fences** — `~/.kairos/fences.json`, the rules currently in force, written by
+  zenborg and read here. **Migration step 5, 2026-08-21: this is the only rule
+  store.** `$KAIROS_HOME/keel/rules/*.json` was the second one and is retired;
+  `store.mjs` no longer opens that directory, and a `RuleSpec` still sitting
+  there does nothing. Re-declare it through zenborg (`set_host_block`,
+  `set_browser_gate`, `seed_host_blocks`) — nothing here adopts it, because a
+  reader that adopted files it found would be a second writer.
 - **the active moment** — `~/.kairos/activeMoment.json`, a pointer (`{momentId, at}`)
   to the moment that IS the current intention, resolved against `moments.json`.
   Set in zenborg (MCP or the UI), read by the agent surface; keel never writes it.

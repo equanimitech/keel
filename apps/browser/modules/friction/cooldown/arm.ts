@@ -16,7 +16,9 @@
 import { buildBrowserEvent } from "@/modules/activity/events";
 import { appendEvent } from "@/modules/activity/log";
 import { observeDomains } from "@/modules/watchlist/store";
-import { armableDomains, breakTarget, type BreakTarget } from "@/modules/friction/policy/store";
+import { breakTarget, type BreakTarget } from "@/modules/friction/policy/store";
+import { browserArmableHosts } from "@/modules/interventions/armed";
+import { armedCache } from "@/modules/interventions/store";
 import { DEFAULT_COOLDOWN_MS, armCooldown } from "./store";
 
 export type { BreakTarget };
@@ -81,8 +83,13 @@ export async function armWatchedCooldown(
   durationMs: number = DEFAULT_COOLDOWN_MS
 ): Promise<ArmResult> {
   // Prefer what the rules declare; fall back to the observe tier so the button
-  // still does something before the first policy pull lands.
-  const declared = await armableDomains.getValue();
+  // still does something before the first push lands.
+  //
+  // The declaration comes off the armed cache since migration step 5. It used to
+  // come off the policy mirror, projected host-side from
+  // `~/.kairos/keel/rules/*.json`; that store is retired, and the candidate set
+  // is the same question asked of the one that replaced it.
+  const declared = [...browserArmableHosts(await armedCache.getValue())];
   const domains = declared.length > 0 ? declared : await observeDomains.getValue();
   const until = await armCooldown({
     ruleId: WATCHED_COOLDOWN_RULE,

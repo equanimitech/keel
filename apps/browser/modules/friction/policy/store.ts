@@ -1,37 +1,30 @@
 /**
- * Policy mirror — the extension's cache of what `~/.keel/rules/*.json` declares.
+ * Policy mirror — the surrounding context the extension needs from the host.
  *
  * The host is the source of truth; extensions cannot read the filesystem, so
- * the relay pulls this on every flush. Two tiers, because they behave
- * differently:
+ * the relay pulls this on every flush.
  *
- *   standing — cooldowns that never lapse (the old drogue seed). Always on.
- *   armable  — cooldowns with a duration, blocked only while armed.
+ * ── What left at migration step 5 ───────────────────────────────────────
+ *
+ * `standing`, `armable` and `gates` used to live here. They were a projection of
+ * `~/.kairos/keel/rules/*.json`, which was a second declared-rule store beside
+ * the `fences` collection, and the extension had to union the two on every
+ * actuation. That store is retired: what is in force now arrives once, as the
+ * pushed armed record (`modules/interventions/`), and the questions those three
+ * answered are asked of it instead — `browserStandingHosts`,
+ * `browserArmableHosts`, `armedGatesFor`.
+ *
+ * What remains is genuinely other: transforms and the break target still come
+ * off rules the host projects, and areas, the area map and the moment's
+ * allow/deny pair are kernel collections rather than rules at all.
  *
  * Deliberately a *cache*, not a store: nothing here is authoritative, and a
  * stale or empty cache must fail toward the previous state rather than toward
- * unblocked. That is why `syncBlocklistRules` unions this with the built-in
- * seed instead of replacing it.
+ * unblocked.
  */
 
 import type { MomentFriction } from "@keel/domain";
 import { storage } from "wxt/storage";
-import type { DwellGate } from "../gate/decide";
-
-/** Domains under a standing (never-lapsing) cooldown. */
-export const standingDomains = storage.defineItem<string[]>("local:policy:standing", {
-  fallback: [],
-});
-
-/** Domains a timed cooldown may cover once armed. */
-export const armableDomains = storage.defineItem<string[]>("local:policy:armable", {
-  fallback: [],
-});
-
-/** Dwell gates declared by rules. */
-export const dwellGates = storage.defineItem<DwellGate[]>("local:policy:gates", {
-  fallback: [],
-});
 
 /**
  * A DOM transform as the extension sees it, projected host-side from a rule's
@@ -110,37 +103,23 @@ export const areaMap = storage.defineItem<Record<string, string>>("local:policy:
  * reaches this function at all and the previous mirror simply persists.
  *
  * This used to additionally ignore empty arrays. That was belt over braces, and
- * it made a *deliberate* lift impossible: disabling the only standing rule makes
- * the host send `standing: []`, which was then discarded, so the block held with
- * no rule behind it and no way to see why.
+ * it made a *deliberate* lift impossible: disabling the only rule behind a
+ * mirror makes the host send an empty list, which was then discarded, so the
+ * old state held with nothing behind it and no way to see why. The same rule now
+ * governs the armed cache, one layer over — malformed keeps, empty lands.
  */
 export async function replacePolicy(policy: {
-  readonly standing?: readonly string[];
-  readonly armable?: readonly string[];
-  readonly gates?: readonly DwellGate[];
   readonly transforms?: readonly PageTransform[];
   readonly break?: BreakTarget | null;
   readonly areas?: readonly AreaInfo[];
   readonly areaMap?: Readonly<Record<string, string>>;
   readonly momentFriction?: MomentFriction | null;
 }): Promise<void> {
-  if (policy.standing !== undefined) {
-    await standingDomains.setValue([...policy.standing]);
-  }
-  if (policy.armable !== undefined) {
-    await armableDomains.setValue([...policy.armable]);
-  }
-  // Gates are replaced wholesale including the empty case — unlike a standing
-  // block, a gate that no longer exists must stop firing. Failing toward "more
-  // friction" is right for blocks and wrong for interruptions.
-  // Same reasoning as gates, and the stakes are higher: a transform that no
-  // longer has a rule must stop hiding things. A stale mirror that keeps part
-  // of a page invisible is indistinguishable from the site being broken.
+  // Replaced wholesale including the empty case: a transform that no longer has
+  // a rule must stop hiding things. A stale mirror that keeps part of a page
+  // invisible is indistinguishable from the site being broken.
   if (policy.transforms !== undefined) {
     await pageTransforms.setValue([...policy.transforms]);
-  }
-  if (policy.gates !== undefined) {
-    await dwellGates.setValue([...policy.gates]);
   }
   if (policy.break !== undefined) {
     await breakTarget.setValue(policy.break);
