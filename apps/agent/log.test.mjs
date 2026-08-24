@@ -153,9 +153,9 @@ const pathToImport = (p) => p.split("\\").join("/");
 
 // ── end-to-end: hook subprocess writes events under $HOME/.kairos/keel/log ──
 
-function runHook(home, sub, stdinObj) {
+function runHook(home, sub, stdinObj, extraEnv = {}) {
   return execFileSync(process.execPath, [KEEL_MJS, "hook", sub], {
-    env: { ...process.env, HOME: home },
+    env: { ...process.env, HOME: home, ...extraEnv },
     input: JSON.stringify(stdinObj),
     encoding: "utf8",
   });
@@ -228,6 +228,84 @@ test("hook post-tool derives durationMs from the matching dispatch", async () =>
 test("hook session-end logs session_end (full-capture hook set)", async () => {
   const home = mkdtempSync(join(tmpdir(), "keel-home-"));
   runHook(home, "session-end", { session_id: "sess-45", reason: "exit" });
+  const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
+  const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.equal(events.filter((e) => e.kind === "session_end").length, 1);
+});
+
+// ── session-end journal trace ────────────────────────────────
+
+/** Create a stub journal-append that writes to a known dir. */
+function makeJournalStub(home) {
+  const journalDir = join(home, "journals");
+  mkdirSync(journalDir, { recursive: true });
+  const stub = join(home, "journal-append-stub");
+  writeFileSync(stub, [
+    "#!/usr/bin/env bash",
+    "set -euo pipefail",
+    `ROOT="${journalDir}"`,
+    'DAY="$(date +%F)"',
+    'entry="$(cat)"',
+    '[ -n "$entry" ] || exit 2',
+    'mkdir -p "$ROOT"',
+    'file="$ROOT/$DAY.md"',
+    'if [ -f "$file" ]; then',
+    '  printf \'\\n---\\n\\n%s\\n\' "$entry" >> "$file"',
+    'else',
+    '  printf \'# %s\\n\\n%s\\n\' "$DAY" "$entry" > "$file"',
+    'fi',
+  ].join("\n"), { mode: 0o755 });
+  return { journalDir, stub };
+}
+
+function todayJournal(journalDir) {
+  const day = new Date().toISOString().slice(0, 10);
+  const file = join(journalDir, `${day}.md`);
+  return existsSync(file) ? readFileSync(file, "utf8") : null;
+}
+
+test("session-end writes a journal trace when close-up has not run", () => {
+  const home = mkdtempSync(join(tmpdir(), "keel-home-"));
+  const { journalDir, stub } = makeJournalStub(home);
+  runHook(home, "session-end",
+    { session_id: "sess-j1", cwd: HERE },
+    { KEEL_JOURNAL_CMD: stub });
+  const journal = todayJournal(journalDir);
+  assert.ok(journal, "journal file should exist");
+  assert.match(journal, /session ended:/);
+  assert.match(journal, /source: keel-agent\/session-end/);
+  assert.match(journal, /branch:/);
+});
+
+test("session-end skips journal when transcript mentions close-up", () => {
+  const home = mkdtempSync(join(tmpdir(), "keel-home-"));
+  const { journalDir, stub } = makeJournalStub(home);
+  const transcript = join(home, "transcript.jsonl");
+  writeFileSync(transcript, '{"type":"skill","name":"close-up","ts":1}\n');
+  runHook(home, "session-end",
+    { session_id: "sess-j2", cwd: HERE, transcript_path: transcript },
+    { KEEL_JOURNAL_CMD: stub });
+  const journal = todayJournal(journalDir);
+  assert.equal(journal, null, "journal should NOT be written when close-up ran");
+});
+
+test("session-end journal shows (no git context) for non-repo directories", () => {
+  const home = mkdtempSync(join(tmpdir(), "keel-home-"));
+  const { journalDir, stub } = makeJournalStub(home);
+  const noRepo = mkdtempSync(join(tmpdir(), "no-repo-"));
+  runHook(home, "session-end",
+    { session_id: "sess-j3", cwd: noRepo },
+    { KEEL_JOURNAL_CMD: stub });
+  const journal = todayJournal(journalDir);
+  assert.ok(journal, "journal file should exist");
+  assert.match(journal, /no git context/);
+});
+
+test("session-end still logs the keel event even when journal-append is unavailable", () => {
+  const home = mkdtempSync(join(tmpdir(), "keel-home-"));
+  runHook(home, "session-end",
+    { session_id: "sess-j4", cwd: HERE },
+    { KEEL_JOURNAL_CMD: "/nonexistent/journal-append" });
   const file = join(home, ".kairos", "keel","log", logFileName(Date.now()));
   const events = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   assert.equal(events.filter((e) => e.kind === "session_end").length, 1);

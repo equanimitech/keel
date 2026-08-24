@@ -6,7 +6,7 @@
   "PostToolUseFailure": [{ "hooks": [{ "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/keel.mjs hook post-tool-failure", "timeout": 10 }] }],
   "Stop": [{ "hooks": [{ "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/keel.mjs hook stop", "timeout": 10 }] }],
   "SubagentStop": [{ "hooks": [{ "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/keel.mjs hook subagent-stop", "timeout": 10 }] }],
-  "SessionEnd": [{ "hooks": [{ "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/keel.mjs hook session-end", "timeout": 10 }] }],
+  "SessionEnd": [{ "hooks": [{ "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/keel.mjs hook session-end", "timeout": 20 }] }],
   "Notification": [{ "hooks": [{ "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/keel.mjs hook notification", "timeout": 10 }] }],
   "PreCompact": [{ "hooks": [{ "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/keel.mjs hook pre-compact", "timeout": 10 }] }],
   "PermissionRequest": [{ "hooks": [{ "type": "command", "command": "node ${CLAUDE_PLUGIN_ROOT}/keel.mjs hook permission-request", "timeout": 10 }] }],

@@ -49,6 +49,70 @@ function logHookEvent(kind, now, input, opts = {}) {
   } catch { /* fail-open */ }
 }
 
+/** Session-end hook: log the event, then write a lightweight journal trace
+ * so every session leaves a mark even when close-up wasn't invoked.
+ * Fail-open at every step -- the journal entry is a bonus, not a gate. */
+async function handleSessionEnd(now) {
+  const input = await readStdin();
+  logHookEvent("session_end", now, input);
+
+  try {
+    const cwd = input?.cwd || process.cwd();
+    const transcriptPath = input?.transcript_path;
+
+    // If close-up already ran this session, it wrote its own journal entry.
+    if (transcriptPath) {
+      try {
+        const grep = spawnSync("grep", ["-q", "close-up", transcriptPath], { timeout: 3000 });
+        if (grep.status === 0) { return emit(null); }
+      } catch { /* fall through -- write the trace */ }
+    }
+
+    // Gather git context from the session's working directory.
+    let branch = "", diffSummary = "", recentCommits = "";
+    try {
+      const r = spawnSync("git", ["-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"],
+        { encoding: "utf8", timeout: 3000 });
+      branch = r.stdout?.trim() || "";
+    } catch { /* not a repo, or git unavailable */ }
+
+    if (branch) {
+      try {
+        const r = spawnSync("git", ["-C", cwd, "diff", "--stat", "--no-color"],
+          { encoding: "utf8", timeout: 3000 });
+        const lines = (r.stdout || "").trim().split("\n");
+        diffSummary = lines[lines.length - 1]?.trim() || "";
+      } catch { /* fail-open */ }
+
+      try {
+        const r = spawnSync("git", ["-C", cwd, "log", "--oneline", "-5", "--since=3 hours ago"],
+          { encoding: "utf8", timeout: 3000 });
+        recentCommits = (r.stdout || "").trim();
+      } catch { /* fail-open */ }
+    }
+
+    const hhmm = new Date(now).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+    const project = cwd.split("/").pop() || "unknown";
+
+    const body = [`## ${hhmm} -- session ended: ${project}`, "", "source: keel-agent/session-end", ""];
+    if (branch) { body.push(`- branch: ${branch}`); }
+    if (recentCommits) {
+      body.push("- commits:");
+      for (const line of recentCommits.split("\n").slice(0, 5)) {
+        body.push(`  - ${line}`);
+      }
+    }
+    if (diffSummary) { body.push(`- uncommitted: ${diffSummary}`); }
+    if (!branch && !recentCommits && !diffSummary) { body.push("- (no git context)"); }
+
+    const journalAppend = process.env.KEEL_JOURNAL_CMD
+      || join(process.env.HOME || "", "Developer/equanimitech/penceive/bin/journal-append");
+    spawnSync(journalAppend, [], { input: body.join("\n"), encoding: "utf8", timeout: 5000 });
+  } catch { /* fail-open */ }
+
+  return emit(null);
+}
+
 /** Generic full-capture hook: log the event, decide nothing. */
 async function handleObservedHook(sub, now) {
   const input = await readStdin();
@@ -365,6 +429,7 @@ async function main() {
     if (sub === "pre-tool") return handlePreTool(now);
     if (sub === "user-submit") return handleUserSubmit(now);
     if (sub === "session-start") return handleSessionStart(now);
+    if (sub === "session-end") return handleSessionEnd(now);
     if (sub in KIND_BY_HOOK) return handleObservedHook(sub, now);
     return process.exit(0);
   }
