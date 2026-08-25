@@ -1,6 +1,6 @@
 {
   "name": "@keel/agent",
-  "description": "keel agent — a Claude Code surface: activity-log writer + HUD. Ships as a Claude Code plugin.",
+  "description": "keel agent — a Claude Code surface: activity-log writer. Ships as a Claude Code plugin.",
   "version": "0.1.0",
   "private": true,
   "type": "module",

@@ -244,7 +244,7 @@ export function loadAreas() {
  *
  * Reads the same three files the intention does, and resolves them through the
  * same `resolveActiveMoment` — there is one answer to "what am I doing right
- * now" and the HUD and the gate must not be able to disagree about it.
+ * now" and the status and the gate must not be able to disagree about it.
  *
  * Hostnames, never the refs themselves: a ref is a full URL and the privacy
  * posture stops URLs at this boundary. What crosses the relay is domains.

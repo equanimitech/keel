@@ -7,7 +7,7 @@ A pnpm monorepo of two surfaces: a Claude Code agent and a Chrome extension.
 ```
 keel/
 ├── apps/
-│   ├── agent/            # Claude Code surface (@keel/agent) — activity-log writer + HUD, no gates; ships as plugin
+│   ├── agent/            # Claude Code surface (@keel/agent) — activity-log writer, no gates; ships as plugin
 │   └── browser/          # Chrome extension (WXT) — activity writer + per-domain sensors + its own inlined domain
 ├── integrations/
 │   └── garmin/           # Garmin body-log poller (Python), run by zenborg's scheduler

@@ -111,8 +111,8 @@ export const focusDayKey = (now) => dayKey(now - DAY_START_HOUR * 3600_000);
 // writer has to remember to clear.
 //
 // This replaced keel's own watch-scoped intention strings (2026-08-07). Two systems
-// held the same concept and neither knew about the other, so the HUD line and the
-// board drifted apart by construction.
+// held the same concept and neither knew about the other, so the status line and
+// the board drifted apart by construction.
 
 /** @typedef {{ id: string, name: string, area: string, emoji: string }} ActiveMoment */
 
@@ -146,15 +146,14 @@ export function resolveActiveMoment(pointer, moments, areas, now) {
  * check, against the vault instead of the config.
  *
  * Why it exists: the pointer holds only the CURRENT intention, so every switch overwrote
- * the last one and left no trace. keel acts on the active moment (the HUD, the friction
+ * the last one and left no trace. keel acts on the active moment (the friction
  * scope) while never recording when it changed, which makes "does declaring an intention
  * change what follows?" unanswerable after the fact. History only accrues forward.
  *
  * Observed, not authored: zenborg writes the pointer and keel never does, so the event's
  * `ts` is when a hook happened to notice, while `keel_declared_at` carries the pointer's
  * own `at` — the true instant of declaration. Detection is deliberately eventual: nothing
- * depends on noticing promptly, which is why this rides hooks that already write rather
- * than the HUD, whose statusline path re-renders constantly and stays read-only.
+ * depends on noticing promptly, which is why this rides hooks that already write.
  *
  * The edge is taken on the RAW pointer id, never the resolved moment. A pointer stops
  * resolving on its own at the 04:00 roll (see resolveActiveMoment), and treating that as a
@@ -300,7 +299,7 @@ export function exceedsCeiling(want, state, now = Date.now()) {
   return GRANULARITY_ORDER.indexOf(want) > GRANULARITY_ORDER.indexOf(activeGranularity(state, now));
 }
 
-/** The granularity contract line — surfaced at session-start and in the HUD. Always renders,
+/** The granularity contract line — surfaced at session-start. Always renders,
  * because a ceiling is always in force. @param {State} state @param {number} [now] @returns {string} */
 export function granularityLine(state, now = Date.now()) {
   const g = activeGranularity(state, now);
@@ -310,7 +309,7 @@ export function granularityLine(state, now = Date.now()) {
 // ── Re-asserting the ceiling when it moves ──────────────────────
 //
 // The ceiling used to reach the agent exactly once, at session-start, and live
-// afterwards only in the statusline HUD — ambient by design, on the assumption
+// afterwards only in `keel status` — ambient by design, on the assumption
 // that a day-scoped dial changes rarely enough for one telling to hold.
 //
 // The tray submenu (2026-08-12) broke that assumption: the dial is now a click
@@ -376,10 +375,10 @@ export function granularityNotice(state, sessionId, now = Date.now()) {
 // It used to also hold you to ONE stream — tool calls in any session but the focus owner
 // were denied. That wall went on 2026-08-18 with the night lock and the day-note gate; what
 // remains is the half that carried signal rather than refusal: a breath on the AI-wait gap,
-// a ◉ in the HUD, and focus_on/focus_off in the log so the read-side EDA can segment focus
+// a ◉ in `keel status`, and focus_on/focus_off in the log so the read-side EDA can segment focus
 // periods. Nothing here denies anything.
 
-/** Set the focus marker. `focusTs` stamps when it engaged (HUD/"since"). Survives session
+/** Set the focus marker. `focusTs` stamps when it engaged. Survives session
  * restarts and clears only on explicit `keel focus off`, never on idle.
  * @param {State} state @param {boolean} on @param {number} now */
 export function setFocus(state, on, now) {

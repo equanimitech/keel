@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // @ts-check
-// keel agent — the Claude Code surface: activity-log writer + HUD. Thin orchestration over core (pure) + store (I/O).
+// keel agent — the Claude Code surface: activity-log writer. Thin orchestration over core (pure) + store (I/O).
 // Fail-open: any error → exit 0, allow. A hook must never trap the user.
 // Gate-free since 2026-08-18: this surface observes and reports; it denies nothing.
 
@@ -15,7 +15,7 @@ import {
 } from "./core.mjs";
 import { loadTarget, loadRawTarget, loadWatchlist, loadDesktopSensors, loadState, saveState, loadPhaseConfigs, loadActiveMomentPointer, loadMoments, loadAreas, readStdin, TARGET_ID, LOG_DIR, appendEvent, readEvents, loadLedger, saveLedger, loadSnapshot, saveSnapshot, writeObserveList, LEDGER_PATH, SNAPSHOT_PATH } from "./store.mjs";
 import { runHost } from "./native-host.mjs";
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { createInterface } from "node:readline";
 import { join, dirname } from "node:path";
@@ -152,8 +152,7 @@ async function handleUserSubmit(now) {
   const target = loadTarget();
   let state = updateSession(loadState(), now, target.orient);
 
-  // Ambient by design: indicators live in the statusline HUD (`keel hud`), not injected per-turn.
-  // One exception, silent on an ordinary turn:
+  // Ambient by design, not injected per-turn. One exception, silent on an ordinary turn:
   //
   // 1. Once per session, on turn 2+, only while nothing is active: prompt the agent to infer
   //    what this session is doing and PROPOSE a moment. It proposes; zenborg writes; keel only
@@ -322,34 +321,6 @@ function cmdFocus(arg, now) {
   console.log(`keel: ◉ focus on — ${named}. A marker, not a lock: nothing is held. Breath on the AI gap. \`keel focus off\` to release.`);
 }
 
-// ── HUD (for the Claude Code statusLine) ──────────────────────
-function sessionCount() {  // approximate # of concurrent Claude Code sessions
-  try {  // no shell: execFile with an arg array. pgrep exits 1 if none → caught.
-    const out = execFileSync("pgrep", ["-fl", "claude"],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
-    const n = out.split("\n").filter((l) =>
-      /\bclaude\b/i.test(l) && !/keel\.mjs|statusline|pgrep|grep|caveman/i.test(l)).length;
-    return n || 1;
-  } catch { return 1; }
-}
-// A calm HUD: glyphs appear only when they carry signal, no empty dashes.
-// The 🔒/🌙 lock and wind-down leaders went with the night gate (2026-08-18) — there is no
-// held-until to report when nothing is held, and a countdown to a wall that no longer exists
-// is worse than silence.
-function cmdHud(now) {
-  const state = loadState();
-
-  const parts = [];
-
-  // Always-on indicators: the active moment (when one is set) + the day's granularity ceiling.
-  const inten = activeMomentNow(now)?.name ?? "";
-  if (inten) parts.push(`◎ ${inten.length > 24 ? inten.slice(0, 23) + "…" : inten}`);
-  if (state.focus) parts.push("◉ focus");
-  parts.push(`▤ ${activeGranularity(state)}`);
-
-  process.stdout.write(parts.join("  ·  "));
-}
-
 /** `keel rules` — the effective rules, with provenance per section. */
 function cmdRules() {
   console.log(renderRules(loadTarget(), loadRawTarget(), loadPhaseConfigs()));
@@ -441,7 +412,6 @@ async function main() {
   if (cmd === "granularity" || cmd === "gran") return cmdGranularity(sub);
   if (cmd === "focus") return cmdFocus(process.argv.slice(3).join(" "), now);
   if (cmd === "arm") return cmdFocus(process.argv.slice(3).join(" ") || "on", now);  // skill entry: empty label → on, no shell expansion needed
-  if (cmd === "hud") return cmdHud(now);
   if (cmd === "status") return cmdStatus(now);
   if (cmd === "watchlist" && sub === "scan") return cmdWatchlistScan();
   console.log("usage: keel <hook pre-tool|user-submit|session-start | signoff | intention (read-only; set it in zenborg) | granularity [sentence|tldr|page|essay|report|reset] | focus [on|off] | rules | log status | status | watchlist scan>");

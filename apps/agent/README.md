@@ -21,7 +21,7 @@ The third row is the one nobody else sits in. Calm-tech tools watch the human; a
 keel accumulates attention signal now; steering comes later, built on your own baselines (a separate P5 module, gated behind ~21 days of personal data). v0 is mostly **see**, a little **steer**.
 
 - **Activity log** (`keel log`, plus `SessionStart` / `UserPromptSubmit` hooks) writes every session event to `~/.keel/log/` as plain JSONL. Domains and timings, never prompts or content.
-- **Intention** (`keel intention`) is the **active moment** — the one you set in zenborg, read from `$KAIROS_HOME/activeMoment.json`. It surfaces in the statusline HUD and holds the conversation to that thread. keel only reads it; when nothing is active the agent proposes one from today's board and sets it in zenborg once you agree. It retires itself at the 04:00 roll.
+- **Intention** (`keel intention`) is the **active moment** — the one you set in zenborg, read from `$KAIROS_HOME/activeMoment.json`. keel only reads it; when nothing is active the agent proposes one from today's board and sets it in zenborg once you agree. It retires itself at the 04:00 roll.
 - **Granularity dial** (`keel granularity <level>`) sets how deep responses go this session. Floor is `tldr`. Levels: `sentence` (L1, claim only), `tldr` (L2, claim + mechanism), `page` (L3, worked example), `report` (L5, citations + edge cases).
 - **Wind-down gate** (`PreToolUse` hook) denies Edit/Write/Bash once you've signed off, parked, or passed a backstop hour. **Breakpoint-armed** (engages at a turn boundary, never mid-edit), escapable only by a scarce **skip credit**. Conversation and journal/ritual writes (`allowPaths`) stay open, so closing the day is never blocked.
 
